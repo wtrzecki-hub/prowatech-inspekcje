@@ -83,7 +83,7 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
           {statusOrder.map((s, index) => {
             const isCompleted = index < currentIndex
             const isCurrent = s === status
-            const label = INSPECTION_STATUSES[s as keyof typeof INSPECTION_STATUSES] || s
+            const label = INSPECTION_STATUSES.find((item) => item.value === s)?.label || s
 
             return (
               <div key={s} className="flex items-center gap-2">
@@ -112,7 +112,7 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
               disabled={isLoading}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              Przejdź do: {INSPECTION_STATUSES[statusOrder[currentIndex + 1] as keyof typeof INSPECTION_STATUSES]}
+              Przejdź do: {INSPECTION_STATUSES.find((item) => item.value === statusOrder[currentIndex + 1])?.label}
             </Button>
           </div>
         )}
@@ -123,7 +123,7 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
           <DialogHeader>
             <DialogTitle>Potwierdzenie zmiany statusu</DialogTitle>
             <DialogDescription>
-              Czy na pewno chcesz zmienić status inspeksji na "{INSPECTION_STATUSES[nextStatus as keyof typeof INSPECTION_STATUSES]}"?
+              Czy na pewno chcesz zmienić status inspeksji na "{INSPECTION_STATUSES.find((item) => item.value === nextStatus)?.label}"?
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 justify-end">

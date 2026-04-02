@@ -39,7 +39,7 @@ interface Inspection {
   inspection_date: string
   inspection_type: 'annual' | 'five_year'
   status: string
-  overall_condition_rating: number | null
+  overall_condition_rating: 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny' | null
   turbine: {
     code: string
   }

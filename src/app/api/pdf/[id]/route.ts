@@ -160,13 +160,13 @@ export async function GET(
         yPosition = margin
       }
       pdf.setFontSize(12)
-      pdf.setFont(undefined, 'bold')
+      pdf.setFont('helvetica', 'bold')
       pdf.text(title, margin, yPosition)
       yPosition += 8
       pdf.setDrawColor(100)
       pdf.line(margin, yPosition - 2, pageWidth - margin, yPosition - 2)
       yPosition += 4
-      pdf.setFont(undefined, 'normal')
+      pdf.setFont('helvetica', 'normal')
       pdf.setFontSize(10)
     }
 
@@ -175,9 +175,9 @@ export async function GET(
         pdf.addPage()
         yPosition = margin
       }
-      pdf.setFont(undefined, 'bold')
+      pdf.setFont('helvetica', 'bold')
       pdf.text(label + ':', margin, yPosition)
-      pdf.setFont(undefined, 'normal')
+      pdf.setFont('helvetica', 'normal')
       const textWidth = pageWidth - margin * 2 - 60
       const lines = pdf.splitTextToSize(value, textWidth)
       pdf.text(lines, margin + 60, yPosition)
@@ -231,7 +231,7 @@ export async function GET(
 
     // Title
     pdf.setFontSize(16)
-    pdf.setFont(undefined, 'bold')
+    pdf.setFont('helvetica', 'bold')
     const inspectionTypeLabel =
       inspection.inspection_type === 'annual' ? 'ROCZNEJ' : 'PIĘCIOLETNIEJ'
     pdf.text(`PROTOKÓŁ Z KONTROLI ${inspectionTypeLabel}`, margin, yPosition)
@@ -378,10 +378,10 @@ export async function GET(
         pdf.addPage()
         yPosition = margin
       }
-      pdf.setFont(undefined, 'bold')
+      pdf.setFont('helvetica', 'bold')
       pdf.text('Ocena techniczna:', margin, yPosition)
       yPosition += 5
-      pdf.setFont(undefined, 'normal')
+      pdf.setFont('helvetica', 'normal')
       const lines = pdf.splitTextToSize(inspection.overall_assessment, pageWidth - margin * 2)
       pdf.text(lines, margin, yPosition)
       yPosition += lines.length * 4 + 3
@@ -393,11 +393,11 @@ export async function GET(
         pdf.addPage()
         yPosition = margin
       }
-      pdf.setFont(undefined, 'bold')
+      pdf.setFont('helvetica', 'bold')
       pdf.setTextColor(220, 53, 69)
       pdf.text('Informacja o zagrożeniach:', margin, yPosition)
       yPosition += 5
-      pdf.setFont(undefined, 'normal')
+      pdf.setFont('helvetica', 'normal')
       pdf.setTextColor(0)
       const lines = pdf.splitTextToSize(
         inspection.hazard_information,
@@ -444,7 +444,7 @@ export async function GET(
     yPosition += 10
     pdf.line(margin, yPosition, margin + 50, yPosition)
     yPosition += 2
-    pdf.setFont(undefined, 'normal')
+    pdf.setFont('helvetica', 'normal')
     pdf.text('Podpis inspektora', margin, yPosition)
     yPosition += 12
 

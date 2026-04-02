@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { debounce } from 'lodash-es'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -36,13 +35,16 @@ import {
 } from '@/lib/constants'
 import { AlertCircle, Download } from 'lucide-react'
 
+type ConditionRating = 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny'
+type InspectionStatus = 'draft' | 'in_progress' | 'review' | 'completed' | 'signed'
+
 interface Inspection {
   id: string
   protocol_number: string | null
   inspection_date: string
   inspection_type: 'annual' | 'five_year'
-  status: string
-  overall_condition_rating: number | null
+  status: InspectionStatus
+  overall_condition_rating: ConditionRating | null
   overall_assessment: string | null
   hazard_information: string | null
   next_annual_date: string | null
@@ -53,15 +55,14 @@ interface Inspection {
   owner_representative_name: string | null
   turbine: {
     id: string
-    code: string
-    model: string
-    manufacturer: string
-    power_output: number
+    turbine_code: string
+    model: string | null
+    manufacturer: string | null
+    rated_power_mw: number | null
   }
   wind_farm: {
     id: string
     name: string
-    location: string
   }
   client: {
     id: string
@@ -70,23 +71,31 @@ interface Inspection {
   }
 }
 
+// Matches ElementCard's internal InspectionElement type
 interface InspectionElement {
   id: string
-  element_definition_id: string
-  inspection_id: string
-  rating: number | null
+  element_number: number
+  condition_rating: ConditionRating | null
+  wear_percentage: number
   notes: string | null
-  element_definition: {
-    id: string
-    name: string
-    description: string | null
-    category: string
-  }
+  recommendations: string | null
+  photo_numbers: string | null
+  detailed_description: string | null
+  not_applicable: boolean
 }
+
+interface ElementDefinition {
+  id: string
+  name_pl: string
+  scope_annual: string | null
+  scope_five_year_additional: string | null
+}
+
+type InspectionElementWithDef = InspectionElement & { definition: ElementDefinition }
 
 interface Inspector {
   id: string
-  name: string
+  full_name: string
   license_number: string | null
   specialty: string | null
 }
@@ -101,12 +110,15 @@ export default function InspectionDetailPage() {
   )
 
   const [inspection, setInspection] = useState<Inspection | null>(null)
-  const [elements, setElements] = useState<InspectionElement[]>([])
+  const [elements, setElements] = useState<InspectionElementWithDef[]>([])
   const [inspectors, setInspectors] = useState<Inspector[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showOnlyNotes, setShowOnlyNotes] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const elementSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inspectionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     fetchInspectionData()
@@ -117,7 +129,6 @@ export default function InspectionDetailPage() {
       setLoading(true)
       setError(null)
 
-      // Fetch inspection with relations
       const { data: inspectionData, error: inspectionError } = await supabase
         .from('inspections')
         .select(
@@ -136,9 +147,18 @@ export default function InspectionDetailPage() {
           inspector_signature_location,
           inspector_signature_date,
           owner_representative_name,
-          turbine:turbine_id (id, code, model, manufacturer, power_output),
-          wind_farm:wind_farm_id (id, name, location),
-          client:client_id (id, name, nip)
+          turbine:turbine_id (
+            id,
+            turbine_code,
+            model,
+            manufacturer,
+            rated_power_mw,
+            wind_farm:wind_farm_id (
+              id,
+              name,
+              client:client_id (id, name, nip)
+            )
+          )
         `
         )
         .eq('id', id)
@@ -146,7 +166,22 @@ export default function InspectionDetailPage() {
 
       if (inspectionError) throw inspectionError
 
-      setInspection(inspectionData)
+      // Flatten nested wind_farm / client into top-level for compatibility with Inspection type
+      const raw = inspectionData as any
+      const flattened: Inspection = {
+        ...raw,
+        turbine: {
+          id: raw.turbine?.id,
+          turbine_code: raw.turbine?.turbine_code,
+          model: raw.turbine?.model,
+          manufacturer: raw.turbine?.manufacturer,
+          rated_power_mw: raw.turbine?.rated_power_mw,
+        },
+        wind_farm: raw.turbine?.wind_farm ?? { id: '', name: '' },
+        client: raw.turbine?.wind_farm?.client ?? { id: '', name: '', nip: null },
+      }
+
+      setInspection(flattened)
 
       // Fetch inspection elements
       const { data: elementsData, error: elementsError } = await supabase
@@ -154,28 +189,50 @@ export default function InspectionDetailPage() {
         .select(
           `
           id,
-          element_definition_id,
-          inspection_id,
-          rating,
+          condition_rating,
+          wear_percentage,
           notes,
-          element_definition:element_definition_id (
+          recommendations,
+          photo_numbers,
+          detailed_description,
+          is_not_applicable,
+          definition:element_definition_id (
             id,
-            name,
-            description,
-            category
+            element_number,
+            name_pl,
+            scope_annual,
+            scope_five_year_additional
           )
         `
         )
         .eq('inspection_id', id)
+        .order('element_definition_id', { ascending: true })
 
       if (elementsError) throw elementsError
 
       if (elementsData && elementsData.length === 0) {
-        // Create elements from definitions if none exist
         await createElementsFromDefinitions(id)
-        fetchInspectionElements(id)
+        await fetchInspectionElements(id)
       } else {
-        setElements(elementsData || [])
+        setElements(
+          (elementsData || []).map((el: any) => ({
+            id: el.id,
+            element_number: el.definition?.element_number ?? 0,
+            condition_rating: el.condition_rating ?? null,
+            wear_percentage: el.wear_percentage ?? 0,
+            notes: el.notes ?? null,
+            recommendations: el.recommendations ?? null,
+            photo_numbers: el.photo_numbers ?? null,
+            detailed_description: el.detailed_description ?? null,
+            not_applicable: el.is_not_applicable ?? false,
+            definition: {
+              id: el.definition?.id ?? '',
+              name_pl: el.definition?.name_pl ?? '',
+              scope_annual: el.definition?.scope_annual ?? null,
+              scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
+            },
+          }))
+        )
       }
 
       // Fetch inspectors
@@ -185,7 +242,7 @@ export default function InspectionDetailPage() {
           `
           inspector:inspector_id (
             id,
-            name,
+            full_name,
             license_number,
             specialty
           )
@@ -212,22 +269,44 @@ export default function InspectionDetailPage() {
       .select(
         `
         id,
-        element_definition_id,
-        inspection_id,
-        rating,
+        condition_rating,
+        wear_percentage,
         notes,
-        element_definition:element_definition_id (
+        recommendations,
+        photo_numbers,
+        detailed_description,
+        is_not_applicable,
+        definition:element_definition_id (
           id,
-          name,
-          description,
-          category
+          element_number,
+          name_pl,
+          scope_annual,
+          scope_five_year_additional
         )
       `
       )
       .eq('inspection_id', inspectionId)
 
     if (!elementsError && elementsData) {
-      setElements(elementsData)
+      setElements(
+        elementsData.map((el: any) => ({
+          id: el.id,
+          element_number: el.definition?.element_number ?? 0,
+          condition_rating: el.condition_rating ?? null,
+          wear_percentage: el.wear_percentage ?? 0,
+          notes: el.notes ?? null,
+          recommendations: el.recommendations ?? null,
+          photo_numbers: el.photo_numbers ?? null,
+          detailed_description: el.detailed_description ?? null,
+          not_applicable: el.is_not_applicable ?? false,
+          definition: {
+            id: el.definition?.id ?? '',
+            name_pl: el.definition?.name_pl ?? '',
+            scope_annual: el.definition?.scope_annual ?? null,
+            scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
+          },
+        }))
+      )
     }
   }
 
@@ -240,68 +319,56 @@ export default function InspectionDetailPage() {
       const elementsToCreate = definitions.map((def) => ({
         inspection_id: inspectionId,
         element_definition_id: def.id,
-        rating: null,
+        condition_rating: null,
+        wear_percentage: null,
         notes: null,
+        is_not_applicable: false,
       }))
-
       await supabase.from('inspection_elements').insert(elementsToCreate)
     }
   }
 
-  const debouncedSaveElement = useCallback(
-    debounce(async (elementId: string, rating: number | null, notes: string | null) => {
+  const handleElementUpdate = (elementId: string, data: Partial<InspectionElement>) => {
+    setElements((prev) =>
+      prev.map((el) =>
+        el.id === elementId ? ({ ...el, ...data } as InspectionElementWithDef) : el
+      )
+    )
+    if (elementSaveTimer.current) clearTimeout(elementSaveTimer.current)
+    elementSaveTimer.current = setTimeout(async () => {
       setSaving(true)
       try {
-        await supabase
-          .from('inspection_elements')
-          .update({ rating, notes })
-          .eq('id', elementId)
+        // Map not_applicable → is_not_applicable for the DB column name
+        const dbData: Record<string, unknown> = { ...data }
+        if ('not_applicable' in dbData) {
+          dbData.is_not_applicable = dbData.not_applicable
+          delete dbData.not_applicable
+        }
+        await supabase.from('inspection_elements').update(dbData).eq('id', elementId)
       } catch (err) {
         console.error('Error saving element:', err)
       } finally {
         setSaving(false)
       }
-    }, 500),
-    [supabase]
-  )
-
-  const handleElementChange = (
-    elementId: string,
-    rating: number | null,
-    notes: string | null
-  ) => {
-    setElements((prevElements) =>
-      prevElements.map((el) =>
-        el.id === elementId ? { ...el, rating, notes } : el
-      )
-    )
-    debouncedSaveElement(elementId, rating, notes)
+    }, 500)
   }
 
-  const debouncedSaveInspection = useCallback(
-    debounce(async (updates: Partial<Inspection>) => {
+  const handleInspectionChange = (field: string, value: unknown) => {
+    setInspection((prev) => {
+      if (!prev) return prev
+      return { ...prev, [field]: value }
+    })
+    if (inspectionSaveTimer.current) clearTimeout(inspectionSaveTimer.current)
+    inspectionSaveTimer.current = setTimeout(async () => {
       setSaving(true)
       try {
-        await supabase
-          .from('inspections')
-          .update(updates)
-          .eq('id', id)
+        await supabase.from('inspections').update({ [field]: value }).eq('id', id)
       } catch (err) {
         console.error('Error saving inspection:', err)
       } finally {
         setSaving(false)
       }
-    }, 500),
-    [supabase, id]
-  )
-
-  const handleInspectionChange = (field: string, value: any) => {
-    setInspection((prev) => {
-      if (!prev) return prev
-      const updated = { ...prev, [field]: value }
-      debouncedSaveInspection({ [field]: value })
-      return updated
-    })
+    }, 500)
   }
 
   const filteredElements = showOnlyNotes
@@ -337,7 +404,7 @@ export default function InspectionDetailPage() {
 
   const elementIds = elements.map((el) => ({
     id: el.id,
-    name: el.element_definition.name,
+    name: el.definition.name_pl,
   }))
 
   return (
@@ -347,7 +414,7 @@ export default function InspectionDetailPage() {
         <div className="flex justify-between items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold mb-2">
-              {inspection.turbine.code} - {inspection.wind_farm.name}
+              {inspection.turbine.turbine_code} - {inspection.wind_farm.name}
             </h1>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
               <div>
@@ -377,22 +444,23 @@ export default function InspectionDetailPage() {
             </div>
           </div>
           <Button
-            asChild
             className="gap-2"
             onClick={() =>
               window.open(`/api/pdf/${inspection.id}`, '_blank')
             }
           >
-            <div>
-              <Download className="h-4 w-4" />
-              Generuj PDF
-            </div>
+            <Download className="h-4 w-4" />
+            Generuj PDF
           </Button>
         </div>
       </div>
 
       {/* Status Bar */}
-      <StatusBar inspectionId={inspection.id} currentStatus={inspection.status} />
+      <StatusBar
+        status={inspection.status}
+        onStatusChange={(status) => handleInspectionChange('status', status)}
+        inspectionId={inspection.id}
+      />
 
       {/* Tabs */}
       <Tabs defaultValue="elementy" className="w-full">
@@ -427,7 +495,7 @@ export default function InspectionDetailPage() {
               <ElementCard
                 key={element.id}
                 element={element}
-                onChange={handleElementChange}
+                onUpdate={(data) => handleElementUpdate(element.id, data)}
               />
             ))}
           </div>
@@ -476,18 +544,18 @@ export default function InspectionDetailPage() {
             <div className="space-y-2">
               <Label htmlFor="rating">Ocena ogólna stanu technicznego</Label>
               <Select
-                value={inspection.overall_condition_rating?.toString() || ''}
+                value={inspection.overall_condition_rating || ''}
                 onValueChange={(value) =>
-                  handleInspectionChange('overall_condition_rating', parseInt(value))
+                  handleInspectionChange('overall_condition_rating', value || null)
                 }
               >
                 <SelectTrigger id="rating">
                   <SelectValue placeholder="Wybierz ocenę" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CONDITION_RATINGS.map((rating) => (
-                    <SelectItem key={rating.value} value={rating.value.toString()}>
-                      {rating.label}
+                  {Object.entries(CONDITION_RATINGS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>
