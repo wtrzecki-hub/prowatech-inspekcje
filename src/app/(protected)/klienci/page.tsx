@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import {
   Dialog,
   DialogContent,
@@ -44,11 +44,6 @@ export default function KlienciPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   useEffect(() => {
     setIsMobile(window.innerWidth < 768)
     const handleResize = () => setIsMobile(window.innerWidth < 768)
@@ -73,6 +68,7 @@ export default function KlienciPage() {
   }, [search, clients])
 
   async function fetchClients() {
+    const supabase = createClient()
     try {
       setLoading(true)
       const { data, error } = await supabase

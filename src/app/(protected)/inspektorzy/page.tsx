@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import {
   Dialog,
   DialogContent,
@@ -42,11 +42,6 @@ export default function InspektorzePage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   useEffect(() => {
     setIsMobile(window.innerWidth < 768)
     const handleResize = () => setIsMobile(window.innerWidth < 768)
@@ -59,6 +54,7 @@ export default function InspektorzePage() {
   }, [])
 
   async function fetchInspectors() {
+    const supabase = createClient()
     try {
       setLoading(true)
       const { data, error } = await supabase
@@ -83,6 +79,7 @@ export default function InspektorzePage() {
   }
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    const supabase = createClient()
     try {
       const { error } = await supabase
         .from('inspectors')

@@ -23,9 +23,8 @@ export function ClientForm({ initialData, onSuccess }: ClientFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const supabase = createClient()
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    const supabase = createClient()
     e.preventDefault()
     setLoading(true)
     setError(null)

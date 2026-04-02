@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 
@@ -104,11 +104,6 @@ export default function InspectionDetailPage() {
   const params = useParams()
   const id = params.id as string
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   const [inspection, setInspection] = useState<Inspection | null>(null)
   const [elements, setElements] = useState<InspectionElementWithDef[]>([])
   const [inspectors, setInspectors] = useState<Inspector[]>([])
@@ -125,6 +120,7 @@ export default function InspectionDetailPage() {
   }, [id])
 
   const fetchInspectionData = async () => {
+    const supabase = createClient()
     try {
       setLoading(true)
       setError(null)
@@ -264,6 +260,7 @@ export default function InspectionDetailPage() {
   }
 
   const fetchInspectionElements = async (inspectionId: string) => {
+    const supabase = createClient()
     const { data: elementsData, error: elementsError } = await supabase
       .from('inspection_elements')
       .select(
@@ -311,6 +308,7 @@ export default function InspectionDetailPage() {
   }
 
   const createElementsFromDefinitions = async (inspectionId: string) => {
+    const supabase = createClient()
     const { data: definitions } = await supabase
       .from('inspection_element_definitions')
       .select('id')
@@ -336,6 +334,7 @@ export default function InspectionDetailPage() {
     )
     if (elementSaveTimer.current) clearTimeout(elementSaveTimer.current)
     elementSaveTimer.current = setTimeout(async () => {
+      const supabase = createClient()
       setSaving(true)
       try {
         // Map not_applicable → is_not_applicable for the DB column name
@@ -360,6 +359,7 @@ export default function InspectionDetailPage() {
     })
     if (inspectionSaveTimer.current) clearTimeout(inspectionSaveTimer.current)
     inspectionSaveTimer.current = setTimeout(async () => {
+      const supabase = createClient()
       setSaving(true)
       try {
         await supabase.from('inspections').update({ [field]: value }).eq('id', id)

@@ -115,8 +115,6 @@ export function NewInspectionWizard() {
     step3: {} as Step3Values,
   })
 
-  const supabase = createClient()
-
   // Step 1 form
   const form1 = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
@@ -165,6 +163,7 @@ export function NewInspectionWizard() {
 
   // Fetch clients
   async function fetchClients() {
+    const supabase = createClient()
     try {
       const { data, error } = await supabase
         .from("clients")
@@ -185,6 +184,7 @@ export function NewInspectionWizard() {
 
   // Fetch inspectors
   async function fetchInspectors() {
+    const supabase = createClient()
     try {
       const { data, error } = await supabase
         .from("inspectors")
@@ -222,6 +222,7 @@ export function NewInspectionWizard() {
       return
     }
 
+    const supabase = createClient()
     try {
       const { data, error } = await supabase
         .from("wind_farms")
@@ -251,6 +252,7 @@ export function NewInspectionWizard() {
       return
     }
 
+    const supabase = createClient()
     try {
       const { data, error } = await supabase
         .from("turbines")
@@ -300,6 +302,7 @@ export function NewInspectionWizard() {
 
   // Handle step 4 submission - Create inspection
   async function onStep4Submit() {
+    const supabase = createClient()
     try {
       setIsLoading(true)
 

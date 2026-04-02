@@ -27,9 +27,8 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [aktywny, setAktywny] = useState(initialData?.aktywny ?? true)
 
-  const supabase = createClient()
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    const supabase = createClient()
     e.preventDefault()
     setLoading(true)
     setError(null)

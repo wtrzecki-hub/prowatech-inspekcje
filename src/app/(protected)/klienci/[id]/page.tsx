@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import {
   Dialog,
   DialogContent,
@@ -62,16 +62,12 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isWindFarmDialogOpen, setIsWindFarmDialogOpen] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   useEffect(() => {
     fetchClientData()
   }, [clientId])
 
   async function fetchClientData() {
+    const supabase = createClient()
     try {
       setLoading(true)
 

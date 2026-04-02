@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -53,16 +53,12 @@ export default function TurbineDetailPage() {
   const [inspections, setInspections] = useState<Inspection[]>([])
   const [loading, setLoading] = useState(true)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   useEffect(() => {
     fetchTurbineData()
   }, [turbineId])
 
   async function fetchTurbineData() {
+    const supabase = createClient()
     try {
       setLoading(true)
 

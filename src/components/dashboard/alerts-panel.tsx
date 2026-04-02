@@ -22,10 +22,10 @@ export function AlertsPanel() {
   const [recommendations, setRecommendations] = useState<RepairRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     const fetchOverdueRecommendations = async () => {
+      const supabase = createClient();
       try {
         const now = new Date().toISOString();
 
@@ -57,7 +57,7 @@ export function AlertsPanel() {
     };
 
     fetchOverdueRecommendations();
-  }, [supabase]);
+  }, []);
 
   const handleCardClick = (inspectionId: string) => {
     router.push(`/inspekcje/${inspectionId}`);

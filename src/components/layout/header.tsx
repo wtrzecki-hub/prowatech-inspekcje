@@ -24,9 +24,8 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick, user }: HeaderProps) {
-  const supabase = createClient();
-
   const handleLogout = async () => {
+    const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/login";
   };

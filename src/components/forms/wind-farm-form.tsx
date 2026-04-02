@@ -44,13 +44,12 @@ export function WindFarmForm({
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState(clientId || '')
 
-  const supabase = createClient()
-
   useEffect(() => {
     fetchClients()
   }, [])
 
   async function fetchClients() {
+    const supabase = createClient()
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -66,6 +65,7 @@ export function WindFarmForm({
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    const supabase = createClient()
     e.preventDefault()
     setLoading(true)
     setError(null)

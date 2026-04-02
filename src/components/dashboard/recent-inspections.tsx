@@ -37,10 +37,10 @@ export function RecentInspections() {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     const fetchInspections = async () => {
+      const supabase = createClient();
       try {
         const { data, error } = await supabase
           .from("inspections")
@@ -70,7 +70,7 @@ export function RecentInspections() {
     };
 
     fetchInspections();
-  }, [supabase]);
+  }, []);
 
   const handleRowClick = (inspectionId: string) => {
     router.push(`/inspekcje/${inspectionId}`);

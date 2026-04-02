@@ -28,10 +28,9 @@ export function StatsCards() {
     loading: true,
   });
 
-  const supabase = createClient();
-
   useEffect(() => {
     const fetchStats = async () => {
+      const supabase = createClient();
       try {
         // Get total inspections
         const { count: totalCount } = await supabase
@@ -76,7 +75,7 @@ export function StatsCards() {
     };
 
     fetchStats();
-  }, [supabase]);
+  }, []);
 
   const statCards = [
     {
