@@ -16,9 +16,10 @@ export default function ProtectedLayout({
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
+    const supabase = createClient();
+
     const checkAuth = async () => {
       const {
         data: { session },
@@ -46,7 +47,7 @@ export default function ProtectedLayout({
     });
 
     return () => subscription?.unsubscribe();
-  }, [supabase, router]);
+  }, [router]);
 
   if (isLoading) {
     return (
