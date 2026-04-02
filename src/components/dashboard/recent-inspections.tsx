@@ -37,9 +37,10 @@ export function RecentInspections() {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
+    const supabase = createClient();
+
     const fetchInspections = async () => {
       try {
         const { data, error } = await supabase
@@ -70,7 +71,7 @@ export function RecentInspections() {
     };
 
     fetchInspections();
-  }, [supabase]);
+  }, []);
 
   const handleRowClick = (inspectionId: string) => {
     router.push(`/inspekcje/${inspectionId}`);

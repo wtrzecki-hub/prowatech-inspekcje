@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { createBrowserClient } from "@supabase/ssr"
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -115,11 +115,6 @@ export function NewInspectionWizard() {
     step3: {} as Step3Values,
   })
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   // Step 1 form
   const form1 = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
@@ -168,6 +163,7 @@ export function NewInspectionWizard() {
 
   // Fetch clients
   async function fetchClients() {
+    const supabase = createClient()
     try {
       const { data, error } = await supabase
         .from("clients")
@@ -188,6 +184,7 @@ export function NewInspectionWizard() {
 
   // Fetch inspectors
   async function fetchInspectors() {
+    const supabase = createClient()
     try {
       const { data, error } = await supabase
         .from("inspectors")
@@ -216,6 +213,7 @@ export function NewInspectionWizard() {
 
   // Fetch wind farms for selected client
   async function handleClientChange(clientId: string) {
+    const supabase = createClient()
     form1.setValue("client_id", clientId)
     form1.setValue("wind_farm_id", "")
     form1.setValue("turbine_id", "")
@@ -246,6 +244,7 @@ export function NewInspectionWizard() {
 
   // Fetch turbines for selected wind farm
   async function handleWindFarmChange(windFarmId: string) {
+    const supabase = createClient()
     form1.setValue("wind_farm_id", windFarmId)
     form1.setValue("turbine_id", "")
 
@@ -303,6 +302,7 @@ export function NewInspectionWizard() {
 
   // Handle step 4 submission - Create inspection
   async function onStep4Submit() {
+    const supabase = createClient()
     try {
       setIsLoading(true)
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { debounce } from 'lodash-es'
@@ -95,11 +95,6 @@ export default function InspectionDetailPage() {
   const params = useParams()
   const id = params.id as string
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   const [inspection, setInspection] = useState<Inspection | null>(null)
   const [elements, setElements] = useState<InspectionElement[]>([])
   const [inspectors, setInspectors] = useState<Inspector[]>([])
@@ -116,6 +111,7 @@ export default function InspectionDetailPage() {
     try {
       setLoading(true)
       setError(null)
+      const supabase = createClient()
 
       // Fetch inspection with relations
       const { data: inspectionData, error: inspectionError } = await supabase
@@ -207,6 +203,7 @@ export default function InspectionDetailPage() {
   }
 
   const fetchInspectionElements = async (inspectionId: string) => {
+    const supabase = createClient()
     const { data: elementsData, error: elementsError } = await supabase
       .from('inspection_elements')
       .select(
@@ -232,6 +229,7 @@ export default function InspectionDetailPage() {
   }
 
   const createElementsFromDefinitions = async (inspectionId: string) => {
+    const supabase = createClient()
     const { data: definitions } = await supabase
       .from('inspection_element_definitions')
       .select('id')
@@ -252,6 +250,7 @@ export default function InspectionDetailPage() {
     debounce(async (elementId: string, rating: number | null, notes: string | null) => {
       setSaving(true)
       try {
+        const supabase = createClient()
         await supabase
           .from('inspection_elements')
           .update({ rating, notes })
@@ -262,7 +261,7 @@ export default function InspectionDetailPage() {
         setSaving(false)
       }
     }, 500),
-    [supabase]
+    []
   )
 
   const handleElementChange = (
@@ -282,6 +281,7 @@ export default function InspectionDetailPage() {
     debounce(async (updates: Partial<Inspection>) => {
       setSaving(true)
       try {
+        const supabase = createClient()
         await supabase
           .from('inspections')
           .update(updates)
@@ -292,7 +292,7 @@ export default function InspectionDetailPage() {
         setSaving(false)
       }
     }, 500),
-    [supabase, id]
+    [id]
   )
 
   const handleInspectionChange = (field: string, value: any) => {
