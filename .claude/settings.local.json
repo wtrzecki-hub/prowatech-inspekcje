@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth:*)",
+      "Bash(git --version)",
+      "Bash(cmd.exe /c \"gh --version\")",
+      "Bash(cmd.exe /c \"where gh\")",
+      "Bash(\"/c/Users/WALDEK/AppData/Roaming/Claude/local-agent-mode-sessions/d28cd4c8-0fb5-4bf2-864e-d55c7495ab59/3366c439-b986-487d-943d-8beaceb6368f/local_3aff2a1e-a716-47eb-b61e-b1da004388ca/outputs/prowatech-app/.gitignore\":*)",
+      "Bash(\"/c/Users/WALDEK/AppData/Roaming/Claude/local-agent-mode-sessions/d28cd4c8-0fb5-4bf2-864e-d55c7495ab59/3366c439-b986-487d-943d-8beaceb6368f/local_3aff2a1e-a716-47eb-b61e-b1da004388ca/outputs/prowatech-app/.env.local.example\":*)",
+      "Bash(git config:*)",
+      "Bash(cmd.exe /c \"xcopy /E /I /Y \"\"C:\\\\Users\\\\WALDEK\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\d28cd4c8-0fb5-4bf2-864e-d55c7495ab59\\\\3366c439-b986-487d-943d-8beaceb6368f\\\\local_3aff2a1e-a716-47eb-b61e-b1da004388ca\\\\outputs\\\\prowatech-app\"\" \"\"C:\\\\prowatech-inspekcje\"\"\")",
+      "Bash(cmd.exe /c \"mkdir C:\\\\prowatech-inspekcje && echo created\")",
+      "Bash(powershell.exe -Command \"New-Item -ItemType Directory -Path ''C:\\\\prowatech-inspekcje'' -Force; Copy-Item -Path ''C:\\\\Users\\\\WALDEK\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\d28cd4c8-0fb5-4bf2-864e-d55c7495ab59\\\\3366c439-b986-487d-943d-8beaceb6368f\\\\local_3aff2a1e-a716-47eb-b61e-b1da004388ca\\\\outputs\\\\prowatech-app\\\\*'' -Destination ''C:\\\\prowatech-inspekcje\\\\'' -Recurse -Force; Get-ChildItem ''C:\\\\prowatech-inspekcje''\")"
+    ]
+  }
+}
