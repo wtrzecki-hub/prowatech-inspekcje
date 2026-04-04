@@ -265,9 +265,9 @@ export default function InspectionsPage() {
                     locale: pl,
                   })}
                 </TableCell>
-                <TableCell>{inspection.turbine.code}</TableCell>
-                <TableCell>{inspection.wind_farm.name}</TableCell>
-                <TableCell>{inspection.client.name}</TableCell>
+                <TableCell>{inspection.turbine?.code || '-'}</TableCell>
+                <TableCell>{inspection.wind_farm?.name || '-'}</TableCell>
+                <TableCell>{inspection.client?.name || '-'}</TableCell>
                 <TableCell>
                   <Badge variant="outline">
                     {inspection.inspection_type === 'annual'
@@ -325,18 +325,18 @@ export default function InspectionsPage() {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Turbina</p>
-                      <p className="font-medium">{inspection.turbine.code}</p>
+                      <p className="font-medium">{inspection.turbine?.code || '-'}</p>
                     </div>
                   </div>
 
                   <div className="text-sm">
                     <p className="text-muted-foreground">Farma</p>
-                    <p className="font-medium">{inspection.wind_farm.name}</p>
+                    <p className="font-medium">{inspection.wind_farm?.name || '-'}</p>
                   </div>
 
                   <div className="text-sm">
                     <p className="text-muted-foreground">Klient</p>
-                    <p className="font-medium">{inspection.client.name}</p>
+                    <p className="font-medium">{inspection.client?.name || '-'}</p>
                   </div>
 
                   <div className="flex gap-2 pt-2">

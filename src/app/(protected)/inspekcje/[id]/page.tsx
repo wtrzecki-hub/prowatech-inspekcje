@@ -414,7 +414,7 @@ export default function InspectionDetailPage() {
         <div className="flex justify-between items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold mb-2">
-              {inspection.turbine.turbine_code} - {inspection.wind_farm.name}
+              {inspection.turbine?.turbine_code} - {inspection.wind_farm?.name}
             </h1>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
               <div>
@@ -434,12 +434,12 @@ export default function InspectionDetailPage() {
               <div>
                 <p className="text-muted-foreground">Turbina</p>
                 <p className="font-medium">
-                  {inspection.turbine.manufacturer} {inspection.turbine.model}
+                  {inspection.turbine?.manufacturer} {inspection.turbine?.model}
                 </p>
               </div>
               <div>
                 <p className="text-muted-foreground">Klient</p>
-                <p className="font-medium">{inspection.client.name}</p>
+                <p className="font-medium">{inspection.client?.name}</p>
               </div>
             </div>
           </div>

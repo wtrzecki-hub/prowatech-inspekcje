@@ -60,9 +60,9 @@ export default function KlienciPage() {
 
   useEffect(() => {
     const filtered = clients.filter((client) =>
-      client.nazwa.toLowerCase().includes(search.toLowerCase()) ||
-      client.email.toLowerCase().includes(search.toLowerCase()) ||
-      client.telefon.includes(search)
+      client.nazwa?.toLowerCase().includes(search.toLowerCase()) ||
+      client.email?.toLowerCase().includes(search.toLowerCase()) ||
+      client.telefon?.includes(search)
     )
     setFilteredClients(filtered)
   }, [search, clients])
