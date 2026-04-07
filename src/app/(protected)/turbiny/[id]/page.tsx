@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { MapPin, Wind, Calendar, FileText, AlertTriangle, ArrowLeft, ExternalLink } from 'lucide-react'
+import { MapPin, Wind, Calendar, FileText, AlertTriangle, ArrowLeft, ExternalLink, Camera, Loader2 } from 'lucide-react'
 
 interface Turbine {
   id: string
@@ -45,13 +44,30 @@ export default function TurbineDetailPage() {
   const router = useRouter()
   const params = useParams()
   const turbineId = params.id as string
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [turbine, setTurbine] = useState<Turbine | null>(null)
   const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     fetchTurbineData()
+    fetchUserRole()
   }, [turbineId])
+
+  async function fetchUserRole() {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+      if (data) setUserRole(data.role)
+    }
+  }
 
   async function fetchTurbineData() {
     const supabase = createClient()
@@ -71,6 +87,50 @@ export default function TurbineDetailPage() {
       setLoading(false)
     }
   }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !turbine) return
+
+    setUploading(true)
+    try {
+      const supabase = createClient()
+      const safeName = turbine.serial_number.replace(/[^\w\-]/g, '_')
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpeg'
+      const path = `${safeName}.${ext}`
+
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('turbine-photos')
+        .upload(path, file, { upsert: true, contentType: file.type })
+
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('turbine-photos')
+        .getPublicUrl(path)
+
+      // Update turbine record
+      const { error: updateError } = await supabase
+        .from('turbines')
+        .update({ photo_url: urlData.publicUrl })
+        .eq('id', turbine.id)
+
+      if (updateError) throw updateError
+
+      // Refresh data
+      setTurbine({ ...turbine, photo_url: urlData.publicUrl })
+    } catch (error) {
+      console.error('Błąd przy uploadzie zdjęcia:', error)
+      alert('Nie udało się dodać zdjęcia. Spróbuj ponownie.')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const canUpload = userRole === 'admin' || userRole === 'inspector'
 
   if (loading) {
     return (
@@ -117,18 +177,66 @@ export default function TurbineDetailPage() {
         </div>
       </div>
 
-      {/* Turbine photo */}
-      {turbine.photo_url && (
-        <Card>
-          <CardContent className="p-4">
-            <img
-              src={turbine.photo_url}
-              alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
-              className="w-full max-h-96 object-contain rounded-lg"
-            />
-          </CardContent>
-        </Card>
-      )}
+      {/* Turbine photo - portrait frame */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="w-full max-w-sm mx-auto">
+            {turbine.photo_url ? (
+              <div className="relative group">
+                <div className="w-full aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-200">
+                  <img
+                    src={turbine.photo_url}
+                    alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {canUpload && (
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Wgrywanie...</>
+                      ) : (
+                        <><Camera className="h-4 w-4 mr-1" /> Zmień zdjęcie</>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-full aspect-[3/4] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-3">
+                <Camera className="h-12 w-12 text-gray-300" />
+                <p className="text-sm text-gray-400">Brak zdjęcia turbiny</p>
+                {canUpload && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Wgrywanie...</>
+                    ) : (
+                      <><Camera className="h-4 w-4 mr-1" /> Dodaj zdjęcie</>
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handlePhotoUpload}
+          />
+        </CardContent>
+      </Card>
 
       {/* Alert: Next inspection */}
       {turbine.next_inspection_date && (
@@ -196,12 +304,7 @@ export default function TurbineDetailPage() {
                     {turbine.latitude.toFixed(6)}°N, {turbine.longitude.toFixed(6)}°E
                   </p>
                   {googleMapsUrl && (
-                    <a
-                      href={googleMapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800"
-                    >
+                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   )}
