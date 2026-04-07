@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,8 @@ interface Turbine {
   previous_findings: string | null
   previous_findings_status: string | null
   photo_url: string | null
+  photo_url_2: string | null
+  photo_url_3: string | null
   wind_farm_id: string
   wind_farms: {
     name: string
@@ -46,11 +48,8 @@ export default function TurbineDetailPage() {
   const router = useRouter()
   const params = useParams()
   const turbineId = params.id as string
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   const [turbine, setTurbine] = useState<Turbine | null>(null)
   const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
@@ -90,44 +89,44 @@ export default function TurbineDetailPage() {
     }
   }
 
-  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null)
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2 | 3) {
     const file = e.target.files?.[0]
     if (!file || !turbine) return
 
-    setUploading(true)
+    setUploadingSlot(slot)
     try {
       const supabase = createClient()
       const safeName = turbine.serial_number.replace(/[^\w\-]/g, '_')
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpeg'
-      const path = `${safeName}.${ext}`
+      const suffix = slot === 1 ? '' : `_${slot}`
+      const path = `${safeName}${suffix}.${ext}`
 
-      // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from('turbine-photos')
         .upload(path, file, { upsert: true, contentType: file.type })
 
       if (uploadError) throw uploadError
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('turbine-photos')
         .getPublicUrl(path)
 
-      // Update turbine record
+      const column = slot === 1 ? 'photo_url' : slot === 2 ? 'photo_url_2' : 'photo_url_3'
       const { error: updateError } = await supabase
         .from('turbines')
-        .update({ photo_url: urlData.publicUrl })
+        .update({ [column]: urlData.publicUrl })
         .eq('id', turbine.id)
 
       if (updateError) throw updateError
 
-      // Refresh data
-      setTurbine({ ...turbine, photo_url: urlData.publicUrl })
+      setTurbine({ ...turbine, [column]: urlData.publicUrl })
     } catch (error) {
       console.error('Błąd przy uploadzie zdjęcia:', error)
       alert('Nie udało się dodać zdjęcia. Spróbuj ponownie.')
     } finally {
-      setUploading(false)
+      setUploadingSlot(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -179,64 +178,57 @@ export default function TurbineDetailPage() {
         </div>
       </div>
 
-      {/* Turbine photo - portrait frame */}
+      {/* Turbine photos - portrait left + 2 landscape right */}
       <Card>
         <CardContent className="p-4">
-          <div className="w-full max-w-sm mx-auto">
-            {turbine.photo_url ? (
-              <div className="relative group">
-                <div className="w-full aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-200">
-                  <img
-                    src={turbine.photo_url}
-                    alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                {canUpload && (
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                    >
-                      {uploading ? (
-                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Wgrywanie...</>
-                      ) : (
-                        <><Camera className="h-4 w-4 mr-1" /> Zmień zdjęcie</>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="w-full aspect-[3/4] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-3">
-                <Camera className="h-12 w-12 text-gray-300" />
-                <p className="text-sm text-gray-400">Brak zdjęcia turbiny</p>
-                {canUpload && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                  >
-                    {uploading ? (
-                      <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Wgrywanie...</>
-                    ) : (
-                      <><Camera className="h-4 w-4 mr-1" /> Dodaj zdjęcie</>
-                    )}
-                  </Button>
-                )}
-              </div>
-            )}
+          <div className="grid grid-cols-2 gap-3" style={{ height: '420px' }}>
+            {/* Left: portrait photo */}
+            <PhotoSlot
+              url={turbine.photo_url}
+              alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
+              aspect="portrait"
+              canUpload={canUpload}
+              isUploading={uploadingSlot === 1}
+              onUpload={() => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = 'image/jpeg,image/png,image/webp'
+                input.onchange = (e) => handlePhotoUpload(e as any, 1)
+                input.click()
+              }}
+            />
+            {/* Right: 2 landscape photos stacked */}
+            <div className="flex flex-col gap-3 h-full">
+              <PhotoSlot
+                url={turbine.photo_url_2}
+                alt="Zdjęcie 2"
+                aspect="landscape"
+                canUpload={canUpload}
+                isUploading={uploadingSlot === 2}
+                onUpload={() => {
+                  const input = document.createElement('input')
+                  input.type = 'file'
+                  input.accept = 'image/jpeg,image/png,image/webp'
+                  input.onchange = (e) => handlePhotoUpload(e as any, 2)
+                  input.click()
+                }}
+              />
+              <PhotoSlot
+                url={turbine.photo_url_3}
+                alt="Zdjęcie 3"
+                aspect="landscape"
+                canUpload={canUpload}
+                isUploading={uploadingSlot === 3}
+                onUpload={() => {
+                  const input = document.createElement('input')
+                  input.type = 'file'
+                  input.accept = 'image/jpeg,image/png,image/webp'
+                  input.onchange = (e) => handlePhotoUpload(e as any, 3)
+                  input.click()
+                }}
+              />
+            </div>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handlePhotoUpload}
-          />
         </CardContent>
       </Card>
 
@@ -419,6 +411,59 @@ export default function TurbineDetailPage() {
           Zobacz klienta
         </Button>
       </div>
+    </div>
+  )
+}
+
+function PhotoSlot({
+  url,
+  alt,
+  aspect,
+  canUpload,
+  isUploading,
+  onUpload,
+}: {
+  url: string | null
+  alt: string
+  aspect: 'portrait' | 'landscape'
+  canUpload: boolean
+  isUploading: boolean
+  onUpload: () => void
+}) {
+  return (
+    <div className={`relative group ${aspect === 'portrait' ? 'h-full' : 'flex-1'}`}>
+      {url ? (
+        <div className="w-full h-full bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-200">
+          <img src={url} alt={alt} className="w-full h-full object-cover" />
+          {canUpload && (
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+              <button
+                onClick={onUpload}
+                disabled={isUploading}
+                className="bg-white/90 hover:bg-white text-gray-800 text-xs font-medium px-3 py-1.5 rounded-md flex items-center gap-1"
+              >
+                {isUploading ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Wgrywanie...</>
+                ) : (
+                  <><Camera className="h-3 w-3" /> Zmień</>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div
+          className="w-full h-full bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-gray-400 hover:bg-gray-100 transition-colors"
+          onClick={canUpload ? onUpload : undefined}
+        >
+          <Camera className="h-8 w-8 text-gray-300" />
+          {canUpload && (
+            <p className="text-xs text-gray-400">
+              {isUploading ? 'Wgrywanie...' : 'Dodaj zdjęcie'}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
