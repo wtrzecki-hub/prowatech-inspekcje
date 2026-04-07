@@ -29,6 +29,8 @@ interface Turbine {
   last_inspection_protocol: string | null
   next_inspection_date: string | null
   inspection_notes: string | null
+  previous_findings: string | null
+  previous_findings_status: string | null
   photo_url: string | null
   wind_farm_id: string
   wind_farms: {
@@ -361,6 +363,52 @@ export default function TurbineDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Previous findings */}
+      {turbine.previous_findings && turbine.previous_findings !== 'Brak robót' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Ustalenia i zalecenia z ostatniej kontroli
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {turbine.previous_findings.split('\n').map((finding, i) => {
+                const statusLines = turbine.previous_findings_status?.split('\n') || []
+                const status = statusLines[i]?.trim()
+                const isCompleted = status?.toLowerCase().startsWith('wykonano')
+                const isNotCompleted = status?.toLowerCase().startsWith('nie wykonano')
+
+                return (
+                  <div key={i} className="flex gap-3 items-start">
+                    <span className={`mt-1 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                      isCompleted
+                        ? 'bg-green-100 text-green-700'
+                        : isNotCompleted
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">{finding}</p>
+                      {status && (
+                        <p className={`text-xs mt-1 ${
+                          isCompleted ? 'text-green-600' : isNotCompleted ? 'text-red-600' : 'text-gray-500'
+                        }`}>
+                          {status}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Actions */}
       <div className="flex gap-3">
