@@ -52,12 +52,12 @@ interface Inspection {
 }
 
 const STATUSES_SELECT = [
-  { value: '', label: 'Wszystkie statusy' },
+  { value: 'all', label: 'Wszystkie statusy' },
   ...INSPECTION_STATUSES,
 ]
 
 const TYPES_SELECT = [
-  { value: '', label: 'Wszystkie rodzaje' },
+  { value: 'all', label: 'Wszystkie rodzaje' },
   ...INSPECTION_TYPES,
 ]
 
@@ -69,9 +69,9 @@ export default function InspectionsPage() {
   const pageSize = 25
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
-  const [clientFilter, setClientFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [clientFilter, setClientFilter] = useState('all')
   const [searchFilter, setSearchFilter] = useState('')
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
 
@@ -118,11 +118,11 @@ export default function InspectionsPage() {
       .range(offset, offset + pageSize - 1)
       .order('created_at', { ascending: false })
 
-    if (statusFilter) {
+    if (statusFilter && statusFilter !== 'all') {
       query = query.eq('status', statusFilter)
     }
 
-    if (typeFilter) {
+    if (typeFilter && typeFilter !== 'all') {
       query = query.eq('inspection_type', typeFilter)
     }
 
@@ -206,7 +206,7 @@ export default function InspectionsPage() {
               <SelectValue placeholder="Klient" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Wszyscy klienci</SelectItem>
+              <SelectItem value="all">Wszyscy klienci</SelectItem>
               {clients.map((client) => (
                 <SelectItem key={client.id} value={client.id}>
                   {client.name}
@@ -255,9 +255,9 @@ export default function InspectionsPage() {
                   {inspection.protocol_number || '-'}
                 </TableCell>
                 <TableCell>
-                  {format(new Date(inspection.inspection_date), 'dd.MM.yyyy', {
-                    locale: pl,
-                  })}
+                  {inspection.inspection_date
+                    ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
+                    : '-'}
                 </TableCell>
                 <TableCell>{inspection.turbines?.turbine_code || '-'}</TableCell>
                 <TableCell>{inspection.turbines?.wind_farms?.name || '-'}</TableCell>
@@ -369,17 +369,3 @@ export default function InspectionsPage() {
         >
           Poprzednia
         </Button>
-        <span className="text-sm text-muted-foreground">
-          Strona {page} z {totalPages} ({totalCount} wyników)
-        </span>
-        <Button
-          variant="outline"
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page === totalPages}
-        >
-          Następna
-        </Button>
-      </div>
-    </div>
-  )
-}
