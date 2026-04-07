@@ -45,19 +45,15 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (user) {
-    // Upsert profile in profiles table
+    // Profile is created by the database trigger on auth.users
+    // Just update full_name if it changed
     const { error: profileError } = await supabase
       .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || "",
-          avatar_url: user.user_metadata?.avatar_url || "",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      );
+      .update({
+        full_name: user.user_metadata?.full_name || "",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id);
 
     if (profileError) {
       console.error("Profile upsert error:", profileError);
