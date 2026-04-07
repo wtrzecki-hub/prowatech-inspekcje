@@ -59,7 +59,7 @@ export default function InspektorzePage() {
       const { data, error } = await supabase
         .from('inspectors')
         .select('*')
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
         .order('full_name', { ascending: true })
 
       if (error) throw error

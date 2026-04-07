@@ -87,18 +87,20 @@ export default function FarmyPage() {
         .select(
           'id, name, client_id, location_address, total_capacity_mw, number_of_turbines, commissioning_date, clients(name)'
         )
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
         .order('name', { ascending: true })
 
+      console.log('Supabase wind_farms response:', { farmsData, farmsError, count: farmsData?.length })
       if (farmsError) throw farmsError
       setWindFarms(farmsData || [])
 
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('id, name')
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
         .order('name', { ascending: true })
 
+      console.log('Supabase clients (farmy) response:', { clientsData, clientsError, count: clientsData?.length })
       if (clientsError) throw clientsError
       setClients(clientsData || [])
     } catch (error) {

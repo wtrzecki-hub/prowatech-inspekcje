@@ -81,7 +81,7 @@ export default function FarmDetailPage() {
         .from('turbines')
         .select('*')
         .eq('wind_farm_id', farmId)
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
         .order('turbine_code', { ascending: true })
 
       if (turbinesError) throw turbinesError

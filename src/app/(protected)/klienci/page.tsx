@@ -43,6 +43,7 @@ export default function KlienciPage() {
   const [search, setSearch] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<string>('')
 
   useEffect(() => {
     setIsMobile(window.innerWidth < 768)
@@ -71,15 +72,25 @@ export default function KlienciPage() {
     const supabase = createClient()
     try {
       setLoading(true)
+
+      // DEBUG: Check auth first
+      const { data: { session }, error: authError } = await supabase.auth.getSession()
+      const authInfo = `AUTH: session=${!!session}, email=${session?.user?.email || 'NONE'}, authErr=${authError?.message || 'none'}`
+
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
         .order('name', { ascending: true })
+
+      const dbInfo = `DB: count=${data?.length || 0}, error=${error?.message || 'none'}, first=${data?.[0]?.name || 'EMPTY'}`
+      setDebugInfo(`${authInfo} | ${dbInfo}`)
+      console.log('DEBUG:', authInfo, dbInfo)
 
       if (error) throw error
       setClients(data || [])
-    } catch (error) {
+    } catch (error: any) {
+      setDebugInfo(prev => prev + ` | CATCH: ${error?.message}`)
       console.error('Błąd przy pobieraniu klientów:', error)
     } finally {
       setLoading(false)
@@ -106,6 +117,11 @@ export default function KlienciPage() {
 
   return (
     <div className="space-y-6">
+      {debugInfo && (
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-900 px-4 py-2 rounded text-xs font-mono">
+          {debugInfo}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Klienci</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

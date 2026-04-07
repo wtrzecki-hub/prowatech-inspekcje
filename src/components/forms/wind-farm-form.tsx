@@ -54,7 +54,7 @@ export function WindFarmForm({
       const { data, error } = await supabase
         .from('clients')
         .select('id, name')
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
         .order('name')
 
       if (error) throw error

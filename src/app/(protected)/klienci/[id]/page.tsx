@@ -85,7 +85,7 @@ export default function ClientDetailPage() {
         .from('wind_farms')
         .select('*, turbines(id)')
         .eq('client_id', clientId)
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
         .order('name', { ascending: true })
 
       if (farmsError) throw farmsError

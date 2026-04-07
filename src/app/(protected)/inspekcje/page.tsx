@@ -114,7 +114,7 @@ export default function InspectionsPage() {
       `,
         { count: 'exact' }
       )
-      .eq('is_deleted', false)
+      .not('is_deleted', 'is', true)
       .range(offset, offset + pageSize - 1)
       .order('created_at', { ascending: false })
 
