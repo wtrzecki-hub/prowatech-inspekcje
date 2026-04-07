@@ -30,6 +30,7 @@ interface Turbine {
   last_inspection_protocol: string | null
   next_inspection_date: string | null
   inspection_notes: string | null
+  photo_url: string | null
   wind_farm_id: string
   wind_farms: {
     name: string
@@ -115,6 +116,19 @@ export default function TurbineDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* Turbine photo */}
+      {turbine.photo_url && (
+        <Card>
+          <CardContent className="p-4">
+            <img
+              src={turbine.photo_url}
+              alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
+              className="w-full max-h-96 object-contain rounded-lg"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Alert: Next inspection */}
       {turbine.next_inspection_date && (
