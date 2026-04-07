@@ -229,4 +229,9 @@ export default function FarmyPage() {
                 </TableRow>
               ))}
             </TableBody>
-         
+          </Table>
+        </div>
+      )}
+    </div>
+  )
+}

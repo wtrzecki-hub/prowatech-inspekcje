@@ -191,4 +191,7 @@ export default function KlienciPage() {
             </TableBody>
           </Table>
         </div>
-    
+      )}
+    </div>
+  )
+}
