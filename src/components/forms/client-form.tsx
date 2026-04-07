@@ -9,11 +9,11 @@ import { Label } from '@/components/ui/label'
 interface ClientFormProps {
   initialData?: {
     id: string
-    nazwa: string
-    nazwa_skrocona: string
-    osoba_kontaktowa: string
-    email: string
-    telefon: string
+    name: string
+    short_name: string
+    contact_person: string
+    contact_email: string
+    contact_phone: string
     nip: string
   }
   onSuccess?: () => void
@@ -31,11 +31,11 @@ export function ClientForm({ initialData, onSuccess }: ClientFormProps) {
 
     const formData = new FormData(e.currentTarget)
     const data = {
-      nazwa: formData.get('nazwa'),
-      nazwa_skrocona: formData.get('nazwa_skrocona'),
-      osoba_kontaktowa: formData.get('osoba_kontaktowa'),
-      email: formData.get('email'),
-      telefon: formData.get('telefon'),
+      name: formData.get('name'),
+      short_name: formData.get('short_name'),
+      contact_person: formData.get('contact_person'),
+      contact_email: formData.get('contact_email'),
+      contact_phone: formData.get('contact_phone'),
       nip: formData.get('nip'),
     }
 
@@ -72,54 +72,54 @@ export function ClientForm({ initialData, onSuccess }: ClientFormProps) {
       )}
 
       <div>
-        <Label htmlFor="nazwa">Nazwa</Label>
+        <Label htmlFor="name">Nazwa</Label>
         <Input
-          id="nazwa"
-          name="nazwa"
+          id="name"
+          name="name"
           required
-          defaultValue={initialData?.nazwa || ''}
+          defaultValue={initialData?.name || ''}
           placeholder="Nazwa klienta"
         />
       </div>
 
       <div>
-        <Label htmlFor="nazwa_skrocona">Nazwa skrócona</Label>
+        <Label htmlFor="short_name">Nazwa skrócona</Label>
         <Input
-          id="nazwa_skrocona"
-          name="nazwa_skrocona"
+          id="short_name"
+          name="short_name"
           required
-          defaultValue={initialData?.nazwa_skrocona || ''}
+          defaultValue={initialData?.short_name || ''}
           placeholder="Np. ABC"
         />
       </div>
 
       <div>
-        <Label htmlFor="osoba_kontaktowa">Osoba kontaktowa</Label>
+        <Label htmlFor="contact_person">Osoba kontaktowa</Label>
         <Input
-          id="osoba_kontaktowa"
-          name="osoba_kontaktowa"
-          defaultValue={initialData?.osoba_kontaktowa || ''}
+          id="contact_person"
+          name="contact_person"
+          defaultValue={initialData?.contact_person || ''}
           placeholder="Imię i nazwisko"
         />
       </div>
 
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="contact_email">Email</Label>
         <Input
-          id="email"
-          name="email"
+          id="contact_email"
+          name="contact_email"
           type="email"
-          defaultValue={initialData?.email || ''}
+          defaultValue={initialData?.contact_email || ''}
           placeholder="email@example.com"
         />
       </div>
 
       <div>
-        <Label htmlFor="telefon">Telefon</Label>
+        <Label htmlFor="contact_phone">Telefon</Label>
         <Input
-          id="telefon"
-          name="telefon"
-          defaultValue={initialData?.telefon || ''}
+          id="contact_phone"
+          name="contact_phone"
+          defaultValue={initialData?.contact_phone || ''}
           placeholder="+48 123 456 789"
         />
       </div>

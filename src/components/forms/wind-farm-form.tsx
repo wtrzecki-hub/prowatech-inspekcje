@@ -17,21 +17,21 @@ interface WindFarmFormProps {
   clientId?: string
   initialData?: {
     id: string
-    nazwa: string
+    name: string
     client_id: string
-    lokalizacja: string
-    lokalizacja_szerokosc: number
-    lokalizacja_dlugosc: number
-    moc_laczna_mw: number
-    liczba_turbin: number
-    data_uruchomienia: string
+    location_address: string
+    latitude: number
+    longitude: number
+    total_capacity_mw: number
+    number_of_turbines: number
+    commissioning_date: string
   }
   onSuccess?: () => void
 }
 
 interface Client {
   id: string
-  nazwa: string
+  name: string
 }
 
 export function WindFarmForm({
@@ -53,9 +53,9 @@ export function WindFarmForm({
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, nazwa')
+        .select('id, name')
         .eq('is_deleted', false)
-        .order('nazwa')
+        .order('name')
 
       if (error) throw error
       setClients(data || [])
@@ -72,18 +72,18 @@ export function WindFarmForm({
 
     const formData = new FormData(e.currentTarget)
     const data = {
-      nazwa: formData.get('nazwa'),
+      name: formData.get('name'),
       client_id: selectedClient,
-      lokalizacja: formData.get('lokalizacja'),
-      lokalizacja_szerokosc: parseFloat(
-        formData.get('lokalizacja_szerokosc') as string
+      location_address: formData.get('location_address'),
+      latitude: parseFloat(
+        formData.get('latitude') as string
       ),
-      lokalizacja_dlugosc: parseFloat(
-        formData.get('lokalizacja_dlugosc') as string
+      longitude: parseFloat(
+        formData.get('longitude') as string
       ),
-      moc_laczna_mw: parseFloat(formData.get('moc_laczna_mw') as string),
-      liczba_turbin: parseInt(formData.get('liczba_turbin') as string),
-      data_uruchomienia: formData.get('data_uruchomienia'),
+      total_capacity_mw: parseFloat(formData.get('total_capacity_mw') as string),
+      number_of_turbines: parseInt(formData.get('number_of_turbines') as string),
+      commissioning_date: formData.get('commissioning_date'),
     }
 
     try {
@@ -127,7 +127,7 @@ export function WindFarmForm({
           <SelectContent>
             {clients.map((client) => (
               <SelectItem key={client.id} value={client.id}>
-                {client.nazwa}
+                {client.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -135,48 +135,48 @@ export function WindFarmForm({
       </div>
 
       <div>
-        <Label htmlFor="nazwa">Nazwa farmy</Label>
+        <Label htmlFor="name">Nazwa farmy</Label>
         <Input
-          id="nazwa"
-          name="nazwa"
+          id="name"
+          name="name"
           required
-          defaultValue={initialData?.nazwa || ''}
+          defaultValue={initialData?.name || ''}
           placeholder="Nazwa farmy wiatrowej"
         />
       </div>
 
       <div>
-        <Label htmlFor="lokalizacja">Lokalizacja</Label>
+        <Label htmlFor="location_address">Lokalizacja</Label>
         <Input
-          id="lokalizacja"
-          name="lokalizacja"
+          id="location_address"
+          name="location_address"
           required
-          defaultValue={initialData?.lokalizacja || ''}
+          defaultValue={initialData?.location_address || ''}
           placeholder="Miejscowość"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="lokalizacja_szerokosc">Szerokość (°N)</Label>
+          <Label htmlFor="latitude">Szerokość (°N)</Label>
           <Input
-            id="lokalizacja_szerokosc"
-            name="lokalizacja_szerokosc"
+            id="latitude"
+            name="latitude"
             type="number"
             step="0.0001"
-            defaultValue={initialData?.lokalizacja_szerokosc || ''}
+            defaultValue={initialData?.latitude || ''}
             placeholder="52.1234"
           />
         </div>
 
         <div>
-          <Label htmlFor="lokalizacja_dlugosc">Długość (°E)</Label>
+          <Label htmlFor="longitude">Długość (°E)</Label>
           <Input
-            id="lokalizacja_dlugosc"
-            name="lokalizacja_dlugosc"
+            id="longitude"
+            name="longitude"
             type="number"
             step="0.0001"
-            defaultValue={initialData?.lokalizacja_dlugosc || ''}
+            defaultValue={initialData?.longitude || ''}
             placeholder="21.0123"
           />
         </div>
@@ -184,40 +184,40 @@ export function WindFarmForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="moc_laczna_mw">Moc łączna (MW)</Label>
+          <Label htmlFor="total_capacity_mw">Moc łączna (MW)</Label>
           <Input
-            id="moc_laczna_mw"
-            name="moc_laczna_mw"
+            id="total_capacity_mw"
+            name="total_capacity_mw"
             type="number"
             step="0.1"
             required
-            defaultValue={initialData?.moc_laczna_mw || ''}
+            defaultValue={initialData?.total_capacity_mw || ''}
             placeholder="50.0"
           />
         </div>
 
         <div>
-          <Label htmlFor="liczba_turbin">Liczba turbin</Label>
+          <Label htmlFor="number_of_turbines">Liczba turbin</Label>
           <Input
-            id="liczba_turbin"
-            name="liczba_turbin"
+            id="number_of_turbines"
+            name="number_of_turbines"
             type="number"
             required
-            defaultValue={initialData?.liczba_turbin || ''}
+            defaultValue={initialData?.number_of_turbines || ''}
             placeholder="25"
           />
         </div>
       </div>
 
       <div>
-        <Label htmlFor="data_uruchomienia">Data uruchomienia</Label>
+        <Label htmlFor="commissioning_date">Data uruchomienia</Label>
         <Input
-          id="data_uruchomienia"
-          name="data_uruchomienia"
+          id="commissioning_date"
+          name="commissioning_date"
           type="date"
           defaultValue={
-            initialData?.data_uruchomienia
-              ? new Date(initialData.data_uruchomienia).toISOString().split('T')[0]
+            initialData?.commissioning_date
+              ? new Date(initialData.commissioning_date).toISOString().split('T')[0]
               : ''
           }
         />

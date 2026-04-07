@@ -10,13 +10,13 @@ interface TurbineFormProps {
   windFarmId: string
   initialData?: {
     id: string
-    kod: string
-    producent: string
+    turbine_code: string
+    manufacturer: string
     model: string
-    moc_mw: number
-    wysokosc_wiezy: number
-    srednica_rotora: number
-    numer_seryjny: string
+    rated_power_mw: number
+    tower_height_m: number
+    rotor_diameter_m: number
+    serial_number: string
   }
   onSuccess?: () => void
 }
@@ -37,13 +37,13 @@ export function TurbineForm({
 
     const formData = new FormData(e.currentTarget)
     const data = {
-      kod: formData.get('kod'),
-      producent: formData.get('producent'),
+      turbine_code: formData.get('turbine_code'),
+      manufacturer: formData.get('manufacturer'),
       model: formData.get('model'),
-      moc_mw: parseFloat(formData.get('moc_mw') as string),
-      wysokosc_wiezy: parseInt(formData.get('wysokosc_wiezy') as string),
-      srednica_rotora: parseInt(formData.get('srednica_rotora') as string),
-      numer_seryjny: formData.get('numer_seryjny'),
+      rated_power_mw: parseFloat(formData.get('rated_power_mw') as string),
+      tower_height_m: parseInt(formData.get('tower_height_m') as string),
+      rotor_diameter_m: parseInt(formData.get('rotor_diameter_m') as string),
+      serial_number: formData.get('serial_number'),
       wind_farm_id: windFarmId,
     }
 
@@ -80,23 +80,23 @@ export function TurbineForm({
       )}
 
       <div>
-        <Label htmlFor="kod">Kod turbiny</Label>
+        <Label htmlFor="turbine_code">Kod turbiny</Label>
         <Input
-          id="kod"
-          name="kod"
+          id="turbine_code"
+          name="turbine_code"
           required
-          defaultValue={initialData?.kod || ''}
+          defaultValue={initialData?.turbine_code || ''}
           placeholder="T001"
         />
       </div>
 
       <div>
-        <Label htmlFor="producent">Producent</Label>
+        <Label htmlFor="manufacturer">Producent</Label>
         <Input
-          id="producent"
-          name="producent"
+          id="manufacturer"
+          name="manufacturer"
           required
-          defaultValue={initialData?.producent || ''}
+          defaultValue={initialData?.manufacturer || ''}
           placeholder="Siemens, Vestas, itp."
         />
       </div>
@@ -113,49 +113,49 @@ export function TurbineForm({
       </div>
 
       <div>
-        <Label htmlFor="moc_mw">Moc (MW)</Label>
+        <Label htmlFor="rated_power_mw">Moc (MW)</Label>
         <Input
-          id="moc_mw"
-          name="moc_mw"
+          id="rated_power_mw"
+          name="rated_power_mw"
           type="number"
           step="0.1"
           required
-          defaultValue={initialData?.moc_mw || ''}
+          defaultValue={initialData?.rated_power_mw || ''}
           placeholder="2.7"
         />
       </div>
 
       <div>
-        <Label htmlFor="wysokosc_wiezy">Wysokość wieży (m)</Label>
+        <Label htmlFor="tower_height_m">Wysokość wieży (m)</Label>
         <Input
-          id="wysokosc_wiezy"
-          name="wysokosc_wiezy"
+          id="tower_height_m"
+          name="tower_height_m"
           type="number"
           required
-          defaultValue={initialData?.wysokosc_wiezy || ''}
+          defaultValue={initialData?.tower_height_m || ''}
           placeholder="120"
         />
       </div>
 
       <div>
-        <Label htmlFor="srednica_rotora">Średnica rotora (m)</Label>
+        <Label htmlFor="rotor_diameter_m">Średnica rotora (m)</Label>
         <Input
-          id="srednica_rotora"
-          name="srednica_rotora"
+          id="rotor_diameter_m"
+          name="rotor_diameter_m"
           type="number"
           required
-          defaultValue={initialData?.srednica_rotora || ''}
+          defaultValue={initialData?.rotor_diameter_m || ''}
           placeholder="100"
         />
       </div>
 
       <div>
-        <Label htmlFor="numer_seryjny">Numer seryjny</Label>
+        <Label htmlFor="serial_number">Numer seryjny</Label>
         <Input
-          id="numer_seryjny"
-          name="numer_seryjny"
+          id="serial_number"
+          name="serial_number"
           required
-          defaultValue={initialData?.numer_seryjny || ''}
+          defaultValue={initialData?.serial_number || ''}
           placeholder="SWW-123456789"
         />
       </div>

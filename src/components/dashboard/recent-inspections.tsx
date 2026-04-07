@@ -21,16 +21,15 @@ interface Inspection {
   protocol_number: string;
   inspection_date: string;
   status: string;
-  assessment_rating: number | null;
   turbines: {
-    name: string;
-  };
-  wind_farms: {
-    name: string;
-  };
-  clients: {
-    name: string;
-  };
+    turbine_code: string;
+    wind_farms: {
+      name: string;
+      clients: {
+        name: string;
+      };
+    };
+  } | null;
 }
 
 export function RecentInspections() {
@@ -50,10 +49,7 @@ export function RecentInspections() {
             protocol_number,
             inspection_date,
             status,
-            assessment_rating,
-            turbines(name),
-            wind_farms(name),
-            clients(name)
+            turbines(turbine_code, wind_farms(name, clients(name)))
           `
           )
           .order("inspection_date", { ascending: false })
@@ -141,13 +137,13 @@ export function RecentInspections() {
                       {new Date(inspection.inspection_date).toLocaleDateString("pl-PL")}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {inspection.turbines?.name || "-"}
+                      {inspection.turbines?.turbine_code || "-"}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {inspection.wind_farms?.name || "-"}
+                      {inspection.turbines?.wind_farms?.name || "-"}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {inspection.clients?.name || "-"}
+                      {inspection.turbines?.wind_farms?.clients?.name || "-"}
                     </TableCell>
                     <TableCell className="text-xs">
                       <Badge className={getStatusColor(inspection.status)}>
@@ -155,7 +151,7 @@ export function RecentInspections() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs font-medium">
-                      {inspection.assessment_rating ? `${inspection.assessment_rating}/10` : "-"}
+                      {"-"}
                     </TableCell>
                   </TableRow>
                 ))}

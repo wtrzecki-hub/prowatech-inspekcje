@@ -18,30 +18,30 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 interface Turbine {
   id: string
-  kod: string
-  producent: string
+  turbine_code: string
+  manufacturer: string
   model: string
-  moc_mw: number
-  wysokosc_wiezy: number
-  srednica_rotora: number
-  numer_seryjny: string
+  rated_power_mw: number
+  tower_height_m: number
+  rotor_diameter_m: number
+  serial_number: string
   wind_farm_id: string
   wind_farms: {
-    nazwa: string
+    name: string
     client_id: string
     clients: {
-      nazwa: string
+      name: string
     }
   }
 }
 
 interface Inspection {
   id: string
-  numer_protokolu: string
-  data_inspekcji: string
-  typ_inspekcji: string
+  protocol_number: string
+  inspection_date: string
+  inspection_type: string
   status: string
-  ocena_ogolna: string
+  overall_condition_rating: string
 }
 
 export default function TurbineDetailPage() {
@@ -64,7 +64,7 @@ export default function TurbineDetailPage() {
 
       const { data: turbineData, error: turbineError } = await supabase
         .from('turbines')
-        .select('*, wind_farms(nazwa, client_id, clients(nazwa))')
+        .select('*, wind_farms(name, client_id, clients(name))')
         .eq('id', turbineId)
         .single()
 
@@ -73,9 +73,9 @@ export default function TurbineDetailPage() {
 
       const { data: inspectionsData, error: inspectionsError } = await supabase
         .from('inspections')
-        .select('id, numer_protokolu, data_inspekcji, typ_inspekcji, status, ocena_ogolna')
+        .select('id, protocol_number, inspection_date, inspection_type, status, overall_condition_rating')
         .eq('turbine_id', turbineId)
-        .order('data_inspekcji', { ascending: false })
+        .order('inspection_date', { ascending: false })
 
       if (inspectionsError) throw inspectionsError
       setInspections(inspectionsData || [])
@@ -124,7 +124,7 @@ export default function TurbineDetailPage() {
         >
           Wróć
         </Button>
-        <h1 className="text-3xl font-bold">{turbine.kod}</h1>
+        <h1 className="text-3xl font-bold">{turbine.turbine_code}</h1>
       </div>
 
       <div className="flex gap-2 text-sm">
@@ -137,7 +137,7 @@ export default function TurbineDetailPage() {
             )
           }
         >
-          {turbine.wind_farms.clients.nazwa}
+          {turbine.wind_farms.clients.name}
         </Button>
         <span className="text-gray-400">/</span>
         <Button
@@ -147,10 +147,10 @@ export default function TurbineDetailPage() {
             router.push(`/farmy/${turbine.wind_farm_id}`)
           }
         >
-          {turbine.wind_farms.nazwa}
+          {turbine.wind_farms.name}
         </Button>
         <span className="text-gray-400">/</span>
-        <span className="py-2">{turbine.kod}</span>
+        <span className="py-2">{turbine.turbine_code}</span>
       </div>
 
       <Card>
@@ -204,15 +204,15 @@ export default function TurbineDetailPage() {
                         router.push(`/inspekcje/${inspection.id}`)
                       }
                     >
-                      <TableCell>{inspection.numer_protokolu}</TableCell>
+                      <TableCell>{inspection.protocol_number}</TableCell>
                       <TableCell>
-                        {new Date(inspection.data_inspekcji).toLocaleDateString(
+                        {new Date(inspection.inspection_date).toLocaleDateString(
                           'pl-PL'
                         )}
                       </TableCell>
-                      <TableCell>{inspection.typ_inspekcji}</TableCell>
+                      <TableCell>{inspection.inspection_type}</TableCell>
                       <TableCell>{inspection.status}</TableCell>
-                      <TableCell>{inspection.ocena_ogolna}</TableCell>
+                      <TableCell>{inspection.overall_condition_rating}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

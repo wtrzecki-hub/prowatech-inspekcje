@@ -10,14 +10,13 @@ import { Checkbox } from '@/components/ui/checkbox'
 interface InspectorFormProps {
   initialData?: {
     id: string
-    imie: string
-    nazwisko: string
-    numer_uprawnien: string
-    specjalnosc: string
-    izba: string
-    telefon: string
+    full_name: string
+    license_number: string
+    specialty: string
+    chamber_membership: string
+    phone: string
     email: string
-    aktywny: boolean
+    is_active: boolean
   }
   onSuccess?: () => void
 }
@@ -25,7 +24,7 @@ interface InspectorFormProps {
 export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [aktywny, setAktywny] = useState(initialData?.aktywny ?? true)
+  const [aktywny, setAktywny] = useState(initialData?.is_active ?? true)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     const supabase = createClient()
@@ -35,14 +34,13 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
 
     const formData = new FormData(e.currentTarget)
     const data = {
-      imie: formData.get('imie'),
-      nazwisko: formData.get('nazwisko'),
-      numer_uprawnien: formData.get('numer_uprawnien'),
-      specjalnosc: formData.get('specjalnosc'),
-      izba: formData.get('izba'),
-      telefon: formData.get('telefon'),
+      full_name: `${formData.get('imie')} ${formData.get('nazwisko')}`.trim(),
+      license_number: formData.get('numer_uprawnien'),
+      specialty: formData.get('specjalnosc'),
+      chamber_membership: formData.get('izba'),
+      phone: formData.get('telefon'),
       email: formData.get('email'),
-      aktywny: aktywny,
+      is_active: aktywny,
     }
 
     try {
@@ -84,7 +82,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
             id="imie"
             name="imie"
             required
-            defaultValue={initialData?.imie || ''}
+            defaultValue={initialData?.full_name?.split(' ')[0] || ''}
             placeholder="Jan"
           />
         </div>
@@ -95,7 +93,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
             id="nazwisko"
             name="nazwisko"
             required
-            defaultValue={initialData?.nazwisko || ''}
+            defaultValue={initialData?.full_name?.split(' ').slice(1).join(' ') || ''}
             placeholder="Kowalski"
           />
         </div>
@@ -107,7 +105,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
           id="numer_uprawnien"
           name="numer_uprawnien"
           required
-          defaultValue={initialData?.numer_uprawnien || ''}
+          defaultValue={initialData?.license_number || ''}
           placeholder="123/2024"
         />
       </div>
@@ -118,7 +116,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
           id="specjalnosc"
           name="specjalnosc"
           required
-          defaultValue={initialData?.specjalnosc || ''}
+          defaultValue={initialData?.specialty || ''}
           placeholder="Elektryk, Mechanik, itp."
         />
       </div>
@@ -128,7 +126,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
         <Input
           id="izba"
           name="izba"
-          defaultValue={initialData?.izba || ''}
+          defaultValue={initialData?.chamber_membership || ''}
           placeholder="Izba Inżynierów"
         />
       </div>
@@ -150,7 +148,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
         <Input
           id="telefon"
           name="telefon"
-          defaultValue={initialData?.telefon || ''}
+          defaultValue={initialData?.phone || ''}
           placeholder="+48 123 456 789"
         />
       </div>

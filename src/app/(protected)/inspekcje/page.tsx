@@ -40,15 +40,15 @@ interface Inspection {
   inspection_type: 'annual' | 'five_year'
   status: string
   overall_condition_rating: 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny' | null
-  turbine: {
-    code: string
-  }
-  wind_farm: {
-    name: string
-  }
-  client: {
-    name: string
-  }
+  turbines: {
+    turbine_code: string
+    wind_farms: {
+      name: string
+      clients: {
+        name: string
+      }
+    }
+  } | null
 }
 
 const STATUSES_SELECT = [
@@ -110,9 +110,7 @@ export default function InspectionsPage() {
         inspection_type,
         status,
         overall_condition_rating,
-        turbine:turbine_id (code),
-        wind_farm:wind_farm_id (name),
-        client:client_id (name)
+        turbines(turbine_code, wind_farms(name, clients(name)))
       `,
         { count: 'exact' }
       )
@@ -128,13 +126,9 @@ export default function InspectionsPage() {
       query = query.eq('inspection_type', typeFilter)
     }
 
-    if (clientFilter) {
-      query = query.eq('client_id', clientFilter)
-    }
-
     if (searchFilter) {
       query = query.or(
-        `protocol_number.ilike.%${searchFilter}%,turbine_id.in.(select id from turbines where code.ilike.%${searchFilter}%)`
+        `protocol_number.ilike.%${searchFilter}%`
       )
     }
 
@@ -265,9 +259,9 @@ export default function InspectionsPage() {
                     locale: pl,
                   })}
                 </TableCell>
-                <TableCell>{inspection.turbine?.code || '-'}</TableCell>
-                <TableCell>{inspection.wind_farm?.name || '-'}</TableCell>
-                <TableCell>{inspection.client?.name || '-'}</TableCell>
+                <TableCell>{inspection.turbines?.turbine_code || '-'}</TableCell>
+                <TableCell>{inspection.turbines?.wind_farms?.name || '-'}</TableCell>
+                <TableCell>{inspection.turbines?.wind_farms?.clients?.name || '-'}</TableCell>
                 <TableCell>
                   <Badge variant="outline">
                     {inspection.inspection_type === 'annual'
@@ -325,18 +319,18 @@ export default function InspectionsPage() {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Turbina</p>
-                      <p className="font-medium">{inspection.turbine?.code || '-'}</p>
+                      <p className="font-medium">{inspection.turbines?.turbine_code || '-'}</p>
                     </div>
                   </div>
 
                   <div className="text-sm">
                     <p className="text-muted-foreground">Farma</p>
-                    <p className="font-medium">{inspection.wind_farm?.name || '-'}</p>
+                    <p className="font-medium">{inspection.turbines?.wind_farms?.name || '-'}</p>
                   </div>
 
                   <div className="text-sm">
                     <p className="text-muted-foreground">Klient</p>
-                    <p className="font-medium">{inspection.client?.name || '-'}</p>
+                    <p className="font-medium">{inspection.turbines?.wind_farms?.clients?.name || '-'}</p>
                   </div>
 
                   <div className="flex gap-2 pt-2">

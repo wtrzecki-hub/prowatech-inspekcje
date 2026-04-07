@@ -32,20 +32,20 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 interface WindFarm {
   id: string
-  nazwa: string
+  name: string
   client_id: string
-  lokalizacja: string
-  moc_laczna_mw: number
-  liczba_turbin: number
-  data_uruchomienia: string
+  location_address: string
+  total_capacity_mw: number
+  number_of_turbines: number
+  commissioning_date: string
   clients: {
-    nazwa: string
+    name: string
   }
 }
 
 interface Client {
   id: string
-  nazwa: string
+  name: string
 }
 
 export default function FarmyPage() {
@@ -85,19 +85,19 @@ export default function FarmyPage() {
       const { data: farmsData, error: farmsError } = await supabase
         .from('wind_farms')
         .select(
-          'id, nazwa, client_id, lokalizacja, moc_laczna_mw, liczba_turbin, data_uruchomienia, clients(nazwa)'
+          'id, name, client_id, location_address, total_capacity_mw, number_of_turbines, commissioning_date, clients(name)'
         )
         .eq('is_deleted', false)
-        .order('nazwa', { ascending: true })
+        .order('name', { ascending: true })
 
       if (farmsError) throw farmsError
       setWindFarms(farmsData || [])
 
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
-        .select('id, nazwa')
+        .select('id, name')
         .eq('is_deleted', false)
-        .order('nazwa', { ascending: true })
+        .order('name', { ascending: true })
 
       if (clientsError) throw clientsError
       setClients(clientsData || [])
@@ -154,7 +154,7 @@ export default function FarmyPage() {
             <SelectItem value="all">Wszyscy klienci</SelectItem>
             {clients.map((client) => (
               <SelectItem key={client.id} value={client.id}>
-                {client.nazwa}
+                {client.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -171,23 +171,23 @@ export default function FarmyPage() {
             >
               <CardContent className="pt-6">
                 <div className="space-y-2">
-                  <p className="font-semibold text-lg">{farm.nazwa}</p>
-                  <p className="text-sm text-gray-600">{farm.clients.nazwa}</p>
+                  <p className="font-semibold text-lg">{farm.name}</p>
+                  <p className="text-sm text-gray-600">{farm.clients.name}</p>
                   <p className="text-sm">
                     <span className="font-semibold">Lokalizacja:</span>{' '}
-                    {farm.lokalizacja}
+                    {farm.location_address}
                   </p>
                   <p className="text-sm">
                     <span className="font-semibold">Moc łączna:</span>{' '}
-                    {farm.moc_laczna_mw} MW
+                    {farm.total_capacity_mw} MW
                   </p>
                   <p className="text-sm">
                     <span className="font-semibold">Turbiny:</span>{' '}
-                    {farm.liczba_turbin}
+                    {farm.number_of_turbines}
                   </p>
                   <p className="text-sm">
                     <span className="font-semibold">Data uruchomienia:</span>{' '}
-                    {new Date(farm.data_uruchomienia).toLocaleDateString(
+                    {new Date(farm.commissioning_date).toLocaleDateString(
                       'pl-PL'
                     )}
                   </p>
@@ -216,13 +216,13 @@ export default function FarmyPage() {
                   className="cursor-pointer hover:bg-gray-50"
                   onClick={() => router.push(`/farmy/${farm.id}`)}
                 >
-                  <TableCell className="font-medium">{farm.nazwa}</TableCell>
-                  <TableCell>{farm.clients.nazwa}</TableCell>
-                  <TableCell>{farm.lokalizacja}</TableCell>
-                  <TableCell>{farm.moc_laczna_mw}</TableCell>
-                  <TableCell>{farm.liczba_turbin}</TableCell>
+                  <TableCell className="font-medium">{farm.name}</TableCell>
+                  <TableCell>{farm.clients.name}</TableCell>
+                  <TableCell>{farm.location_address}</TableCell>
+                  <TableCell>{farm.total_capacity_mw}</TableCell>
+                  <TableCell>{farm.number_of_turbines}</TableCell>
                   <TableCell>
-                    {new Date(farm.data_uruchomienia).toLocaleDateString(
+                    {new Date(farm.commissioning_date).toLocaleDateString(
                       'pl-PL'
                     )}
                   </TableCell>

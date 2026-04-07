@@ -26,27 +26,27 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 interface WindFarm {
   id: string
-  nazwa: string
+  name: string
   client_id: string
-  lokalizacja: string
-  lokalizacja_szerokosc: number
-  lokalizacja_dlugosc: number
-  moc_laczna_mw: number
-  liczba_turbin: number
-  data_uruchomienia: string
+  location_address: string
+  latitude: number
+  longitude: number
+  total_capacity_mw: number
+  number_of_turbines: number
+  commissioning_date: string
   clients: {
-    nazwa: string
+    name: string
   }
 }
 
 interface Turbine {
   id: string
-  kod: string
-  producent: string
+  turbine_code: string
+  manufacturer: string
   model: string
-  moc_mw: number
-  wysokosc_wiezy: number
-  numer_seryjny: string
+  rated_power_mw: number
+  tower_height_m: number
+  serial_number: string
 }
 
 export default function FarmDetailPage() {
@@ -70,7 +70,7 @@ export default function FarmDetailPage() {
 
       const { data: farmData, error: farmError } = await supabase
         .from('wind_farms')
-        .select('*, clients(nazwa)')
+        .select('*, clients(name)')
         .eq('id', farmId)
         .single()
 
@@ -82,7 +82,7 @@ export default function FarmDetailPage() {
         .select('*')
         .eq('wind_farm_id', farmId)
         .eq('is_deleted', false)
-        .order('kod', { ascending: true })
+        .order('turbine_code', { ascending: true })
 
       if (turbinesError) throw turbinesError
       setTurbines(turbinesData || [])
@@ -136,7 +136,7 @@ export default function FarmDetailPage() {
         >
           Wróć
         </Button>
-        <h1 className="text-3xl font-bold">{windFarm.nazwa}</h1>
+        <h1 className="text-3xl font-bold">{windFarm.name}</h1>
       </div>
 
       <Card>
@@ -147,26 +147,26 @@ export default function FarmDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-600">Klient</label>
-              <p className="text-lg">{windFarm.clients.nazwa}</p>
+              <p className="text-lg">{windFarm.clients.name}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-600">Moc łączna</label>
-              <p className="text-lg">{windFarm.moc_laczna_mw} MW</p>
+              <p className="text-lg">{windFarm.total_capacity_mw} MW</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-600">Lokalizacja</label>
-              <p className="text-lg">{windFarm.lokalizacja}</p>
+              <p className="text-lg">{windFarm.location_address}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-600">Liczba turbin</label>
-              <p className="text-lg">{windFarm.liczba_turbin}</p>
+              <p className="text-lg">{windFarm.number_of_turbines}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-600">
                 Współrzędne geograficzne
               </label>
               <p className="text-sm">
-                {windFarm.lokalizacja_szerokosc}, {windFarm.lokalizacja_dlugosc}
+                {windFarm.latitude}, {windFarm.longitude}
               </p>
             </div>
             <div>
@@ -174,7 +174,7 @@ export default function FarmDetailPage() {
                 Data uruchomienia
               </label>
               <p className="text-lg">
-                {new Date(windFarm.data_uruchomienia).toLocaleDateString('pl-PL')}
+                {new Date(windFarm.commissioning_date).toLocaleDateString('pl-PL')}
               </p>
             </div>
           </div>
@@ -222,12 +222,12 @@ export default function FarmDetailPage() {
                       className="cursor-pointer hover:bg-gray-50"
                       onClick={() => router.push(`/turbiny/${turbine.id}`)}
                     >
-                      <TableCell className="font-medium">{turbine.kod}</TableCell>
-                      <TableCell>{turbine.producent}</TableCell>
+                      <TableCell className="font-medium">{turbine.turbine_code}</TableCell>
+                      <TableCell>{turbine.manufacturer}</TableCell>
                       <TableCell>{turbine.model}</TableCell>
-                      <TableCell>{turbine.moc_mw}</TableCell>
-                      <TableCell>{turbine.wysokosc_wiezy} m</TableCell>
-                      <TableCell>{turbine.numer_seryjny}</TableCell>
+                      <TableCell>{turbine.rated_power_mw}</TableCell>
+                      <TableCell>{turbine.tower_height_m} m</TableCell>
+                      <TableCell>{turbine.serial_number}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

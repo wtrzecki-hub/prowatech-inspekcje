@@ -26,11 +26,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 interface Client {
   id: string
-  nazwa: string
-  nazwa_skrocona: string
-  osoba_kontaktowa: string
-  email: string
-  telefon: string
+  name: string
+  short_name: string
+  contact_person: string
+  contact_email: string
+  contact_phone: string
   nip: string
 }
 
@@ -60,9 +60,9 @@ export default function KlienciPage() {
 
   useEffect(() => {
     const filtered = clients.filter((client) =>
-      client.nazwa?.toLowerCase().includes(search.toLowerCase()) ||
-      client.email?.toLowerCase().includes(search.toLowerCase()) ||
-      client.telefon?.includes(search)
+      client.name?.toLowerCase().includes(search.toLowerCase()) ||
+      client.contact_email?.toLowerCase().includes(search.toLowerCase()) ||
+      client.contact_phone?.includes(search)
     )
     setFilteredClients(filtered)
   }, [search, clients])
@@ -75,7 +75,7 @@ export default function KlienciPage() {
         .from('clients')
         .select('*')
         .eq('is_deleted', false)
-        .order('nazwa', { ascending: true })
+        .order('name', { ascending: true })
 
       if (error) throw error
       setClients(data || [])
@@ -138,17 +138,17 @@ export default function KlienciPage() {
             >
               <CardContent className="pt-6">
                 <div className="space-y-2">
-                  <p className="font-semibold text-lg">{client.nazwa}</p>
-                  <p className="text-sm text-gray-600">{client.nazwa_skrocona}</p>
+                  <p className="font-semibold text-lg">{client.name}</p>
+                  <p className="text-sm text-gray-600">{client.short_name}</p>
                   <p className="text-sm">
                     <span className="font-semibold">Osoba kontaktowa:</span>{' '}
-                    {client.osoba_kontaktowa}
+                    {client.contact_person}
                   </p>
                   <p className="text-sm">
-                    <span className="font-semibold">Email:</span> {client.email}
+                    <span className="font-semibold">Email:</span> {client.contact_email}
                   </p>
                   <p className="text-sm">
-                    <span className="font-semibold">Telefon:</span> {client.telefon}
+                    <span className="font-semibold">Telefon:</span> {client.contact_phone}
                   </p>
                   <p className="text-sm">
                     <span className="font-semibold">NIP:</span> {client.nip}
@@ -178,11 +178,11 @@ export default function KlienciPage() {
                   className="cursor-pointer hover:bg-gray-50"
                   onClick={() => router.push(`/klienci/${client.id}`)}
                 >
-                  <TableCell className="font-medium">{client.nazwa}</TableCell>
-                  <TableCell>{client.nazwa_skrocona}</TableCell>
-                  <TableCell>{client.osoba_kontaktowa}</TableCell>
-                  <TableCell>{client.email}</TableCell>
-                  <TableCell>{client.telefon}</TableCell>
+                  <TableCell className="font-medium">{client.name}</TableCell>
+                  <TableCell>{client.short_name}</TableCell>
+                  <TableCell>{client.contact_person}</TableCell>
+                  <TableCell>{client.contact_email}</TableCell>
+                  <TableCell>{client.contact_phone}</TableCell>
                   <TableCell>{client.nip}</TableCell>
                 </TableRow>
               ))}

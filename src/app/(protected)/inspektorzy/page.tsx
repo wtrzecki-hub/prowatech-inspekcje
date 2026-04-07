@@ -25,14 +25,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 interface Inspector {
   id: string
-  imie: string
-  nazwisko: string
-  numer_uprawnien: string
-  specjalnosc: string
-  izba: string
-  telefon: string
+  full_name: string
+  license_number: string
+  specialty: string
+  chamber_membership: string
+  phone: string
   email: string
-  aktywny: boolean
+  is_active: boolean
 }
 
 export default function InspektorzePage() {
@@ -61,7 +60,7 @@ export default function InspektorzePage() {
         .from('inspectors')
         .select('*')
         .eq('is_deleted', false)
-        .order('nazwisko', { ascending: true })
+        .order('full_name', { ascending: true })
 
       if (error) throw error
       setInspectors(data || [])
@@ -83,7 +82,7 @@ export default function InspektorzePage() {
     try {
       const { error } = await supabase
         .from('inspectors')
-        .update({ aktywny: !currentStatus })
+        .update({ is_active: !currentStatus })
         .eq('id', id)
 
       if (error) throw error
@@ -143,24 +142,24 @@ export default function InspektorzePage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-semibold text-lg">
-                        {inspector.imie} {inspector.nazwisko}
+                        {inspector.full_name}
                       </p>
                       <p className="text-sm text-gray-600">
-                        {inspector.specjalnosc}
+                        {inspector.specialty}
                       </p>
                     </div>
-                    <Badge variant={inspector.aktywny ? 'default' : 'secondary'}>
-                      {inspector.aktywny ? 'Aktywny' : 'Nieaktywny'}
+                    <Badge variant={inspector.is_active ? 'default' : 'secondary'}>
+                      {inspector.is_active ? 'Aktywny' : 'Nieaktywny'}
                     </Badge>
                   </div>
                   <div className="space-y-1 text-sm">
                     <p>
                       <span className="font-semibold">Nr uprawnień:</span>{' '}
-                      {inspector.numer_uprawnien}
+                      {inspector.license_number}
                     </p>
                     <p>
                       <span className="font-semibold">Izba:</span>{' '}
-                      {inspector.izba}
+                      {inspector.chamber_membership}
                     </p>
                     <p>
                       <span className="font-semibold">Email:</span>{' '}
@@ -168,7 +167,7 @@ export default function InspektorzePage() {
                     </p>
                     <p>
                       <span className="font-semibold">Telefon:</span>{' '}
-                      {inspector.telefon}
+                      {inspector.phone}
                     </p>
                   </div>
                   <div className="flex gap-2 mt-4">
@@ -186,10 +185,10 @@ export default function InspektorzePage() {
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        handleToggleActive(inspector.id, inspector.aktywny)
+                        handleToggleActive(inspector.id, inspector.is_active)
                       }
                     >
-                      {inspector.aktywny ? 'Dezaktywuj' : 'Aktywuj'}
+                      {inspector.is_active ? 'Dezaktywuj' : 'Aktywuj'}
                     </Button>
                   </div>
                 </div>
@@ -216,16 +215,16 @@ export default function InspektorzePage() {
               {inspectors.map((inspector) => (
                 <TableRow key={inspector.id}>
                   <TableCell className="font-medium">
-                    {inspector.imie} {inspector.nazwisko}
+                    {inspector.full_name}
                   </TableCell>
-                  <TableCell>{inspector.numer_uprawnien}</TableCell>
-                  <TableCell>{inspector.specjalnosc}</TableCell>
-                  <TableCell>{inspector.izba}</TableCell>
-                  <TableCell>{inspector.telefon}</TableCell>
+                  <TableCell>{inspector.license_number}</TableCell>
+                  <TableCell>{inspector.specialty}</TableCell>
+                  <TableCell>{inspector.chamber_membership}</TableCell>
+                  <TableCell>{inspector.phone}</TableCell>
                   <TableCell>{inspector.email}</TableCell>
                   <TableCell>
-                    <Badge variant={inspector.aktywny ? 'default' : 'secondary'}>
-                      {inspector.aktywny ? 'Aktywny' : 'Nieaktywny'}
+                    <Badge variant={inspector.is_active ? 'default' : 'secondary'}>
+                      {inspector.is_active ? 'Aktywny' : 'Nieaktywny'}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -244,10 +243,10 @@ export default function InspektorzePage() {
                         size="sm"
                         variant="ghost"
                         onClick={() =>
-                          handleToggleActive(inspector.id, inspector.aktywny)
+                          handleToggleActive(inspector.id, inspector.is_active)
                         }
                       >
-                        {inspector.aktywny ? 'Dezaktywuj' : 'Aktywuj'}
+                        {inspector.is_active ? 'Dezaktywuj' : 'Aktywuj'}
                       </Button>
                     </div>
                   </TableCell>
