@@ -174,7 +174,9 @@ export default function FarmDetailPage() {
                 Data uruchomienia
               </label>
               <p className="text-lg">
-                {new Date(windFarm.commissioning_date).toLocaleDateString('pl-PL')}
+                {windFarm.commissioning_date
+                  ? new Date(windFarm.commissioning_date).toLocaleDateString('pl-PL')
+                  : 'Brak danych'}
               </p>
             </div>
           </div>

@@ -312,9 +312,9 @@ export default function InspectionsPage() {
                     <div>
                       <p className="text-muted-foreground">Data</p>
                       <p className="font-medium">
-                        {format(new Date(inspection.inspection_date), 'dd.MM.yyyy', {
-                          locale: pl,
-                        })}
+                        {inspection.inspection_date
+                          ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
+                          : '-'}
                       </p>
                     </div>
                     <div>

@@ -90,7 +90,6 @@ export default function FarmyPage() {
         .not('is_deleted', 'is', true)
         .order('name', { ascending: true })
 
-      console.log('Supabase wind_farms response:', { farmsData, farmsError, count: farmsData?.length })
       if (farmsError) throw farmsError
       setWindFarms(farmsData || [])
 
@@ -100,7 +99,6 @@ export default function FarmyPage() {
         .not('is_deleted', 'is', true)
         .order('name', { ascending: true })
 
-      console.log('Supabase clients (farmy) response:', { clientsData, clientsError, count: clientsData?.length })
       if (clientsError) throw clientsError
       setClients(clientsData || [])
     } catch (error) {
@@ -189,9 +187,9 @@ export default function FarmyPage() {
                   </p>
                   <p className="text-sm">
                     <span className="font-semibold">Data uruchomienia:</span>{' '}
-                    {new Date(farm.commissioning_date).toLocaleDateString(
-                      'pl-PL'
-                    )}
+                    {farm.commissioning_date
+                      ? new Date(farm.commissioning_date).toLocaleDateString('pl-PL')
+                      : '-'}
                   </p>
                 </div>
               </CardContent>
@@ -224,22 +222,11 @@ export default function FarmyPage() {
                   <TableCell>{farm.total_capacity_mw}</TableCell>
                   <TableCell>{farm.number_of_turbines}</TableCell>
                   <TableCell>
-                    {new Date(farm.commissioning_date).toLocaleDateString(
-                      'pl-PL'
-                    )}
+                    {farm.commissioning_date
+                      ? new Date(farm.commissioning_date).toLocaleDateString('pl-PL')
+                      : '-'}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {filteredWindFarms.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500">Brak farm do wyświetlenia</p>
-        </div>
-      )}
-    </div>
-  )
-}
+         
