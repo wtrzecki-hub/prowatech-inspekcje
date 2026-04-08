@@ -9,7 +9,6 @@ import {
   ClipboardCheck,
   Users,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -36,15 +35,17 @@ export function MobileNav({ isOpen, onOpenChange }: MobileNavProps) {
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="p-0">
-        <SheetHeader className="border-b border-gray-200 px-4 py-3">
-          <SheetTitle className="text-left flex items-center gap-2">
-            <Wind className="h-5 w-5 text-blue-600" />
-            <span>Prowatech</span>
+      <SheetContent side="left" className="p-0 w-72">
+        <SheetHeader className="border-b border-gray-100 px-5 py-4">
+          <SheetTitle className="text-left flex items-center gap-2.5">
+            <div className="p-1.5 bg-blue-600 rounded-lg">
+              <Wind className="h-4 w-4 text-white" />
+            </div>
+            <span className="font-bold text-gray-900">Prowatech</span>
           </SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-2 p-4">
+        <div className="px-3 py-4 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
@@ -55,16 +56,25 @@ export function MobileNav({ isOpen, onOpenChange }: MobileNavProps) {
                 href={item.href}
                 onClick={() => onOpenChange(false)}
               >
-                <Button
-                  variant={isActive ? "default" : "ghost"}
+                <div
                   className={cn(
-                    "w-full justify-start",
-                    isActive && "bg-blue-600 text-white hover:bg-blue-700"
+                    "flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150",
+                    isActive
+                      ? "bg-blue-50 text-blue-700 font-semibold"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
                   )}
                 >
-                  <Icon className="h-4 w-4 mr-2" />
-                  {item.label}
-                </Button>
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 flex-shrink-0",
+                      isActive ? "text-blue-600" : "text-gray-400"
+                    )}
+                  />
+                  <span className="text-sm">{item.label}</span>
+                  {isActive && (
+                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-600" />
+                  )}
+                </div>
               </Link>
             );
           })}

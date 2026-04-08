@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -75,17 +75,17 @@ export function AlertsPanel() {
 
   if (loading) {
     return (
-      <Card className="lg:col-span-1">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-600" />
+      <Card className="lg:col-span-1 rounded-xl border border-gray-100 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-500" />
             Przeterminowane zalecenia
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full" />
+              <Skeleton key={i} className="h-20 w-full rounded-xl" />
             ))}
           </div>
         </CardContent>
@@ -94,42 +94,49 @@ export function AlertsPanel() {
   }
 
   return (
-    <Card className="lg:col-span-1">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <AlertCircle className="h-5 w-5 text-red-600" />
+    <Card className="lg:col-span-1 rounded-xl border border-gray-100 shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-red-500" />
           Przeterminowane zalecenia
+          {recommendations.length > 0 && (
+            <span className="ml-auto text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+              {recommendations.length}
+            </span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
         {recommendations.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-green-600 text-sm font-medium">
-              ✓ Brak przeterminowanych zaleceń
-            </p>
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="p-3 bg-green-50 rounded-2xl mb-3">
+              <CheckCircle2 className="h-8 w-8 text-green-500" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700">Wszystko w porządku</p>
+            <p className="text-xs text-gray-400 mt-1">Brak przeterminowanych zaleceń</p>
           </div>
         ) : (
           <div className="space-y-3">
             {recommendations.map((rec) => (
               <div
                 key={rec.id}
-                className="p-3 rounded-lg border border-red-200 bg-red-50 cursor-pointer hover:bg-red-100 transition"
+                className="p-3 rounded-xl border border-red-100 bg-red-50 cursor-pointer hover:bg-red-100 transition-colors"
                 onClick={() => handleCardClick(rec.inspection_id)}
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-gray-900">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 truncate">
                       {rec.element_name}
                     </p>
-                    <p className="text-xs text-gray-700 mt-1">
+                    <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
                       {rec.scope_description}
                     </p>
                   </div>
-                  <Badge className={getUrgencyColor(rec.urgency_level)}>
+                  <Badge className={`${getUrgencyColor(rec.urgency_level)} flex-shrink-0`}>
                     {getUrgencyLabel(rec.urgency_level)}
                   </Badge>
                 </div>
-                <p className="text-xs text-red-700 font-medium">
+                <p className="text-xs text-red-600 font-semibold">
                   Termin: {new Date(rec.deadline_date).toLocaleDateString("pl-PL")}
                 </p>
               </div>

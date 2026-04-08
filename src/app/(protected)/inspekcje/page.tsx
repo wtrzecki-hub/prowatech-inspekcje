@@ -29,9 +29,9 @@ import {
 } from '@/lib/constants'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Plus, ClipboardList, Search } from 'lucide-react'
 
 interface Inspection {
   id: string
@@ -68,7 +68,6 @@ export default function InspectionsPage() {
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 25
 
-  // Filters
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [clientFilter, setClientFilter] = useState('all')
@@ -146,17 +145,14 @@ export default function InspectionsPage() {
 
   if (loading && page === 1) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Inspekcje</h1>
-          <Button asChild>
-            <Link href="/inspekcje/nowa">Nowa inspekcja</Link>
-          </Button>
+          <Skeleton className="h-8 w-32 rounded-xl" />
+          <Skeleton className="h-12 w-40 rounded-xl" />
         </div>
-
-        <div className="space-y-4">
+        <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full" />
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -164,222 +160,249 @@ export default function InspectionsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Inspekcje</h1>
-        <Button asChild>
-          <Link href="/inspekcje/nowa">Nowa inspekcja</Link>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Inspekcje</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{totalCount} inspekcji łącznie</p>
+        </div>
+        <Button asChild className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 gap-2 px-5">
+          <Link href="/inspekcje/nowa">
+            <Plus className="h-4 w-4" />
+            Nowa inspekcja
+          </Link>
         </Button>
       </div>
 
       {/* Filters */}
-      <div className="bg-muted p-4 rounded-lg space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUSES_SELECT.map((status) => (
-                <SelectItem key={status.value} value={status.value}>
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <Card className="rounded-xl border border-gray-100 shadow-sm">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-12 rounded-xl border-gray-200">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES_SELECT.map((status) => (
+                  <SelectItem key={status.value} value={status.value}>
+                    {status.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Typ kontroli" />
-            </SelectTrigger>
-            <SelectContent>
-              {TYPES_SELECT.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="h-12 rounded-xl border-gray-200">
+                <SelectValue placeholder="Typ kontroli" />
+              </SelectTrigger>
+              <SelectContent>
+                {TYPES_SELECT.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select value={clientFilter} onValueChange={setClientFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Klient" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Wszyscy klienci</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>
-                  {client.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={clientFilter} onValueChange={setClientFilter}>
+              <SelectTrigger className="h-12 rounded-xl border-gray-200">
+                <SelectValue placeholder="Klient" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Wszyscy klienci</SelectItem>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Input
-            placeholder="Szukaj..."
-            value={searchFilter}
-            onChange={(e) => {
-              setSearchFilter(e.target.value)
-              setPage(1)
-            }}
-            className="lg:col-span-2"
-          />
-        </div>
-      </div>
-
-      {/* Desktop Table View */}
-      <div className="hidden md:block border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nr protokołu</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead>Turbina</TableHead>
-              <TableHead>Farma</TableHead>
-              <TableHead>Klient</TableHead>
-              <TableHead>Typ</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Ocena ogólna</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {inspections.map((inspection) => (
-              <TableRow
-                key={inspection.id}
-                className="cursor-pointer hover:bg-muted"
-                onClick={() => {
-                  window.location.href = `/inspekcje/${inspection.id}`
+            <div className="relative lg:col-span-2">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Szukaj po numerze protokołu..."
+                value={searchFilter}
+                onChange={(e) => {
+                  setSearchFilter(e.target.value)
+                  setPage(1)
                 }}
-              >
-                <TableCell className="font-medium">
-                  {inspection.protocol_number || '-'}
-                </TableCell>
-                <TableCell>
-                  {inspection.inspection_date
-                    ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
-                    : '-'}
-                </TableCell>
-                <TableCell>{inspection.turbines?.turbine_code || '-'}</TableCell>
-                <TableCell>{inspection.turbines?.wind_farms?.name || '-'}</TableCell>
-                <TableCell>{inspection.turbines?.wind_farms?.clients?.name || '-'}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">
-                    {inspection.inspection_type === 'annual'
-                      ? 'Roczna'
-                      : 'Pięcioletnia'}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="secondary"
-                    className={STATUS_COLORS[inspection.status]}
+                className="h-12 pl-10 rounded-xl border-gray-200"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {inspections.length === 0 && !loading ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="p-4 bg-gray-50 rounded-2xl mb-4">
+            <ClipboardList className="h-10 w-10 text-gray-300" />
+          </div>
+          <p className="text-sm font-semibold text-gray-700 mb-1">Brak inspekcji</p>
+          <p className="text-xs text-gray-400 mb-4">Nie znaleziono inspekcji spełniających kryteria</p>
+          <Button asChild className="h-10 rounded-xl">
+            <Link href="/inspekcje/nowa">Dodaj inspekcję</Link>
+          </Button>
+        </div>
+      ) : (
+        <>
+          {/* Desktop Table View */}
+          <Card className="hidden md:block rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 hover:bg-gray-50 border-b border-gray-100">
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3 px-4">Nr protokołu</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Data</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Turbina</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Farma</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Klient</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Typ</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Status</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Ocena</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inspections.map((inspection) => (
+                  <TableRow
+                    key={inspection.id}
+                    className="cursor-pointer hover:bg-blue-50/50 transition-colors border-b border-gray-50 h-16"
+                    onClick={() => {
+                      window.location.href = `/inspekcje/${inspection.id}`
+                    }}
                   >
-                    {INSPECTION_STATUSES.find((s) => s.value === inspection.status)
-                      ?.label}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {inspection.overall_condition_rating ? (
-                    <RatingBadge rating={inspection.overall_condition_rating} />
-                  ) : (
-                    '-'
-                  )}
-                </TableCell>
-              </TableRow>
+                    <TableCell className="font-semibold text-gray-900 px-4">
+                      {inspection.protocol_number || '-'}
+                    </TableCell>
+                    <TableCell className="text-gray-600">
+                      {inspection.inspection_date
+                        ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
+                        : '-'}
+                    </TableCell>
+                    <TableCell className="text-gray-600">{inspection.turbines?.turbine_code || '-'}</TableCell>
+                    <TableCell className="text-gray-600">{inspection.turbines?.wind_farms?.name || '-'}</TableCell>
+                    <TableCell className="text-gray-600">{inspection.turbines?.wind_farms?.clients?.name || '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs font-medium">
+                        {inspection.inspection_type === 'annual'
+                          ? 'Roczna'
+                          : 'Pięcioletnia'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={STATUS_COLORS[inspection.status]}
+                      >
+                        {INSPECTION_STATUSES.find((s) => s.value === inspection.status)
+                          ?.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {inspection.overall_condition_rating ? (
+                        <RatingBadge rating={inspection.overall_condition_rating} />
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3">
+            {inspections.map((inspection) => (
+              <Link key={inspection.id} href={`/inspekcje/${inspection.id}`}>
+                <Card className="hover:shadow-md cursor-pointer transition-all rounded-xl border border-gray-100">
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <p className="text-xs text-gray-400">Nr protokołu</p>
+                          <p className="font-semibold text-gray-900">
+                            {inspection.protocol_number || '-'}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0 mt-1" />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-gray-400">Data</p>
+                          <p className="font-medium text-gray-700">
+                            {inspection.inspection_date
+                              ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
+                              : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Turbina</p>
+                          <p className="font-medium text-gray-700">{inspection.turbines?.turbine_code || '-'}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-sm">
+                        <p className="text-xs text-gray-400">Farma</p>
+                        <p className="font-medium text-gray-700">{inspection.turbines?.wind_farms?.name || '-'}</p>
+                      </div>
+
+                      <div className="text-sm">
+                        <p className="text-xs text-gray-400">Klient</p>
+                        <p className="font-medium text-gray-700">{inspection.turbines?.wind_farms?.clients?.name || '-'}</p>
+                      </div>
+
+                      <div className="flex gap-2 flex-wrap pt-1">
+                        <Badge variant="outline" className="text-xs">
+                          {inspection.inspection_type === 'annual'
+                            ? 'Roczna'
+                            : 'Pięcioletnia'}
+                        </Badge>
+                        <Badge
+                          variant="secondary"
+                          className={STATUS_COLORS[inspection.status]}
+                        >
+                          {INSPECTION_STATUSES.find((s) => s.value === inspection.status)
+                            ?.label}
+                        </Badge>
+                        {inspection.overall_condition_rating && (
+                          <RatingBadge rating={inspection.overall_condition_rating} />
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
-        {inspections.map((inspection) => (
-          <Link key={inspection.id} href={`/inspekcje/${inspection.id}`}>
-            <Card className="hover:bg-muted cursor-pointer transition-colors">
-              <CardContent className="pt-6">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nr protokołu</p>
-                      <p className="font-semibold">
-                        {inspection.protocol_number || '-'}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Data</p>
-                      <p className="font-medium">
-                        {inspection.inspection_date
-                          ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
-                          : '-'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Turbina</p>
-                      <p className="font-medium">{inspection.turbines?.turbine_code || '-'}</p>
-                    </div>
-                  </div>
-
-                  <div className="text-sm">
-                    <p className="text-muted-foreground">Farma</p>
-                    <p className="font-medium">{inspection.turbines?.wind_farms?.name || '-'}</p>
-                  </div>
-
-                  <div className="text-sm">
-                    <p className="text-muted-foreground">Klient</p>
-                    <p className="font-medium">{inspection.turbines?.wind_farms?.clients?.name || '-'}</p>
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Badge variant="outline">
-                      {inspection.inspection_type === 'annual'
-                        ? 'Roczna'
-                        : 'Pięcioletnia'}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className={STATUS_COLORS[inspection.status]}
-                    >
-                      {INSPECTION_STATUSES.find((s) => s.value === inspection.status)
-                        ?.label}
-                    </Badge>
-                  </div>
-
-                  {inspection.overall_condition_rating && (
-                    <div className="pt-2">
-                      <RatingBadge rating={inspection.overall_condition_rating} />
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+          </div>
+        </>
+      )}
 
       {/* Pagination */}
-      <div className="flex justify-center items-center gap-2">
-        <Button
-          variant="outline"
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page === 1}
-        >
-          Poprzednia
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          Strona {page} z {totalPages} ({totalCount} wyników)
-        </span>
-        <Button
-          variant="outline"
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page === totalPages}
-        >
-          Następna
-        </Button>
-      </div>
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-3">
+          <Button
+            variant="outline"
+            className="h-10 rounded-xl border-gray-200"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+          >
+            Poprzednia
+          </Button>
+          <span className="text-sm text-gray-500 font-medium">
+            {page} / {totalPages} ({totalCount})
+          </span>
+          <Button
+            variant="outline"
+            className="h-10 rounded-xl border-gray-200"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+          >
+            Następna
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

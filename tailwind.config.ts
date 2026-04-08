@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -21,6 +22,37 @@ const config: Config = {
           800: "#1f2937",
           900: "#111827",
         },
+        primary: {
+          DEFAULT: "#2563eb",
+          foreground: "#ffffff",
+          50: "#eff6ff",
+          100: "#dbeafe",
+          500: "#3b82f6",
+          600: "#2563eb",
+          700: "#1d4ed8",
+        },
+        destructive: {
+          DEFAULT: "#dc2626",
+          foreground: "#ffffff",
+          50: "#fef2f2",
+          100: "#fee2e2",
+        },
+        warning: {
+          DEFAULT: "#d97706",
+          foreground: "#ffffff",
+          50: "#fffbeb",
+          100: "#fef3c7",
+        },
+        success: {
+          DEFAULT: "#16a34a",
+          foreground: "#ffffff",
+          50: "#f0fdf4",
+          100: "#dcfce7",
+        },
+      },
+      borderRadius: {
+        xl: "0.75rem",
+        "2xl": "1rem",
       },
       keyframes: {
         "slide-down": {

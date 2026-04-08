@@ -7,7 +7,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 
@@ -32,24 +32,20 @@ export function StatsCards() {
     const fetchStats = async () => {
       const supabase = createClient();
       try {
-        // Get total inspections
         const { count: totalCount } = await supabase
           .from("inspections")
           .select("*", { count: "exact", head: true });
 
-        // Get in-progress inspections
         const { count: inProgressCount } = await supabase
           .from("inspections")
           .select("*", { count: "exact", head: true })
           .eq("status", "in_progress");
 
-        // Get open repair recommendations
         const { count: openRecommendationsCount } = await supabase
           .from("repair_recommendations")
           .select("*", { count: "exact", head: true })
           .eq("is_completed", false);
 
-        // Get inspections completed this month
         const now = new Date();
         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -80,31 +76,39 @@ export function StatsCards() {
   const statCards = [
     {
       label: "Łączna liczba inspekcji",
+      subtitle: "Wszystkie zarejestrowane",
       value: stats.totalInspections,
       icon: BarChart3,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100",
+      iconColor: "text-blue-600",
+      iconBg: "bg-blue-50",
+      valueColor: "text-blue-700",
     },
     {
       label: "Inspekcje w toku",
+      subtitle: "Aktualnie prowadzone",
       value: stats.inProgressInspections,
       icon: Clock,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100",
+      iconColor: "text-amber-600",
+      iconBg: "bg-amber-50",
+      valueColor: "text-amber-700",
     },
     {
       label: "Otwarte zalecenia",
+      subtitle: "Wymagające naprawy",
       value: stats.openRecommendations,
       icon: AlertCircle,
-      color: "text-red-600",
-      bgColor: "bg-red-100",
+      iconColor: "text-red-600",
+      iconBg: "bg-red-50",
+      valueColor: "text-red-700",
     },
     {
       label: "Zakończone w tym miesiącu",
+      subtitle: "Zamknięte inspekcje",
       value: stats.completedThisMonth,
       icon: CheckCircle2,
-      color: "text-green-600",
-      bgColor: "bg-green-100",
+      iconColor: "text-green-600",
+      iconBg: "bg-green-50",
+      valueColor: "text-green-700",
     },
   ];
 
@@ -112,12 +116,11 @@ export function StatsCards() {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2">
-              <Skeleton className="h-4 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-12" />
+          <Card key={i} className="rounded-xl">
+            <CardContent className="p-6">
+              <Skeleton className="h-10 w-10 rounded-xl mb-4" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-4 w-32" />
             </CardContent>
           </Card>
         ))}
@@ -130,19 +133,16 @@ export function StatsCards() {
       {statCards.map((stat, index) => {
         const Icon = stat.icon;
         return (
-          <Card key={index}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                  <Icon className={`h-4 w-4 ${stat.color}`} />
-                </div>
-                {stat.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
+          <Card key={index} className="rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className={`inline-flex p-2.5 rounded-xl ${stat.iconBg} mb-4`}>
+                <Icon className={`h-5 w-5 ${stat.iconColor}`} />
+              </div>
+              <div className={`text-4xl font-bold mb-1 ${stat.valueColor}`}>
                 {stat.value}
               </div>
+              <div className="text-sm font-semibold text-gray-700">{stat.label}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{stat.subtitle}</div>
             </CardContent>
           </Card>
         );

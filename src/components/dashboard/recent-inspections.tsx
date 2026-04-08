@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ClipboardList, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -12,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { INSPECTION_STATUS } from "@/lib/constants";
@@ -84,14 +86,14 @@ export function RecentInspections() {
 
   if (loading) {
     return (
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-lg">Ostatnie inspekcje</CardTitle>
+      <Card className="lg:col-span-2 rounded-xl border border-gray-100 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold text-gray-900">Ostatnie inspekcje</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
+              <Skeleton key={i} className="h-12 w-full rounded-lg" />
             ))}
           </div>
         </CardContent>
@@ -100,58 +102,70 @@ export function RecentInspections() {
   }
 
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle className="text-lg">Ostatnie inspekcje</CardTitle>
+    <Card className="lg:col-span-2 rounded-xl border border-gray-100 shadow-sm">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <CardTitle className="text-base font-semibold text-gray-900">Ostatnie inspekcje</CardTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-blue-600 hover:text-blue-700 h-8 px-2 text-xs gap-1"
+          onClick={() => router.push("/inspekcje")}
+        >
+          Zobacz wszystkie
+          <ArrowRight className="h-3 w-3" />
+        </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         {inspections.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Brak inspekcji</p>
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="p-4 bg-gray-50 rounded-2xl mb-4">
+              <ClipboardList className="h-10 w-10 text-gray-300" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700 mb-1">Brak inspekcji</p>
+            <p className="text-xs text-gray-400 mb-4">Dodaj pierwszą inspekcję, aby zobaczyć ją tutaj</p>
+            <Button
+              size="sm"
+              className="h-9 rounded-xl"
+              onClick={() => router.push("/inspekcje/nowa")}
+            >
+              Dodaj inspekcję
+            </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Nr protokołu</TableHead>
-                  <TableHead className="text-xs">Data</TableHead>
-                  <TableHead className="text-xs">Turbina</TableHead>
-                  <TableHead className="text-xs">Farma</TableHead>
-                  <TableHead className="text-xs">Klient</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Ocena</TableHead>
+                <TableRow className="border-b border-gray-100">
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-4">Nr protokołu</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Data</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Turbina</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Farma</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {inspections.map((inspection) => (
                   <TableRow
                     key={inspection.id}
-                    className="cursor-pointer hover:bg-gray-50"
+                    className="cursor-pointer hover:bg-blue-50/50 transition-colors border-b border-gray-50 h-14"
                     onClick={() => handleRowClick(inspection.id)}
                   >
-                    <TableCell className="text-xs font-medium">
-                      {inspection.protocol_number}
+                    <TableCell className="text-xs font-semibold text-gray-900 px-4">
+                      {inspection.protocol_number || "-"}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-xs text-gray-600">
                       {new Date(inspection.inspection_date).toLocaleDateString("pl-PL")}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-xs text-gray-600">
                       {inspection.turbines?.turbine_code || "-"}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-xs text-gray-600">
                       {inspection.turbines?.wind_farms?.name || "-"}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {inspection.turbines?.wind_farms?.clients?.name || "-"}
                     </TableCell>
                     <TableCell className="text-xs">
                       <Badge className={getStatusColor(inspection.status)}>
                         {getStatusLabel(inspection.status)}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {"-"}
                     </TableCell>
                   </TableRow>
                 ))}
