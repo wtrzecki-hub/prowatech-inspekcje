@@ -43,3 +43,11 @@ Thumbs.db
 turbine_main_photos/
 turbine_photos_map.json
 upload_photos.mjs
+
+# Claude Code worktrees & local config
+.claude/worktrees/
+.claude/launch.json
+
+# Icon generation scripts
+generate-icons.mjs
+generate-icons.ps1
