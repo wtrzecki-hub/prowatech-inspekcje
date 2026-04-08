@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -35,6 +35,14 @@ interface Client {
 }
 
 export default function KlienciPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4"><div className="h-10 w-48 bg-gray-200 animate-pulse rounded" /><div className="h-64 w-full bg-gray-200 animate-pulse rounded" /></div>}>
+      <KlienciContent />
+    </Suspense>
+  )
+}
+
+function KlienciContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [clients, setClients] = useState<Client[]>([])

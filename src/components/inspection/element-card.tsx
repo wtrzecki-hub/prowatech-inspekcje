@@ -160,11 +160,11 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                   Ocena stanu
                 </Label>
                 <Select
-                  value={element.condition_rating || ''}
+                  value={element.condition_rating || 'none'}
                   onValueChange={(val) =>
                     handleFieldChange(
                       'condition_rating',
-                      val as InspectionElement['condition_rating']
+                      val === 'none' ? null : (val as InspectionElement['condition_rating'])
                     )
                   }
                   disabled={isLoading}
@@ -173,6 +173,7 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                     <SelectValue placeholder="Wybierz ocenę" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">— brak oceny —</SelectItem>
                     {Object.entries(CONDITION_RATINGS).map(([key, label]) => (
                       <SelectItem key={key} value={key}>
                         {label}

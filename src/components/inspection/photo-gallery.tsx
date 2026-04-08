@@ -348,13 +348,14 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
                   Przypisz do elementu
                 </Label>
                 <Select
-                  value={formData.element_id}
-                  onValueChange={handleElementChange}
+                  value={formData.element_id || 'none'}
+                  onValueChange={(val) => handleElementChange(val === 'none' ? '' : val)}
                 >
                   <SelectTrigger id="photo-element">
                     <SelectValue placeholder="Wybierz element (opcjonalnie)" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">— brak —</SelectItem>
                     {elements.map((el) => (
                       <SelectItem key={el.id} value={el.id}>
                         {el.name}

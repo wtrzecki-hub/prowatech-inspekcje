@@ -544,15 +544,16 @@ export default function InspectionDetailPage() {
             <div className="space-y-2">
               <Label htmlFor="rating">Ocena ogólna stanu technicznego</Label>
               <Select
-                value={inspection.overall_condition_rating || ''}
+                value={inspection.overall_condition_rating || 'none'}
                 onValueChange={(value) =>
-                  handleInspectionChange('overall_condition_rating', value || null)
+                  handleInspectionChange('overall_condition_rating', value === 'none' ? null : value)
                 }
               >
                 <SelectTrigger id="rating">
                   <SelectValue placeholder="Wybierz ocenę" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">— brak oceny —</SelectItem>
                   {Object.entries(CONDITION_RATINGS).map(([key, label]) => (
                     <SelectItem key={key} value={key}>
                       {label}
