@@ -37,7 +37,7 @@ export default function NewInspectionPage() {
       supabase.auth.getSession(),
     ])
 
-    if (turbinesRes.data) setTurbines(turbinesRes.data as TurbineOption[])
+    if (turbinesRes.data) setTurbines(turbinesRes.data as unknown as TurbineOption[])
     if (defsRes.data)     setElementDefinitions(defsRes.data)
 
     if (sessionRes.data.session) {
@@ -50,8 +50,8 @@ export default function NewInspectionPage() {
     }
 
     if (preselectedTurbineId && turbinesRes.data) {
-      const found = turbinesRes.data.find((t: TurbineOption) => t.id === preselectedTurbineId)
-      if (found) setSelectedTurbine(found as TurbineOption)
+      const found = (turbinesRes.data as unknown as TurbineOption[]).find((t) => t.id === preselectedTurbineId)
+      if (found) setSelectedTurbine(found)
     }
 
     setLoading(false)
