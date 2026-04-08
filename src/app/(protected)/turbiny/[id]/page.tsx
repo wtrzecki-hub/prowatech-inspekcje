@@ -177,12 +177,11 @@ export default function TurbineDetailPage() {
         </div>
       </div>
 
-      {/* Turbine photos - main left (4:3) + 2 smaller right */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid gap-2" style={{ gridTemplateColumns: '1.2fr 1fr', gridTemplateRows: '160px 160px' }}>
-            {/* Left: main photo spanning 2 rows */}
-            <div style={{ gridRow: '1 / 3' }}>
+      {/* Turbine photos - protocol layout: 12×7cm portrait + 2× 5.5×7cm landscape */}
+      <div className="bg-white p-5">
+        <div className="flex gap-3" style={{ height: '340px' }}>
+          {/* Left: portrait 12×7cm ratio */}
+          <div className="flex-shrink-0" style={{ width: '200px', height: '340px' }}>
               <PhotoSlot
                 url={turbine.photo_url}
                 alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
@@ -197,41 +196,41 @@ export default function TurbineDetailPage() {
                 }}
               />
             </div>
-            {/* Right top */}
-            <div>
-              <PhotoSlot
-                url={turbine.photo_url_2}
-                alt="Zdjęcie 2"
-                canUpload={canUpload}
-                isUploading={uploadingSlot === 2}
-                onUpload={() => {
-                  const input = document.createElement('input')
-                  input.type = 'file'
-                  input.accept = 'image/jpeg,image/png,image/webp'
-                  input.onchange = (e) => handlePhotoUpload(e as any, 2)
-                  input.click()
-                }}
-              />
-            </div>
-            {/* Right bottom */}
-            <div>
-              <PhotoSlot
-                url={turbine.photo_url_3}
-                alt="Zdjęcie 3"
-                canUpload={canUpload}
-                isUploading={uploadingSlot === 3}
-                onUpload={() => {
-                  const input = document.createElement('input')
-                  input.type = 'file'
-                  input.accept = 'image/jpeg,image/png,image/webp'
-                  input.onchange = (e) => handlePhotoUpload(e as any, 3)
-                  input.click()
-                }}
-              />
+            {/* Right: 2 landscape 5.5×7cm stacked */}
+            <div className="flex flex-col gap-3 flex-1 min-w-0" style={{ height: '340px' }}>
+              <div style={{ height: '164px' }}>
+                <PhotoSlot
+                  url={turbine.photo_url_2}
+                  alt="Zdjęcie 2"
+                  canUpload={canUpload}
+                  isUploading={uploadingSlot === 2}
+                  onUpload={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/jpeg,image/png,image/webp'
+                    input.onchange = (e) => handlePhotoUpload(e as any, 2)
+                    input.click()
+                  }}
+                />
+              </div>
+              <div style={{ height: '164px' }}>
+                <PhotoSlot
+                  url={turbine.photo_url_3}
+                  alt="Zdjęcie 3"
+                  canUpload={canUpload}
+                  isUploading={uploadingSlot === 3}
+                  onUpload={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/jpeg,image/png,image/webp'
+                    input.onchange = (e) => handlePhotoUpload(e as any, 3)
+                    input.click()
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Alert: Next inspection */}
       {turbine.next_inspection_date && (
@@ -433,15 +432,15 @@ function PhotoSlot({
     <div className="relative group w-full h-full">
       {url ? (
         <>
-          <div className="w-full h-full bg-gray-900 rounded-lg overflow-hidden border border-gray-200">
-            <img src={url} alt={alt} className="w-full h-full object-contain" />
+          <div className="w-full h-full bg-white overflow-hidden border border-gray-300">
+            <img src={url} alt={alt} className="w-full h-full object-cover" />
           </div>
           {canUpload && (
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <button
                 onClick={onUpload}
                 disabled={isUploading}
-                className="bg-white/90 hover:bg-white text-gray-800 text-xs font-medium px-3 py-1.5 rounded-md flex items-center gap-1"
+                className="bg-white hover:bg-gray-50 text-gray-800 text-xs font-medium px-3 py-1.5 rounded shadow flex items-center gap-1"
               >
                 {isUploading ? (
                   <><Loader2 className="h-3 w-3 animate-spin" /> Wgrywanie...</>
@@ -454,10 +453,10 @@ function PhotoSlot({
         </>
       ) : (
         <div
-          className={`w-full h-full bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 ${canUpload ? 'cursor-pointer hover:border-gray-400 hover:bg-gray-100' : ''} transition-colors`}
+          className={`w-full h-full bg-white border border-gray-300 flex flex-col items-center justify-center gap-2 ${canUpload ? 'cursor-pointer hover:bg-gray-50' : ''} transition-colors`}
           onClick={canUpload ? onUpload : undefined}
         >
-          <Camera className="h-8 w-8 text-gray-300" />
+          <Camera className="h-6 w-6 text-gray-300" />
           {canUpload && (
             <p className="text-xs text-gray-400">
               {isUploading ? 'Wgrywanie...' : 'Dodaj zdjęcie'}
