@@ -177,59 +177,57 @@ export default function TurbineDetailPage() {
         </div>
       </div>
 
-      {/* Turbine photos - protocol layout: 12×7cm portrait + 2× 5.5×7cm landscape */}
+      {/* Zdjęcia: pionowa 12×7cm + 2× poziome 5.5×7cm */}
       <div className="bg-white p-5">
-        <div className="flex gap-3" style={{ height: '340px' }}>
-          {/* Left: portrait 12×7cm ratio */}
-          <div className="flex-shrink-0" style={{ width: '200px', height: '340px' }}>
+        <div style={{ display: 'flex', gap: '12px', height: '454px' }}>
+          <div style={{ width: '265px', height: '454px', flexShrink: 0 }}>
+            <PhotoSlot
+              url={turbine.photo_url}
+              alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
+              canUpload={canUpload}
+              isUploading={uploadingSlot === 1}
+              onUpload={() => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = 'image/jpeg,image/png,image/webp'
+                input.onchange = (e) => handlePhotoUpload(e as any, 1)
+                input.click()
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '265px', flexShrink: 0 }}>
+            <div style={{ width: '265px', height: '221px' }}>
               <PhotoSlot
-                url={turbine.photo_url}
-                alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
+                url={turbine.photo_url_2}
+                alt="Zdjęcie 2"
                 canUpload={canUpload}
-                isUploading={uploadingSlot === 1}
+                isUploading={uploadingSlot === 2}
                 onUpload={() => {
                   const input = document.createElement('input')
                   input.type = 'file'
                   input.accept = 'image/jpeg,image/png,image/webp'
-                  input.onchange = (e) => handlePhotoUpload(e as any, 1)
+                  input.onchange = (e) => handlePhotoUpload(e as any, 2)
                   input.click()
                 }}
               />
             </div>
-            {/* Right: 2 landscape 5.5×7cm stacked */}
-            <div className="flex flex-col gap-3 flex-1 min-w-0" style={{ height: '340px' }}>
-              <div style={{ height: '164px' }}>
-                <PhotoSlot
-                  url={turbine.photo_url_2}
-                  alt="Zdjęcie 2"
-                  canUpload={canUpload}
-                  isUploading={uploadingSlot === 2}
-                  onUpload={() => {
-                    const input = document.createElement('input')
-                    input.type = 'file'
-                    input.accept = 'image/jpeg,image/png,image/webp'
-                    input.onchange = (e) => handlePhotoUpload(e as any, 2)
-                    input.click()
-                  }}
-                />
-              </div>
-              <div style={{ height: '164px' }}>
-                <PhotoSlot
-                  url={turbine.photo_url_3}
-                  alt="Zdjęcie 3"
-                  canUpload={canUpload}
-                  isUploading={uploadingSlot === 3}
-                  onUpload={() => {
-                    const input = document.createElement('input')
-                    input.type = 'file'
-                    input.accept = 'image/jpeg,image/png,image/webp'
-                    input.onchange = (e) => handlePhotoUpload(e as any, 3)
-                    input.click()
-                  }}
-                />
-              </div>
+            <div style={{ width: '265px', height: '221px' }}>
+              <PhotoSlot
+                url={turbine.photo_url_3}
+                alt="Zdjęcie 3"
+                canUpload={canUpload}
+                isUploading={uploadingSlot === 3}
+                onUpload={() => {
+                  const input = document.createElement('input')
+                  input.type = 'file'
+                  input.accept = 'image/jpeg,image/png,image/webp'
+                  input.onchange = (e) => handlePhotoUpload(e as any, 3)
+                  input.click()
+                }}
+              />
             </div>
           </div>
+        </div>
       </div>
 
       {/* Alert: Next inspection */}
@@ -460,23 +458,4 @@ function PhotoSlot({
           {canUpload && (
             <p className="text-xs text-gray-400">
               {isUploading ? 'Wgrywanie...' : 'Dodaj zdjęcie'}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function InfoItem({ label, value, highlight }: { label: string; value: string | number | null | undefined; highlight?: 'red' }) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
-      <p className={`text-sm font-medium ${
-        highlight === 'red' ? 'text-red-600 font-semibold' : ''
-      }`}>
-        {value || '-'}
-      </p>
-    </div>
-  )
-}
+           
