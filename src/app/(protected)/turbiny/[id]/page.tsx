@@ -465,3 +465,12 @@ function PhotoSlot({
     </div>
   )
 }
+
+function InfoItem({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs text-gray-500">{label}</span>
+      <span className="text-sm font-medium text-gray-800">{value || '-'}</span>
+    </div>
+  )
+}
