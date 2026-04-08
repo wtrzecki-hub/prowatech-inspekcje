@@ -42,7 +42,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
   const [isLoading, setIsLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [filterElement, setFilterElement] = useState<string>('')
+  const [filterElement, setFilterElement] = useState<string>('all')
   const [formData, setFormData] = useState({
     photo_url: '',
     photo_number: '',
@@ -190,7 +190,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
     }
   }
 
-  const filteredPhotos = filterElement
+  const filteredPhotos = filterElement && filterElement !== 'all'
     ? photos.filter((p) => p.element_id === filterElement)
     : photos
 
@@ -224,7 +224,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
                   <SelectValue placeholder="Filtruj po elemencie..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Wszystkie elementy</SelectItem>
+                  <SelectItem value="all">Wszystkie elementy</SelectItem>
                   {elements.map((el) => (
                     <SelectItem key={el.id} value={el.id}>
                       {el.name}
@@ -239,7 +239,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
             <div className="text-center py-12 text-gray-500">
               <ImageIcon size={48} className="mx-auto mb-3 opacity-50" />
               <p>
-                {filterElement
+                {filterElement && filterElement !== 'all'
                   ? 'Brak zdjęć dla wybranego elementu'
                   : 'Brak zdjęć. Kliknij przycisk powyżej, aby dodać nowe.'}
               </p>
