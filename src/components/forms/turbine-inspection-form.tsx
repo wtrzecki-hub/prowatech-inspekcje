@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Slider } from '@/components/ui/slider'
 import {
   Select,
   SelectContent,
@@ -20,13 +21,40 @@ import {
 } from '@/components/ui/select'
 import {
   Wind, ClipboardCheck, Camera, FileText, Save, CheckCircle2,
-  AlertTriangle, XCircle, MapPin, Calendar, User, ChevronRight,
-  ChevronLeft, Upload, Loader2,
+  AlertTriangle, MapPin, Calendar, User, ChevronRight,
+  ChevronLeft, Upload, Loader2, Wrench, Plus, Trash2,
+  Building2, Shield, Zap, HardHat, Navigation2,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────
 
 type ConditionRating = 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny' | null
+type RepairType = 'NG' | 'NB' | 'K'
+type UrgencyLevel = 'I' | 'II' | 'III' | 'IV'
+
+interface Inspector {
+  name: string
+  license: string
+  specialty: string
+  chamber: string
+  contact: string
+}
+
+interface PrevInspection {
+  id: string
+  date: string
+  protocolNumber: string
+  findings: string
+  completionStatus: string
+}
+
+interface InfraState {
+  roadAccess: boolean
+  maneuvringArea: boolean
+  mvCables: boolean
+  substation: boolean
+  notes: string
+}
 
 interface ElementCheck {
   definitionId: string
@@ -37,19 +65,45 @@ interface ElementCheck {
   wearPercentage: number | null
   notes: string
   recommendations: string
+  photoNumbers: string
+  detailedDescription: string
 }
 
-interface TurbineOption {
+interface ServiceChecklistItem {
+  code: string
+  namePl: string
+  checked: boolean
+  notes: string
+  sortOrder: number
+}
+
+interface RepairRecommendation {
+  id: string
+  scopeDescription: string
+  repairType: RepairType
+  urgencyLevel: UrgencyLevel
+  elementName: string
+}
+
+interface PhotoEntry {
+  file: File
+  description: string
+  preview: string
+}
+
+export interface TurbineOption {
   id: string
   turbine_code: string
   serial_number: string
   manufacturer: string
   model: string
   location_address: string
+  rated_power_kw?: number | null
+  hub_height_m?: number | null
   wind_farms: { name: string }
 }
 
-interface ElementDefinition {
+export interface ElementDefinition {
   id: string
   element_number: number
   section_code: string
@@ -57,25 +111,57 @@ interface ElementDefinition {
   name_short: string
 }
 
-// ── Rating config ──────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────
 
-const RATINGS: { value: ConditionRating; label: string; color: string; activeColor: string; icon: typeof CheckCircle2 }[] = [
-  { value: 'dobry', label: 'Dobry', color: 'border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400', activeColor: 'bg-green-600 text-white border-green-600', icon: CheckCircle2 },
-  { value: 'zadowalajacy', label: 'Zadow.', color: 'border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400', activeColor: 'bg-blue-600 text-white border-blue-600', icon: CheckCircle2 },
-  { value: 'sredni', label: 'Średni', color: 'border-yellow-300 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-800 dark:text-yellow-400', activeColor: 'bg-yellow-500 text-white border-yellow-500', icon: AlertTriangle },
-  { value: 'zly', label: 'Zły', color: 'border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400', activeColor: 'bg-orange-600 text-white border-orange-600', icon: XCircle },
-  { value: 'awaryjny', label: 'Awaria', color: 'border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400', activeColor: 'bg-red-600 text-white border-red-600', icon: XCircle },
+const RATINGS: { value: NonNullable<ConditionRating>; label: string; color: string; activeColor: string }[] = [
+  { value: 'dobry',       label: 'DOBRY',     color: 'border-green-300  text-green-700  hover:bg-green-50',  activeColor: 'bg-green-600  text-white border-green-600' },
+  { value: 'zadowalajacy',label: 'ZADOW.',    color: 'border-blue-300   text-blue-700   hover:bg-blue-50',   activeColor: 'bg-blue-600   text-white border-blue-600' },
+  { value: 'sredni',      label: 'ŚREDNI',    color: 'border-yellow-300 text-yellow-700 hover:bg-yellow-50', activeColor: 'bg-yellow-500 text-white border-yellow-500' },
+  { value: 'zly',         label: 'ZŁY',       color: 'border-orange-300 text-orange-700 hover:bg-orange-50', activeColor: 'bg-orange-600 text-white border-orange-600' },
+  { value: 'awaryjny',    label: 'AWARYJNY',  color: 'border-red-300    text-red-700    hover:bg-red-50',    activeColor: 'bg-red-600    text-white border-red-600' },
 ]
 
 const SECTION_NAMES: Record<string, string> = {
-  A: 'Konstrukcja',
-  B: 'Bezpieczeństwo',
-  C: 'Instalacje elektryczne',
-  D: 'BHP i P-POŻ',
-  E: 'Infrastruktura',
+  A: 'A — Konstrukcja',
+  B: 'B — Bezpieczeństwo',
+  C: 'C — Instalacje elektryczne',
+  D: 'D — BHP i P-POŻ',
+  E: 'E — Infrastruktura',
 }
 
-// ── Component ──────────────────────────────────────────────────────
+const SECTION_ICONS: Record<string, React.ElementType> = {
+  A: Building2,
+  B: Shield,
+  C: Zap,
+  D: HardHat,
+  E: Navigation2,
+}
+
+const DEFAULT_SERVICE_CHECKLIST: Omit<ServiceChecklistItem, 'checked' | 'notes'>[] = [
+  { code: 'S01', namePl: 'Oględziny zewnętrzne turbiny i gondoli',           sortOrder: 1 },
+  { code: 'S02', namePl: 'Kontrola łopat wirnika (pęknięcia, uszkodzenia)',  sortOrder: 2 },
+  { code: 'S03', namePl: 'Kontrola momentów dokręcenia śrub kołnierzy wieży', sortOrder: 3 },
+  { code: 'S04', namePl: 'Kontrola momentów dokręcenia śrub łopat',          sortOrder: 4 },
+  { code: 'S05', namePl: 'Smarowanie łożysk głównych',                        sortOrder: 5 },
+  { code: 'S06', namePl: 'Smarowanie łożysk skoku łopat (pitch)',             sortOrder: 6 },
+  { code: 'S07', namePl: 'Kontrola przekładni głównej (olej, wycieki)',       sortOrder: 7 },
+  { code: 'S08', namePl: 'Kontrola generatora',                               sortOrder: 8 },
+  { code: 'S09', namePl: 'Kontrola układu hamulcowego mechanicznego',         sortOrder: 9 },
+  { code: 'S10', namePl: 'Kontrola systemu sterowania i oprogramowania',      sortOrder: 10 },
+  { code: 'S11', namePl: 'Kontrola instalacji elektrycznej w gondoli',        sortOrder: 11 },
+  { code: 'S12', namePl: 'Kontrola instalacji elektrycznej w wieży',          sortOrder: 12 },
+  { code: 'S13', namePl: 'Kontrola systemu odgromowego',                      sortOrder: 13 },
+  { code: 'S14', namePl: 'Kontrola drabiny i systemu asekuracji TYP-T',      sortOrder: 14 },
+  { code: 'S15', namePl: 'Kontrola systemu przeciwpożarowego',                sortOrder: 15 },
+  { code: 'S16', namePl: 'Kontrola anemometru i systemu pomiaru wiatru',      sortOrder: 16 },
+  { code: 'S17', namePl: 'Kontrola świateł przeszkodowych',                   sortOrder: 17 },
+  { code: 'S18', namePl: 'Weryfikacja danych w systemie SCADA',               sortOrder: 18 },
+]
+
+const TABS = ['dane-obiektu', 'ocena-elementow', 'serwis', 'wnioski', 'zdjecia'] as const
+type TabKey = (typeof TABS)[number]
+
+// ── Props ──────────────────────────────────────────────────────────
 
 interface Props {
   turbines: TurbineOption[]
@@ -84,21 +170,60 @@ interface Props {
   inspectorName?: string
 }
 
-export function TurbineInspectionForm({ turbines, elementDefinitions, preselectedTurbine, inspectorName = '' }: Props) {
+// ── Sub-component helpers ──────────────────────────────────────────
+
+function ToggleButton({
+  label, checked, onClick,
+}: { label: string; checked: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-medium text-sm min-h-[48px] transition-all ${
+        checked
+          ? 'bg-green-600 text-white border-green-600'
+          : 'border-gray-200 text-gray-600 hover:border-green-400'
+      }`}
+    >
+      <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+      {label}
+    </button>
+  )
+}
+
+// ── Component ──────────────────────────────────────────────────────
+
+export function TurbineInspectionForm({
+  turbines,
+  elementDefinitions,
+  preselectedTurbine,
+  inspectorName = '',
+}: Props) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState('info')
-  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabKey>('dane-obiektu')
+  const [saving, setSaving]       = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // Form state
+  // ── Tab 1: Dane obiektu ───────────────────────────────────────────
+
   const [selectedTurbineId, setSelectedTurbineId] = useState(preselectedTurbine?.id || '')
-  const [inspectionType, setInspectionType] = useState<'annual' | 'five_year'>('annual')
-  const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0])
-  const [siteVisitDate, setSiteVisitDate] = useState(new Date().toISOString().split('T')[0])
-  const [inspector, setInspector] = useState(inspectorName)
-  const [generalNotes, setGeneralNotes] = useState('')
-  const [overallAssessment, setOverallAssessment] = useState('')
-  const [photos, setPhotos] = useState<File[]>([])
+  const [inspectionType, setInspectionType]       = useState<'annual' | 'five_year'>('annual')
+  const [inspectionDate, setInspectionDate]       = useState(new Date().toISOString().split('T')[0])
+  const [siteVisitDate, setSiteVisitDate]         = useState(new Date().toISOString().split('T')[0])
+  const [nextInspectionDate, setNextInspectionDate] = useState('')
+  const [committeeMembers, setCommitteeMembers]   = useState('')
+  const [inspector1, setInspector1] = useState<Inspector>({
+    name: inspectorName, license: '', specialty: 'budowlana', chamber: '', contact: '',
+  })
+  const [inspector2, setInspector2] = useState<Inspector>({
+    name: '', license: '', specialty: 'elektryczna', chamber: '', contact: '',
+  })
+  const [infra, setInfra] = useState<InfraState>({
+    roadAccess: false, maneuvringArea: false, mvCables: false, substation: false, notes: '',
+  })
+  const [prevInspections, setPrevInspections] = useState<PrevInspection[]>([])
+
+  // ── Tab 2: Ocena elementów ────────────────────────────────────────
 
   const [elements, setElements] = useState<ElementCheck[]>(
     elementDefinitions.map((def) => ({
@@ -110,43 +235,141 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
       wearPercentage: null,
       notes: '',
       recommendations: '',
+      photoNumbers: '',
+      detailedDescription: '',
     }))
   )
 
-  const selectedTurbine = turbines.find((t) => t.id === selectedTurbineId)
-  const completedCount = elements.filter((e) => e.rating !== null).length
-  const issueCount = elements.filter((e) => e.rating && !['dobry', 'zadowalajacy'].includes(e.rating)).length
+  // ── Tab 3: Serwis ─────────────────────────────────────────────────
 
-  // ── Element updates ────────────────────────────────────────────
+  const [serviceCompany, setServiceCompany]       = useState('')
+  const [udtCertificate, setUdtCertificate]       = useState('')
+  const [lastServiceDate, setLastServiceDate]     = useState('')
+  const [lastServiceProtocol, setLastServiceProtocol] = useState('')
+  const [nextServiceDate, setNextServiceDate]     = useState('')
+  const [protocolsInKob, setProtocolsInKob]       = useState(false)
+  const [serviceNotes, setServiceNotes]           = useState('')
+  const [serviceChecklist, setServiceChecklist]   = useState<ServiceChecklistItem[]>(
+    DEFAULT_SERVICE_CHECKLIST.map((item) => ({ ...item, checked: false, notes: '' }))
+  )
+
+  // ── Tab 4: Wnioski ────────────────────────────────────────────────
+
+  const [repairRecs, setRepairRecs]             = useState<RepairRecommendation[]>([])
+  const [overallAssessment, setOverallAssessment] = useState('')
+  const [hazardInformation, setHazardInformation] = useState('')
+
+  // ── Tab 5: Zdjęcia ────────────────────────────────────────────────
+
+  const [photos, setPhotos] = useState<PhotoEntry[]>([])
+
+  // ── Derived ───────────────────────────────────────────────────────
+
+  const selectedTurbine = turbines.find((t) => t.id === selectedTurbineId)
+  const completedCount  = elements.filter((e) => e.rating !== null).length
+  const issueCount      = elements.filter(
+    (e) => e.rating && !['dobry', 'zadowalajacy'].includes(e.rating)
+  ).length
+
+  // ── Updaters ──────────────────────────────────────────────────────
 
   function updateElement(defId: string, updates: Partial<ElementCheck>) {
     setElements((prev) => prev.map((el) => el.definitionId === defId ? { ...el, ...updates } : el))
   }
 
-  // ── Save / Submit ──────────────────────────────────────────────
+  function updI1(field: keyof Inspector, v: string) {
+    setInspector1((p) => ({ ...p, [field]: v }))
+  }
+  function updI2(field: keyof Inspector, v: string) {
+    setInspector2((p) => ({ ...p, [field]: v }))
+  }
 
-  async function saveInspection(status: 'draft' | 'in_progress' | 'completed') {
+  function toggleInfra(field: keyof Omit<InfraState, 'notes'>) {
+    setInfra((p) => ({ ...p, [field]: !p[field] }))
+  }
+
+  function addPrevInspection() {
+    setPrevInspections((p) => [
+      ...p,
+      { id: crypto.randomUUID(), date: '', protocolNumber: '', findings: '', completionStatus: '' },
+    ])
+  }
+  function updatePrevInspection(id: string, field: keyof PrevInspection, v: string) {
+    setPrevInspections((p) => p.map((x) => x.id === id ? { ...x, [field]: v } : x))
+  }
+  function removePrevInspection(id: string) {
+    setPrevInspections((p) => p.filter((x) => x.id !== id))
+  }
+
+  function addRepairRec() {
+    setRepairRecs((p) => [
+      ...p,
+      { id: crypto.randomUUID(), scopeDescription: '', repairType: 'NB', urgencyLevel: 'II', elementName: '' },
+    ])
+  }
+  function updateRepairRec(id: string, updates: Partial<RepairRecommendation>) {
+    setRepairRecs((p) => p.map((r) => r.id === id ? { ...r, ...updates } : r))
+  }
+  function removeRepairRec(id: string) {
+    setRepairRecs((p) => p.filter((r) => r.id !== id))
+  }
+
+  function toggleChecklistItem(code: string) {
+    setServiceChecklist((p) => p.map((x) => x.code === code ? { ...x, checked: !x.checked } : x))
+  }
+  function updateChecklistNote(code: string, notes: string) {
+    setServiceChecklist((p) => p.map((x) => x.code === code ? { ...x, notes } : x))
+  }
+
+  function addPhotos(files: FileList | null) {
+    if (!files) return
+    const entries: PhotoEntry[] = Array.from(files).map((file) => ({
+      file,
+      description: '',
+      preview: URL.createObjectURL(file),
+    }))
+    setPhotos((p) => [...p, ...entries])
+  }
+  function removePhoto(i: number) {
+    setPhotos((p) => {
+      URL.revokeObjectURL(p[i].preview)
+      return p.filter((_, idx) => idx !== i)
+    })
+  }
+  function updatePhotoDesc(i: number, description: string) {
+    setPhotos((p) => p.map((x, idx) => idx === i ? { ...x, description } : x))
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────
+
+  const currentIndex = TABS.indexOf(activeTab)
+  const goNext = () => { if (currentIndex < TABS.length - 1) setActiveTab(TABS[currentIndex + 1]) }
+  const goPrev = () => { if (currentIndex > 0) setActiveTab(TABS[currentIndex - 1]) }
+
+  // ── Save / Submit ─────────────────────────────────────────────────
+
+  async function saveInspection(status: 'draft' | 'completed') {
     if (!selectedTurbineId) {
       alert('Wybierz turbinę')
+      setActiveTab('dane-obiektu')
       return
     }
 
-    const isSubmit = status === 'completed'
-    if (isSubmit) setSubmitting(true)
+    if (status === 'completed') setSubmitting(true)
     else setSaving(true)
 
     try {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
 
-      // Calculate overall rating
+      // Calculate worst rating
       const rated = elements.filter((e) => e.rating !== null)
       const ratingOrder: ConditionRating[] = ['awaryjny', 'zly', 'sredni', 'zadowalajacy', 'dobry']
-      let worstRating: ConditionRating = rated.length > 0
-        ? ratingOrder.find((r) => rated.some((e) => e.rating === r)) || null
+      const worstRating = rated.length > 0
+        ? (ratingOrder.find((r) => rated.some((e) => e.rating === r)) ?? null)
         : null
 
-      // Create inspection
+      // 1. Create inspection record
       const { data: inspection, error: inspError } = await supabase
         .from('inspections')
         .insert({
@@ -154,169 +377,226 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
           inspection_type: inspectionType,
           status,
           inspection_date: inspectionDate,
-          site_visit_date: siteVisitDate,
-          committee_members: inspector,
+          site_visit_date: siteVisitDate || null,
+          committee_members: committeeMembers || inspector1.name || null,
           overall_condition_rating: worstRating,
           overall_assessment: overallAssessment || null,
-          notes: generalNotes || null,
+          hazard_information: hazardInformation || null,
+          notes: null,
           created_by: session?.user.id,
         })
         .select('id')
         .single()
 
       if (inspError) throw inspError
+      const inspectionId = inspection.id
 
-      // Create inspection elements
+      // 2. Inspection elements
       const elementRows = elements
         .filter((el) => el.rating !== null)
         .map((el) => ({
-          inspection_id: inspection.id,
+          inspection_id: inspectionId,
           element_definition_id: el.definitionId,
           condition_rating: el.rating,
           wear_percentage: el.wearPercentage,
           notes: el.notes || null,
           recommendations: el.recommendations || null,
+          photo_numbers: el.photoNumbers || null,
+          detailed_description: el.detailedDescription || null,
         }))
 
       if (elementRows.length > 0) {
-        const { error: elemError } = await supabase
-          .from('inspection_elements')
-          .insert(elementRows)
-
-        if (elemError) throw elemError
+        const { error } = await supabase.from('inspection_elements').insert(elementRows)
+        if (error) throw error
       }
 
-      // Upload photos to Supabase Storage
-      if (photos.length > 0) {
-        for (let i = 0; i < photos.length; i++) {
-          const file = photos[i]
-          const ext = file.name.split('.').pop() || 'jpeg'
-          const path = `inspections/${inspection.id}/photo_${i + 1}.${ext}`
+      // 3. Service info
+      const { error: svcError } = await supabase.from('service_info').insert({
+        inspection_id: inspectionId,
+        service_company: serviceCompany || null,
+        udt_certificate_number: udtCertificate || null,
+        last_service_date: lastServiceDate || null,
+        last_service_protocol_number: lastServiceProtocol || null,
+        next_service_date: nextServiceDate || null,
+        service_protocols_in_kob: protocolsInKob,
+        notes: serviceNotes || null,
+      })
+      if (svcError) throw svcError
 
-          const { error: uploadError } = await supabase.storage
-            .from('turbine-photos')
-            .upload(path, file, { contentType: file.type })
+      // 4. Service checklist
+      const checklistRows = serviceChecklist
+        .filter((x) => x.checked || x.notes)
+        .map((x) => ({
+          inspection_id: inspectionId,
+          item_code: x.code,
+          item_name_pl: x.namePl,
+          is_checked: x.checked,
+          notes: x.notes || null,
+          sort_order: x.sortOrder,
+        }))
+      if (checklistRows.length > 0) {
+        const { error } = await supabase.from('service_checklist').insert(checklistRows)
+        if (error) throw error
+      }
 
-          if (!uploadError) {
-            const { data: urlData } = supabase.storage
-              .from('turbine-photos')
-              .getPublicUrl(path)
+      // 5. Repair recommendations
+      const repairRows = repairRecs
+        .filter((r) => r.scopeDescription.trim())
+        .map((r, i) => ({
+          inspection_id: inspectionId,
+          item_number: i + 1,
+          scope_description: r.scopeDescription,
+          repair_type: r.repairType,
+          urgency_level: r.urgencyLevel,
+          element_name: r.elementName || null,
+        }))
+      if (repairRows.length > 0) {
+        const { error } = await supabase.from('repair_recommendations').insert(repairRows)
+        if (error) throw error
+      }
 
-            await supabase.from('inspection_photos').insert({
-              inspection_id: inspection.id,
-              photo_number: i + 1,
-              file_url: urlData.publicUrl,
-              description: `Zdjęcie ${i + 1}`,
-              created_by: session?.user.id,
-            })
-          }
+      // 6. Photos upload
+      for (let i = 0; i < photos.length; i++) {
+        const { file, description } = photos[i]
+        const ext = file.name.split('.').pop() || 'jpeg'
+        const path = `inspections/${inspectionId}/photo_${i + 1}.${ext}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('turbine-photos')
+          .upload(path, file, { contentType: file.type })
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from('turbine-photos').getPublicUrl(path)
+          await supabase.from('inspection_photos').insert({
+            inspection_id: inspectionId,
+            photo_number: i + 1,
+            description: description || `Zdjęcie ${i + 1}`,
+            file_url: urlData.publicUrl,
+            created_by: session?.user.id,
+          })
         }
       }
 
-      // Update turbine's last inspection data
+      // 7. Update turbine last inspection if completed
       if (status === 'completed') {
         await supabase
           .from('turbines')
-          .update({
-            last_inspection_date: inspectionDate,
-            last_inspection_protocol: inspection.id,
-          })
+          .update({ last_inspection_date: inspectionDate, last_inspection_protocol: inspectionId })
           .eq('id', selectedTurbineId)
-      }
-
-      if (isSubmit) {
-        router.push(`/inspekcje`)
+        router.push('/inspekcje')
       } else {
         alert('Zapisano roboczo!')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error)
       console.error('Błąd zapisu:', error)
-      alert(`Błąd: ${error.message}`)
+      alert(`Błąd: ${msg}`)
     } finally {
       setSaving(false)
       setSubmitting(false)
     }
   }
 
-  // ── Navigation ─────────────────────────────────────────────────
-
-  const goNext = () => {
-    if (activeTab === 'info') setActiveTab('checklist')
-    else if (activeTab === 'checklist') setActiveTab('notes')
-  }
-  const goPrev = () => {
-    if (activeTab === 'notes') setActiveTab('checklist')
-    else if (activeTab === 'checklist') setActiveTab('info')
-  }
-
-  // ── Render ─────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-
-        <TabsList className="grid w-full grid-cols-3 h-14 mb-4">
-          <TabsTrigger value="info" className="h-12 text-sm gap-2">
-            <ClipboardCheck className="h-4 w-4" />
-            Informacje
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as TabKey)}
+        className="flex-1 flex flex-col"
+      >
+        {/* ── Tab strip ── */}
+        <TabsList className="grid w-full grid-cols-5 h-14 mb-4">
+          <TabsTrigger value="dane-obiektu" className="h-12 text-xs sm:text-sm px-1">
+            <ClipboardCheck className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline ml-1.5">Dane obiektu</span>
           </TabsTrigger>
-          <TabsTrigger value="checklist" className="h-12 text-sm gap-2">
-            <Wind className="h-4 w-4" />
-            Stan techniczny
+          <TabsTrigger value="ocena-elementow" className="h-12 text-xs sm:text-sm px-1">
+            <Wind className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline ml-1.5">Ocena</span>
             {completedCount > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">{completedCount}/{elements.length}</Badge>
+              <Badge variant="secondary" className="ml-1 text-xs hidden sm:flex">
+                {completedCount}/{elements.length}
+              </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="notes" className="h-12 text-sm gap-2">
-            <FileText className="h-4 w-4" />
-            Notatki
+          <TabsTrigger value="serwis" className="h-12 text-xs sm:text-sm px-1">
+            <Wrench className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline ml-1.5">Serwis</span>
+          </TabsTrigger>
+          <TabsTrigger value="wnioski" className="h-12 text-xs sm:text-sm px-1">
+            <FileText className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline ml-1.5">Wnioski</span>
+          </TabsTrigger>
+          <TabsTrigger value="zdjecia" className="h-12 text-xs sm:text-sm px-1">
+            <Camera className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline ml-1.5">Zdjęcia</span>
+            {photos.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs hidden sm:flex">
+                {photos.length}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
-        {/* ── Krok 1 ──────────────────────────────────────────────── */}
-        <TabsContent value="info" className="mt-0">
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* TAB 1 — Dane obiektu                                       */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        <TabsContent value="dane-obiektu" className="mt-0 space-y-4">
+
+          {/* Obiekt */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <ClipboardCheck className="h-5 w-5 text-blue-600" />
-                Informacje ogólne
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wind className="h-5 w-5 text-blue-600" />
+                Obiekt kontrolowany
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="flex items-center gap-2 text-base">
-                    <Wind className="h-4 w-4 text-muted-foreground" />
-                    Turbina
-                  </Label>
-                  <Select value={selectedTurbineId} onValueChange={setSelectedTurbineId}>
-                    <SelectTrigger className="h-12 text-base">
-                      <SelectValue placeholder="Wybierz turbinę..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {turbines.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.turbine_code} — {t.manufacturer} {t.model} ({t.wind_farms?.name})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-base">Turbina *</Label>
+                <Select value={selectedTurbineId} onValueChange={setSelectedTurbineId}>
+                  <SelectTrigger className="h-12 text-base">
+                    <SelectValue placeholder="Wybierz turbinę..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {turbines.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.turbine_code} — {t.manufacturer} {t.model} ({t.wind_farms?.name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {selectedTurbine && (
-                  <div className="md:col-span-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm">
-                    <p><strong>Lokalizacja:</strong> {selectedTurbine.location_address}</p>
-                    <p><strong>SN:</strong> {selectedTurbine.serial_number}</p>
-                    <p><strong>Farma:</strong> {selectedTurbine.wind_farms?.name}</p>
+              {selectedTurbine && (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm">
+                  <div><span className="text-muted-foreground">Producent:</span> <strong>{selectedTurbine.manufacturer}</strong></div>
+                  <div><span className="text-muted-foreground">Model:</span> <strong>{selectedTurbine.model}</strong></div>
+                  {selectedTurbine.rated_power_kw != null && (
+                    <div><span className="text-muted-foreground">Moc:</span> <strong>{selectedTurbine.rated_power_kw} kW</strong></div>
+                  )}
+                  {selectedTurbine.hub_height_m != null && (
+                    <div><span className="text-muted-foreground">Wys. osi:</span> <strong>{selectedTurbine.hub_height_m} m</strong></div>
+                  )}
+                  <div><span className="text-muted-foreground">Nr seryjny:</span> <strong>{selectedTurbine.serial_number}</strong></div>
+                  <div><span className="text-muted-foreground">Farma:</span> <strong>{selectedTurbine.wind_farms?.name}</strong></div>
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Lokalizacja:</span>{' '}
+                    <strong>{selectedTurbine.location_address}</strong>
                   </div>
-                )}
+                </div>
+              )}
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-base">Typ kontroli</Label>
-                  <Select value={inspectionType} onValueChange={(v) => setInspectionType(v as 'annual' | 'five_year')}>
-                    <SelectTrigger className="h-12 text-base">
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Select
+                    value={inspectionType}
+                    onValueChange={(v) => setInspectionType(v as 'annual' | 'five_year')}
+                  >
+                    <SelectTrigger className="h-12 text-base"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="annual">Roczna</SelectItem>
                       <SelectItem value="five_year">Pięcioletnia</SelectItem>
@@ -325,49 +605,235 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-base">
+                  <Label className="text-base flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     Data przeglądu
                   </Label>
-                  <Input type="date" value={inspectionDate} onChange={(e) => setInspectionDate(e.target.value)} className="h-12 text-base" />
+                  <Input
+                    type="date"
+                    value={inspectionDate}
+                    onChange={(e) => setInspectionDate(e.target.value)}
+                    className="h-12 text-base"
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-base">
+                  <Label className="text-base flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
                     Data wizji lokalnej
                   </Label>
-                  <Input type="date" value={siteVisitDate} onChange={(e) => setSiteVisitDate(e.target.value)} className="h-12 text-base" />
+                  <Input
+                    type="date"
+                    value={siteVisitDate}
+                    onChange={(e) => setSiteVisitDate(e.target.value)}
+                    className="h-12 text-base"
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-base">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Inspektor
+                  <Label className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    Data następnej kontroli
                   </Label>
-                  <Input value={inspector} onChange={(e) => setInspector(e.target.value)} placeholder="Imię i nazwisko" className="h-12 text-base" />
+                  <Input
+                    type="date"
+                    value={nextInspectionDate}
+                    onChange={(e) => setNextInspectionDate(e.target.value)}
+                    className="h-12 text-base"
+                  />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-base">Skład komisji</Label>
+                <Input
+                  value={committeeMembers}
+                  onChange={(e) => setCommitteeMembers(e.target.value)}
+                  placeholder="Imiona i nazwiska członków komisji..."
+                  className="h-12 text-base"
+                />
               </div>
             </CardContent>
           </Card>
 
-          <div className="flex justify-end mt-6">
+          {/* Infrastruktura */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Navigation2 className="h-5 w-5 text-blue-600" />
+                Infrastruktura
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <ToggleButton label="Droga dojazdowa"  checked={infra.roadAccess}     onClick={() => toggleInfra('roadAccess')} />
+                <ToggleButton label="Plac manewrowy"   checked={infra.maneuvringArea} onClick={() => toggleInfra('maneuvringArea')} />
+                <ToggleButton label="Kable SN"         checked={infra.mvCables}       onClick={() => toggleInfra('mvCables')} />
+                <ToggleButton label="Stacja GPZ"       checked={infra.substation}     onClick={() => toggleInfra('substation')} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Uwagi do infrastruktury</Label>
+                <Textarea
+                  value={infra.notes}
+                  onChange={(e) => setInfra((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Opis stanu infrastruktury..."
+                  className="min-h-[80px] text-base resize-none"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Inspektor 1 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <User className="h-5 w-5 text-blue-600" />
+                Inspektor — branża budowlana
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-base">Imię i nazwisko</Label>
+                <Input value={inspector1.name} onChange={(e) => updI1('name', e.target.value)} placeholder="Jan Kowalski" className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Nr uprawnień budowlanych</Label>
+                <Input value={inspector1.license} onChange={(e) => updI1('license', e.target.value)} placeholder="np. MAŁ/0001/POOK/2020" className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Specjalność</Label>
+                <Input value={inspector1.specialty} onChange={(e) => updI1('specialty', e.target.value)} placeholder="budowlana" className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Izba</Label>
+                <Input value={inspector1.chamber} onChange={(e) => updI1('chamber', e.target.value)} placeholder="MOIIB / PIIB / ..." className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Kontakt</Label>
+                <Input value={inspector1.contact} onChange={(e) => updI1('contact', e.target.value)} placeholder="tel. / e-mail" className="h-12 text-base" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Inspektor 2 — tylko przy 5-letniej */}
+          {inspectionType === 'five_year' && (
+            <Card className="border-yellow-300 dark:border-yellow-700">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <User className="h-5 w-5 text-yellow-600" />
+                  Inspektor — branża elektryczna
+                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">
+                    5-letnia
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label className="text-base">Imię i nazwisko</Label>
+                  <Input value={inspector2.name} onChange={(e) => updI2('name', e.target.value)} placeholder="Jan Kowalski" className="h-12 text-base" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-base">Nr uprawnień elektrycznych</Label>
+                  <Input value={inspector2.license} onChange={(e) => updI2('license', e.target.value)} placeholder="np. E/0001/2020" className="h-12 text-base" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-base">Specjalność</Label>
+                  <Input value={inspector2.specialty} onChange={(e) => updI2('specialty', e.target.value)} placeholder="elektryczna" className="h-12 text-base" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-base">Izba / Stowarzyszenie</Label>
+                  <Input value={inspector2.chamber} onChange={(e) => updI2('chamber', e.target.value)} placeholder="SEP / ..." className="h-12 text-base" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-base">Kontakt</Label>
+                  <Input value={inspector2.contact} onChange={(e) => updI2('contact', e.target.value)} placeholder="tel. / e-mail" className="h-12 text-base" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Poprzednie kontrole */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  Poprzednie kontrole
+                </CardTitle>
+                <Button type="button" variant="outline" size="sm" onClick={addPrevInspection} className="h-10 gap-1.5">
+                  <Plus className="h-4 w-4" /> Dodaj
+                </Button>
+              </div>
+            </CardHeader>
+            {prevInspections.length > 0 && (
+              <CardContent className="space-y-4">
+                {prevInspections.map((pi) => (
+                  <div key={pi.id} className="p-4 border rounded-lg space-y-3 relative">
+                    <button
+                      type="button"
+                      onClick={() => removePrevInspection(pi.id)}
+                      className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm">Data kontroli</Label>
+                        <Input type="date" value={pi.date} onChange={(e) => updatePrevInspection(pi.id, 'date', e.target.value)} className="h-11" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-sm">Nr protokołu</Label>
+                        <Input value={pi.protocolNumber} onChange={(e) => updatePrevInspection(pi.id, 'protocolNumber', e.target.value)} placeholder="np. P/2023/001" className="h-11" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">Ustalenia</Label>
+                      <Textarea
+                        value={pi.findings}
+                        onChange={(e) => updatePrevInspection(pi.id, 'findings', e.target.value)}
+                        placeholder="Ustalenia z poprzedniej kontroli..."
+                        className="min-h-[64px] resize-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">Stan realizacji</Label>
+                      <Input
+                        value={pi.completionStatus}
+                        onChange={(e) => updatePrevInspection(pi.id, 'completionStatus', e.target.value)}
+                        placeholder="np. Zrealizowano w 100%"
+                        className="h-11"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            )}
+          </Card>
+
+          <div className="flex justify-end gap-4 pb-2">
             <Button onClick={goNext} size="lg" className="h-14 px-8 text-base gap-2">
-              Dalej: Stan techniczny <ChevronRight className="h-5 w-5" />
+              Dalej: Ocena elementów <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
         </TabsContent>
 
-        {/* ── Krok 2 ──────────────────────────────────────────────── */}
-        <TabsContent value="checklist" className="mt-0">
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* TAB 2 — Ocena elementów                                    */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        <TabsContent value="ocena-elementow" className="mt-0">
           <div className="flex gap-3 mb-4 flex-wrap">
             <Badge variant="outline" className="h-10 px-4 text-sm gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              {completedCount}/{elements.length}
+              {completedCount}/{elements.length} oceniono
             </Badge>
             {issueCount > 0 && (
               <Badge className="h-10 px-4 text-sm gap-2 bg-red-100 text-red-800 border-red-300">
                 <AlertTriangle className="h-4 w-4" /> Problemy: {issueCount}
+              </Badge>
+            )}
+            {inspectionType === 'five_year' && (
+              <Badge className="h-10 px-4 text-sm gap-2 bg-yellow-100 text-yellow-800 border-yellow-300">
+                Zakres 5-letni aktywny
               </Badge>
             )}
           </div>
@@ -379,63 +845,125 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
                 return elements.map((el) => {
                   const showSection = el.sectionCode !== lastSection
                   lastSection = el.sectionCode
-                  const ratingConfig = RATINGS.find((r) => r.value === el.rating)
+                  const SectionIcon = SECTION_ICONS[el.sectionCode] ?? Building2
+
+                  const cardBorder =
+                    el.rating === 'awaryjny' ? 'border-red-400 bg-red-50/50 dark:border-red-700 dark:bg-red-950/30' :
+                    el.rating === 'zly'      ? 'border-orange-300 bg-orange-50/50 dark:border-orange-700 dark:bg-orange-950/30' :
+                    el.rating === 'sredni'   ? 'border-yellow-300 bg-yellow-50/50 dark:border-yellow-700 dark:bg-yellow-950/30' :
+                    (el.rating === 'dobry' || el.rating === 'zadowalajacy')
+                      ? 'border-green-300 bg-green-50/30 dark:border-green-700 dark:bg-green-950/20' : ''
 
                   return (
                     <div key={el.definitionId}>
                       {showSection && (
-                        <div className="pt-4 pb-2 first:pt-0">
-                          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                            {el.sectionCode}. {SECTION_NAMES[el.sectionCode] || el.sectionCode}
+                        <div className="pt-5 pb-2 first:pt-0">
+                          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                            <SectionIcon className="h-4 w-4" />
+                            {SECTION_NAMES[el.sectionCode] ?? el.sectionCode}
                           </h3>
                         </div>
                       )}
-                      <Card className={`transition-colors ${
-                        el.rating === 'awaryjny' || el.rating === 'zly' ? 'border-red-300 bg-red-50/50 dark:border-red-800 dark:bg-red-950/30' :
-                        el.rating === 'sredni' ? 'border-yellow-300 bg-yellow-50/50 dark:border-yellow-800 dark:bg-yellow-950/30' :
-                        el.rating === 'dobry' || el.rating === 'zadowalajacy' ? 'border-green-300 bg-green-50/30 dark:border-green-800 dark:bg-green-950/20' : ''
-                      }`}>
-                        <CardContent className="p-4">
-                          <div className="space-y-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-base font-medium pt-2">
-                                {el.elementNumber}. {el.namePl}
-                              </span>
-                            </div>
-                            <div className="flex gap-1.5 flex-wrap">
-                              {RATINGS.map((r) => (
-                                <button
-                                  key={r.value}
-                                  type="button"
-                                  onClick={() => updateElement(el.definitionId, {
-                                    rating: el.rating === r.value ? null : r.value
-                                  })}
-                                  className={`flex items-center gap-1 px-3 py-2.5 rounded-lg border-2 font-medium text-xs transition-all min-h-[44px] ${
-                                    el.rating === r.value ? r.activeColor : r.color
-                                  }`}
-                                >
-                                  <r.icon className="h-3.5 w-3.5" />
-                                  {r.label}
-                                </button>
-                              ))}
-                            </div>
-                            {el.rating && !['dobry', 'zadowalajacy'].includes(el.rating) && (
-                              <div className="space-y-2 pt-1">
-                                <Textarea
-                                  placeholder="Opis stanu / uwagi..."
-                                  value={el.notes}
-                                  onChange={(e) => updateElement(el.definitionId, { notes: e.target.value })}
-                                  className="min-h-[60px] text-base resize-none"
-                                />
-                                <Textarea
-                                  placeholder="Zalecenia naprawcze..."
-                                  value={el.recommendations}
-                                  onChange={(e) => updateElement(el.definitionId, { recommendations: e.target.value })}
-                                  className="min-h-[60px] text-base resize-none"
+
+                      <Card className={`transition-colors ${cardBorder}`}>
+                        <CardContent className="p-4 space-y-3">
+                          <p className="text-base font-semibold leading-snug">
+                            {el.elementNumber}. {el.namePl}
+                          </p>
+
+                          {/* Rating buttons */}
+                          <div className="flex gap-1.5 flex-wrap">
+                            {RATINGS.map((r) => (
+                              <button
+                                key={r.value}
+                                type="button"
+                                onClick={() =>
+                                  updateElement(el.definitionId, {
+                                    rating: el.rating === r.value ? null : r.value,
+                                  })
+                                }
+                                className={`px-3 py-2.5 rounded-lg border-2 font-bold text-xs transition-all min-h-[48px] ${
+                                  el.rating === r.value ? r.activeColor : r.color
+                                }`}
+                              >
+                                {r.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* % zużycia + nr zdjęcia */}
+                          {el.rating !== null && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-2">
+                                <Label className="text-sm">
+                                  % zużycia: <strong>{el.wearPercentage ?? 0}%</strong>
+                                </Label>
+                                <Slider
+                                  min={0}
+                                  max={100}
+                                  step={5}
+                                  value={[el.wearPercentage ?? 0]}
+                                  onValueChange={([v]) =>
+                                    updateElement(el.definitionId, { wearPercentage: v })
+                                  }
+                                  className="mt-2"
                                 />
                               </div>
-                            )}
-                          </div>
+                              <div className="space-y-1">
+                                <Label className="text-sm">Nr zdjęcia</Label>
+                                <Input
+                                  value={el.photoNumbers}
+                                  onChange={(e) =>
+                                    updateElement(el.definitionId, { photoNumbers: e.target.value })
+                                  }
+                                  placeholder="np. 1, 2, 5"
+                                  className="h-11"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Notes / Recommendations — for non-good ratings */}
+                          {el.rating && !['dobry', 'zadowalajacy'].includes(el.rating) && (
+                            <div className="space-y-2">
+                              <Textarea
+                                placeholder="Opis stanu / uwagi..."
+                                value={el.notes}
+                                onChange={(e) =>
+                                  updateElement(el.definitionId, { notes: e.target.value })
+                                }
+                                className="min-h-[64px] text-base resize-none"
+                              />
+                              <Textarea
+                                placeholder="Zalecenia naprawcze..."
+                                value={el.recommendations}
+                                onChange={(e) =>
+                                  updateElement(el.definitionId, { recommendations: e.target.value })
+                                }
+                                className="min-h-[64px] text-base resize-none"
+                              />
+                            </div>
+                          )}
+
+                          {/* 5-year extended scope */}
+                          {inspectionType === 'five_year' && (
+                            <div className="space-y-1 border-t pt-3 border-yellow-200 dark:border-yellow-800">
+                              <Label className="text-sm text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5">
+                                <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
+                                  5-letni
+                                </Badge>
+                                Szczegółowy opis — zakres rozszerzony
+                              </Label>
+                              <Textarea
+                                placeholder="Opis w zakresie kontroli pięcioletniej..."
+                                value={el.detailedDescription}
+                                onChange={(e) =>
+                                  updateElement(el.definitionId, { detailedDescription: e.target.value })
+                                }
+                                className="min-h-[56px] text-base resize-none"
+                              />
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     </div>
@@ -450,77 +978,305 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
               <ChevronLeft className="h-5 w-5" /> Wróć
             </Button>
             <Button onClick={goNext} size="lg" className="h-14 px-8 text-base gap-2">
-              Dalej: Notatki <ChevronRight className="h-5 w-5" />
+              Dalej: Serwis <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
         </TabsContent>
 
-        {/* ── Krok 3 ──────────────────────────────────────────────── */}
-        <TabsContent value="notes" className="mt-0">
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                  Ocena ogólna i uwagi
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-base">Ocena ogólna stanu technicznego</Label>
-                  <Textarea
-                    placeholder="Ogólna ocena stanu technicznego obiektu..."
-                    value={overallAssessment}
-                    onChange={(e) => setOverallAssessment(e.target.value)}
-                    className="min-h-[120px] text-base resize-none"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-base">Uwagi dodatkowe</Label>
-                  <Textarea
-                    placeholder="Dodatkowe spostrzeżenia, informacje o zagrożeniach..."
-                    value={generalNotes}
-                    onChange={(e) => setGeneralNotes(e.target.value)}
-                    className="min-h-[120px] text-base resize-none"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* TAB 3 — Serwis                                             */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        <TabsContent value="serwis" className="mt-0 space-y-4">
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Camera className="h-5 w-5 text-blue-600" />
-                  Dokumentacja fotograficzna
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {photos.length > 0 && (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-4">
-                    {photos.map((file, i) => (
-                      <div key={i} className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border relative group">
-                        <img src={URL.createObjectURL(file)} alt={`Zdjęcie ${i + 1}`} className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                        >×</button>
-                      </div>
-                    ))}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wrench className="h-5 w-5 text-blue-600" />
+                Dane firmy serwisowej
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-base">Firma serwisowa</Label>
+                <Input value={serviceCompany} onChange={(e) => setServiceCompany(e.target.value)} placeholder="Nazwa firmy" className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Nr certyfikatu UDT</Label>
+                <Input value={udtCertificate} onChange={(e) => setUdtCertificate(e.target.value)} placeholder="np. UDT/0001/2023" className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Data ostatniego serwisu</Label>
+                <Input type="date" value={lastServiceDate} onChange={(e) => setLastServiceDate(e.target.value)} className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Nr protokołu serwisowego</Label>
+                <Input value={lastServiceProtocol} onChange={(e) => setLastServiceProtocol(e.target.value)} placeholder="np. SRV/2023/001" className="h-12 text-base" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Planowany termin serwisu</Label>
+                <Input type="date" value={nextServiceDate} onChange={(e) => setNextServiceDate(e.target.value)} className="h-12 text-base" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-base">Uwagi</Label>
+                <Textarea value={serviceNotes} onChange={(e) => setServiceNotes(e.target.value)} placeholder="Dodatkowe informacje o serwisie..." className="min-h-[80px] text-base resize-none" />
+              </div>
+              <div className="sm:col-span-2">
+                <ToggleButton
+                  label="Protokoły serwisowe w KOB"
+                  checked={protocolsInKob}
+                  onClick={() => setProtocolsInKob((p) => !p)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-blue-600" />
+                Czynności serwisowe
+                <Badge variant="secondary">
+                  {serviceChecklist.filter((x) => x.checked).length}/{serviceChecklist.length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {serviceChecklist.map((item) => (
+                <div key={item.code} className="p-3 rounded-lg border bg-card space-y-2">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleChecklistItem(item.code)}
+                      className={`w-7 h-7 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                        item.checked
+                          ? 'bg-green-600 border-green-600'
+                          : 'border-gray-300 hover:border-green-400'
+                      }`}
+                    >
+                      {item.checked && <CheckCircle2 className="h-4 w-4 text-white" />}
+                    </button>
+                    <span className="text-sm font-medium">{item.namePl}</span>
                   </div>
-                )}
-                <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-lg cursor-pointer hover:border-blue-400 transition-colors">
-                  <Upload className="h-8 w-8 text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500">Dotknij aby dodać zdjęcia</span>
-                  <input type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={(e) => {
-                    const files = Array.from(e.target.files || [])
-                    setPhotos([...photos, ...files])
-                  }} />
-                </label>
-              </CardContent>
-            </Card>
-          </div>
+                  {item.checked && (
+                    <Input
+                      value={item.notes}
+                      onChange={(e) => updateChecklistNote(item.code, e.target.value)}
+                      placeholder="Uwagi..."
+                      className="h-9 text-sm ml-10"
+                    />
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-          <div className="flex justify-between mt-6 gap-4">
+          <div className="flex justify-between gap-4">
+            <Button onClick={goPrev} variant="outline" size="lg" className="h-14 px-6 text-base gap-2">
+              <ChevronLeft className="h-5 w-5" /> Wróć
+            </Button>
+            <Button onClick={goNext} size="lg" className="h-14 px-8 text-base gap-2">
+              Dalej: Wnioski <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* TAB 4 — Wnioski                                            */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        <TabsContent value="wnioski" className="mt-0 space-y-4">
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-blue-600" />
+                  Zestawienie robót remontowych
+                </CardTitle>
+                <Button type="button" variant="outline" size="sm" onClick={addRepairRec} className="h-10 gap-1.5">
+                  <Plus className="h-4 w-4" /> Dodaj zalecenie
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {repairRecs.length === 0 && (
+                <p className="text-center text-muted-foreground py-8 text-sm">
+                  Brak zaleceń remontowych — kliknij &quot;Dodaj zalecenie&quot;
+                </p>
+              )}
+              {repairRecs.map((rec, idx) => (
+                <div key={rec.id} className="p-4 border rounded-lg space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-sm px-3 h-7 font-bold shrink-0">
+                      Lp. {idx + 1}
+                    </Badge>
+                    <button
+                      type="button"
+                      onClick={() => removeRepairRec(rec.id)}
+                      className="ml-auto text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm">Zakres robót</Label>
+                    <Textarea
+                      value={rec.scopeDescription}
+                      onChange={(e) => updateRepairRec(rec.id, { scopeDescription: e.target.value })}
+                      placeholder="Opisz zakres robót remontowych..."
+                      className="min-h-[72px] text-base resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm">Rodzaj</Label>
+                      <Select
+                        value={rec.repairType}
+                        onValueChange={(v) => updateRepairRec(rec.id, { repairType: v as RepairType })}
+                      >
+                        <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NG">NG — głęboka naprawa</SelectItem>
+                          <SelectItem value="NB">NB — niezbędne bieżąco</SelectItem>
+                          <SelectItem value="K">K — konieczne</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">Pilność</Label>
+                      <Select
+                        value={rec.urgencyLevel}
+                        onValueChange={(v) => updateRepairRec(rec.id, { urgencyLevel: v as UrgencyLevel })}
+                      >
+                        <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="I">I — natychmiast</SelectItem>
+                          <SelectItem value="II">II — do 3 miesięcy</SelectItem>
+                          <SelectItem value="III">III — do 1 roku</SelectItem>
+                          <SelectItem value="IV">IV — do 5 lat</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">Element</Label>
+                      <Input
+                        value={rec.elementName}
+                        onChange={(e) => updateRepairRec(rec.id, { elementName: e.target.value })}
+                        placeholder="np. Fundament"
+                        className="h-11"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
+                Ocena końcowa i zagrożenia
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-base">Ogólna ocena stanu technicznego</Label>
+                <Textarea
+                  value={overallAssessment}
+                  onChange={(e) => setOverallAssessment(e.target.value)}
+                  placeholder="Ogólna ocena stanu technicznego obiektu..."
+                  className="min-h-[120px] text-base resize-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-base">Informacja o zagrożeniach</Label>
+                <Textarea
+                  value={hazardInformation}
+                  onChange={(e) => setHazardInformation(e.target.value)}
+                  placeholder="Zidentyfikowane zagrożenia i zalecenia bezpieczeństwa..."
+                  className="min-h-[120px] text-base resize-none"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-between gap-4">
+            <Button onClick={goPrev} variant="outline" size="lg" className="h-14 px-6 text-base gap-2">
+              <ChevronLeft className="h-5 w-5" /> Wróć
+            </Button>
+            <Button onClick={goNext} size="lg" className="h-14 px-8 text-base gap-2">
+              Dalej: Zdjęcia <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* TAB 5 — Zdjęcia                                            */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        <TabsContent value="zdjecia" className="mt-0 space-y-4">
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Camera className="h-5 w-5 text-blue-600" />
+                Dokumentacja fotograficzna
+                {photos.length > 0 && (
+                  <Badge variant="secondary">{photos.length} zdjęć</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 transition-colors">
+                <Upload className="h-10 w-10 text-gray-400 mb-2" />
+                <span className="text-base text-gray-500 font-medium">Dotknij aby dodać zdjęcia</span>
+                <span className="text-sm text-gray-400 mt-0.5">Aparat lub galeria</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => addPhotos(e.target.files)}
+                />
+              </label>
+
+              {photos.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {photos.map((photo, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="relative aspect-[4/3] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border">
+                        <img
+                          src={photo.preview}
+                          alt={`Zdjęcie ${i + 1}`}
+                          className="w-full h-full object-contain"
+                        />
+                        <div className="absolute top-1.5 left-1.5 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                          #{i + 1}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(i)}
+                          className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-lg leading-none transition-colors"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <Input
+                        value={photo.description}
+                        onChange={(e) => updatePhotoDesc(i, e.target.value)}
+                        placeholder={`Opis zdjęcia ${i + 1}...`}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-between gap-4">
             <Button onClick={goPrev} variant="outline" size="lg" className="h-14 px-6 text-base gap-2">
               <ChevronLeft className="h-5 w-5" /> Wróć
             </Button>
@@ -528,7 +1284,7 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
         </TabsContent>
       </Tabs>
 
-      {/* ── Bottom action bar ──────────────────────────────────────── */}
+      {/* ── Sticky footer ─────────────────────────────────────────── */}
       <div className="sticky bottom-0 bg-background border-t pt-4 pb-6 mt-6 flex gap-4">
         <Button
           onClick={() => saveInspection('draft')}
@@ -537,7 +1293,9 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
           className="h-14 flex-1 text-base gap-2"
           disabled={saving || submitting}
         >
-          {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+          {saving
+            ? <Loader2 className="h-5 w-5 animate-spin" />
+            : <Save className="h-5 w-5" />}
           Zapisz roboczo
         </Button>
         <Button
@@ -546,7 +1304,9 @@ export function TurbineInspectionForm({ turbines, elementDefinitions, preselecte
           className="h-14 flex-1 text-base gap-2 bg-green-600 hover:bg-green-700"
           disabled={saving || submitting}
         >
-          {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+          {submitting
+            ? <Loader2 className="h-5 w-5 animate-spin" />
+            : <CheckCircle2 className="h-5 w-5" />}
           Zakończ inspekcję
         </Button>
       </div>
