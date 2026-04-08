@@ -458,4 +458,10 @@ function PhotoSlot({
           {canUpload && (
             <p className="text-xs text-gray-400">
               {isUploading ? 'Wgrywanie...' : 'Dodaj zdjęcie'}
-           
+                       </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
