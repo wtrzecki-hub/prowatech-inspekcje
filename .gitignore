@@ -38,3 +38,8 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Temp / upload scripts
+turbine_main_photos/
+turbine_photos_map.json
+upload_photos.mjs
