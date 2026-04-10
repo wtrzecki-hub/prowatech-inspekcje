@@ -31,7 +31,7 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ChevronRight, Plus, ClipboardList, Search } from 'lucide-react'
+import { ChevronRight, Plus, ClipboardList, Search, Trash2 } from 'lucide-react'
 
 interface Inspection {
   id: string
@@ -73,10 +73,33 @@ export default function InspectionsPage() {
   const [clientFilter, setClientFilter] = useState('all')
   const [searchFilter, setSearchFilter] = useState('')
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     fetchClients()
+    fetchUserRole()
   }, [])
+
+  const fetchUserRole = async () => {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
+      if (data) setUserRole(data.role)
+    }
+  }
+
+  const handleDelete = async (e: React.MouseEvent, inspectionId: string) => {
+    e.stopPropagation()
+    if (!confirm('Czy na pewno chcesz usunąć tę inspekcję?')) return
+    const supabase = createClient()
+    const { error } = await supabase.from('inspections').update({ is_deleted: true }).eq('id', inspectionId)
+    if (error) {
+      alert('Błąd usuwania: ' + error.message)
+    } else {
+      setInspections(inspections.filter(i => i.id !== inspectionId))
+    }
+  }
 
   useEffect(() => {
     fetchInspections()
@@ -260,6 +283,9 @@ export default function InspectionsPage() {
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Typ</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Status</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Ocena</TableHead>
+                  {userRole === 'admin' && (
+                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3 w-16"></TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -305,6 +331,17 @@ export default function InspectionsPage() {
                         <span className="text-gray-400 text-sm">-</span>
                       )}
                     </TableCell>
+                    {userRole === 'admin' && (
+                      <TableCell>
+                        <button
+                          onClick={(e) => handleDelete(e, inspection.id)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Usuń inspekcję"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
