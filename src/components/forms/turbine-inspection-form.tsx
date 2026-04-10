@@ -55,6 +55,12 @@ interface PrevInspection {
   completionStatus: string
 }
 
+interface PrevFinding {
+  text: string
+  originalStatus: string
+  currentStatus: 'done' | 'not_done' | 'not_checked'
+}
+
 interface InfraState {
   roadAccess: boolean
   maneuvringArea: boolean
@@ -243,6 +249,7 @@ export function TurbineInspectionForm({
     roadAccess: false, maneuvringArea: false, mvCables: false, substation: false, notes: '',
   })
   const [prevInspections, setPrevInspections] = useState<PrevInspection[]>([])
+  const [prevFindings, setPrevFindings]       = useState<PrevFinding[]>([])
 
   // ── Tab 2: Ocena elementów ────────────────────────────────────────
 
@@ -391,6 +398,57 @@ export function TurbineInspectionForm({
     setPhotos((p) => p.map((x, idx) => idx === i ? { ...x, description } : x))
   }
 
+  // ── Load previous findings from turbine ──────────────────────────
+
+  useEffect(() => {
+    if (!selectedTurbineId) {
+      setPrevFindings([])
+      return
+    }
+    const supabase = createClient()
+    supabase
+      .from('turbines')
+      .select('previous_findings, previous_findings_status')
+      .eq('id', selectedTurbineId)
+      .single()
+      .then(({ data }) => {
+        if (data?.previous_findings) {
+          const findings = (data.previous_findings as string).split('\n').filter(Boolean)
+          const statuses = ((data.previous_findings_status as string) || '').split('\n')
+          setPrevFindings(
+            findings.map((f, i) => ({
+              text: f,
+              originalStatus: statuses[i]?.trim() || '',
+              currentStatus: 'not_checked' as const,
+            }))
+          )
+        } else {
+          setPrevFindings([])
+        }
+      })
+  }, [selectedTurbineId])
+
+  // ── Auto-add 'Nie wykonano' findings to repairRecs ────────────────
+
+  useEffect(() => {
+    const notDone = prevFindings.filter((f) => f.currentStatus === 'not_done')
+    setRepairRecs((prev) => {
+      // Remove entries that were previously auto-added but are no longer 'not_done'
+      const withoutAutoAdded = prev.filter((r) => !r.id.startsWith('prev-'))
+      const autoAdded = notDone.map((f) => ({
+        id: `prev-${f.text.slice(0, 40)}`,
+        scopeDescription: f.text,
+        repairType: 'NB' as RepairType,
+        urgencyLevel: 'II' as UrgencyLevel,
+        elementName: '',
+      }))
+      // Merge: keep manual ones, replace auto-added block
+      const existingIds = new Set(withoutAutoAdded.map((r) => r.id))
+      const newAuto = autoAdded.filter((a) => !existingIds.has(a.id))
+      return [...withoutAutoAdded, ...newAuto]
+    })
+  }, [prevFindings])
+
   // ── Auto-calculate next inspection date ──────────────────────────
 
   useEffect(() => {
@@ -457,6 +515,15 @@ export function TurbineInspectionForm({
           overall_assessment: overallAssessment || null,
           hazard_information: hazardInformation || null,
           notes: null,
+          previous_findings: prevFindings.length > 0
+            ? prevFindings.map((f) => f.text).join('\n')
+            : null,
+          previous_recommendations_status: prevFindings.length > 0
+            ? prevFindings.map((f) =>
+                f.currentStatus === 'done' ? 'Wykonano' :
+                f.currentStatus === 'not_done' ? 'Nie wykonano' : 'Nie sprawdzono'
+              ).join('\n')
+            : null,
           created_by: session?.user.id,
         })
         .select('id')
@@ -1004,6 +1071,89 @@ export function TurbineInspectionForm({
               </CardContent>
             )}
           </Card>
+
+          {/* Zalecenia z poprzedniej kontroli */}
+          {prevFindings.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-500" />
+                  Zalecenia z poprzedniej kontroli
+                  <Badge variant="secondary">{prevFindings.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {prevFindings.map((f, i) => (
+                  <div key={i} className="p-3 border rounded-lg space-y-2">
+                    <p className="text-sm font-medium leading-snug">{f.text}</p>
+                    {f.originalStatus && (
+                      <p className="text-xs text-muted-foreground">
+                        Status w poprzednim protokole: <span className="font-medium">{f.originalStatus}</span>
+                      </p>
+                    )}
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPrevFindings((prev) =>
+                            prev.map((x, idx) =>
+                              idx === i ? { ...x, currentStatus: 'done' } : x
+                            )
+                          )
+                        }
+                        className={`px-3 py-2 rounded-lg border-2 text-xs font-semibold transition-all min-h-[40px] ${
+                          f.currentStatus === 'done'
+                            ? 'bg-green-600 text-white border-green-600'
+                            : 'border-green-300 text-green-700 hover:bg-green-50'
+                        }`}
+                      >
+                        Wykonano
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPrevFindings((prev) =>
+                            prev.map((x, idx) =>
+                              idx === i ? { ...x, currentStatus: 'not_done' } : x
+                            )
+                          )
+                        }
+                        className={`px-3 py-2 rounded-lg border-2 text-xs font-semibold transition-all min-h-[40px] ${
+                          f.currentStatus === 'not_done'
+                            ? 'bg-red-600 text-white border-red-600'
+                            : 'border-red-300 text-red-700 hover:bg-red-50'
+                        }`}
+                      >
+                        Nie wykonano
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPrevFindings((prev) =>
+                            prev.map((x, idx) =>
+                              idx === i ? { ...x, currentStatus: 'not_checked' } : x
+                            )
+                          )
+                        }
+                        className={`px-3 py-2 rounded-lg border-2 text-xs font-semibold transition-all min-h-[40px] ${
+                          f.currentStatus === 'not_checked'
+                            ? 'bg-gray-500 text-white border-gray-500'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Nie sprawdzono
+                      </button>
+                    </div>
+                    {f.currentStatus === 'not_done' && (
+                      <p className="text-xs text-red-600 font-medium">
+                        Zalecenie zostanie automatycznie dodane do Wniosków (Tab Wnioski).
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <div className="flex justify-end gap-4 pb-2">
             <Button onClick={goNext} size="lg" className="h-14 px-8 text-base gap-2">
