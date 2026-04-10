@@ -23,7 +23,7 @@ import {
   Wind, ClipboardCheck, Camera, FileText, Save, CheckCircle2,
   AlertTriangle, MapPin, Calendar, User, ChevronRight,
   ChevronLeft, Upload, Loader2, Wrench, Plus, Trash2,
-  Building2, Shield, Zap, HardHat, Navigation2,
+  Building2, Shield, Zap, HardHat, Navigation2, BookOpen, Search,
 } from 'lucide-react'
 import {
   Dialog,
@@ -102,6 +102,14 @@ interface PhotoEntry {
   file: File
   description: string
   preview: string
+}
+
+export interface DefectLibraryItem {
+  code: string
+  category: string
+  name_pl: string
+  recommendation_template: string
+  typical_urgency: UrgencyLevel
 }
 
 export interface TurbineOption {
@@ -193,6 +201,7 @@ interface Props {
   preselectedTurbine?: TurbineOption | null
   inspectorName?: string
   inspectors?: InspectorOption[]
+  defectLibrary?: DefectLibraryItem[]
 }
 
 // ── Sub-component helpers ──────────────────────────────────────────
@@ -224,6 +233,7 @@ export function TurbineInspectionForm({
   preselectedTurbine,
   inspectorName = '',
   inspectors = [],
+  defectLibrary = [],
 }: Props) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabKey>('dane-obiektu')
@@ -302,6 +312,9 @@ export function TurbineInspectionForm({
   // ── Completion dialog ─────────────────────────────────────────────
 
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [showLibraryDialog, setShowLibraryDialog]       = useState(false)
+  const [librarySearch, setLibrarySearch]               = useState('')
+  const [libraryCategory, setLibraryCategory]           = useState('__all__')
   const [completionChecklist, setCompletionChecklist] = useState({
     uprawnieniaBudowlane: false,
     certyfikatGWO: false,
@@ -1439,9 +1452,16 @@ export function TurbineInspectionForm({
                   <AlertTriangle className="h-5 w-5 text-blue-600" />
                   Zestawienie robót remontowych
                 </CardTitle>
-                <Button type="button" variant="outline" size="sm" onClick={addRepairRec} className="h-10 gap-1.5">
-                  <Plus className="h-4 w-4" /> Dodaj zalecenie
-                </Button>
+                <div className="flex gap-2">
+                  {defectLibrary.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowLibraryDialog(true)} className="h-10 gap-1.5">
+                      <BookOpen className="h-4 w-4" /> Dodaj z biblioteki
+                    </Button>
+                  )}
+                  <Button type="button" variant="outline" size="sm" onClick={addRepairRec} className="h-10 gap-1.5">
+                    <Plus className="h-4 w-4" /> Dodaj zalecenie
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1718,6 +1738,107 @@ export function TurbineInspectionForm({
               Zatwierdź i zakończ
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Library dialog ─────────────────────────────────────────── */}
+      <Dialog open={showLibraryDialog} onOpenChange={(open) => { setShowLibraryDialog(open); if (!open) { setLibrarySearch(''); setLibraryCategory('__all__') } }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-blue-600" /> Biblioteka zaleceń
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex gap-2 mt-2 shrink-0">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Szukaj zalecenia..."
+                value={librarySearch}
+                onChange={(e) => setLibrarySearch(e.target.value)}
+                className="pl-9 h-10"
+              />
+            </div>
+            <Select value={libraryCategory} onValueChange={setLibraryCategory}>
+              <SelectTrigger className="w-52 h-10"><SelectValue placeholder="Kategoria" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Wszystkie kategorie</SelectItem>
+                {Array.from(new Set(defectLibrary.map((d) => d.category))).sort().map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <ScrollArea className="flex-1 mt-3 pr-1">
+            <div className="space-y-1">
+              {(() => {
+                const items = defectLibrary.filter((d) => {
+                  const matchCat = libraryCategory === '__all__' || d.category === libraryCategory
+                  const matchQ   = librarySearch === '' || d.name_pl.toLowerCase().includes(librarySearch.toLowerCase())
+                  return matchCat && matchQ
+                })
+                const grouped = items.reduce<Record<string, DefectLibraryItem[]>>((acc, d) => {
+                  acc[d.category] = acc[d.category] || []
+                  acc[d.category].push(d)
+                  return acc
+                }, {})
+                const cats = Object.keys(grouped).sort()
+                if (cats.length === 0) return (
+                  <p className="text-center text-muted-foreground py-8 text-sm">Brak wyników</p>
+                )
+                return cats.map((cat) => (
+                  <div key={cat} className="mb-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">{cat}</p>
+                    {grouped[cat].map((item) => {
+                      const urgencyLabels: Record<string, string> = { I: 'Niezwłocznie', II: 'Do 3 m-cy', III: 'Do 1 roku', IV: 'Do 5 lat' }
+                      return (
+                        <button
+                          key={item.code}
+                          type="button"
+                          onClick={() => {
+                            setRepairRecs((prev) => [
+                              ...prev,
+                              {
+                                id: crypto.randomUUID(),
+                                scopeDescription: item.name_pl,
+                                repairType: (item.recommendation_template as RepairType) || 'NB',
+                                urgencyLevel: item.typical_urgency || 'III',
+                                elementName: item.category,
+                              },
+                            ])
+                            setShowLibraryDialog(false)
+                            setLibrarySearch('')
+                            setLibraryCategory('__all__')
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-md hover:bg-accent transition-colors flex items-start gap-3 group"
+                        >
+                          <span className="flex-1 text-sm leading-snug">{item.name_pl}</span>
+                          <div className="flex gap-1.5 shrink-0 mt-0.5">
+                            <Badge variant="outline" className="text-xs h-5 px-1.5">{item.recommendation_template}</Badge>
+                            <Badge variant="secondary" className="text-xs h-5 px-1.5">{urgencyLabels[item.typical_urgency] || item.typical_urgency}</Badge>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))
+              })()}
+
+              {/* Inne — własne zalecenie */}
+              <div className="border-t pt-3 mt-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">Inne</p>
+                <button
+                  type="button"
+                  onClick={() => { addRepairRec(); setShowLibraryDialog(false); setLibrarySearch(''); setLibraryCategory('__all__') }}
+                  className="w-full text-left px-3 py-2.5 rounded-md hover:bg-accent transition-colors flex items-center gap-2 text-sm text-muted-foreground"
+                >
+                  <Plus className="h-4 w-4" /> Wpisz własne zalecenie...
+                </button>
+              </div>
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 

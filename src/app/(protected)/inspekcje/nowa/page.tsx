@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { TurbineInspectionForm, type TurbineOption, type ElementDefinition } from '@/components/forms/turbine-inspection-form'
+import { TurbineInspectionForm, type TurbineOption, type ElementDefinition, type DefectLibraryItem } from '@/components/forms/turbine-inspection-form'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function NewInspectionPage() {
@@ -26,6 +26,7 @@ function NewInspectionContent() {
 
   const [turbines, setTurbines]                   = useState<TurbineOption[]>([])
   const [elementDefinitions, setElementDefinitions] = useState<ElementDefinition[]>([])
+  const [defectLibrary, setDefectLibrary]           = useState<DefectLibraryItem[]>([])
   const [selectedTurbine, setSelectedTurbine]     = useState<TurbineOption | null>(null)
   const [inspectorName, setInspectorName]         = useState('')
   const [inspectors, setInspectors]               = useState<Array<{ id: string; full_name: string; license_number: string; specialty: string; chamber_membership: string; email: string; phone: string }>>([])
@@ -38,7 +39,7 @@ function NewInspectionContent() {
   async function fetchData() {
     const supabase = createClient()
 
-    const [turbinesRes, defsRes, sessionRes, inspectorsRes] = await Promise.all([
+    const [turbinesRes, defsRes, sessionRes, inspectorsRes, defectsRes] = await Promise.all([
       supabase
         .from('turbines')
         .select('id, turbine_code, serial_number, manufacturer, model, location_address, rated_power_mw, hub_height_m, wind_farm_id, wind_farms(name)')
@@ -56,11 +57,18 @@ function NewInspectionContent() {
         .not('is_deleted', 'is', true)
         .eq('is_active', true)
         .order('full_name'),
+      supabase
+        .from('defect_library')
+        .select('code, category, name_pl, recommendation_template, typical_urgency')
+        .eq('is_active', true)
+        .order('category')
+        .order('name_pl'),
     ])
 
     if (turbinesRes.data) setTurbines(turbinesRes.data as unknown as TurbineOption[])
     if (defsRes.data)     setElementDefinitions(defsRes.data)
     if (inspectorsRes.data) setInspectors(inspectorsRes.data as typeof inspectors)
+    if (defectsRes.data) setDefectLibrary(defectsRes.data as DefectLibraryItem[])
 
     if (sessionRes.data.session) {
       const { data: profile } = await supabase
@@ -104,6 +112,7 @@ function NewInspectionContent() {
         preselectedTurbine={selectedTurbine}
         inspectorName={inspectorName}
         inspectors={inspectors}
+        defectLibrary={defectLibrary}
       />
     </div>
   )
