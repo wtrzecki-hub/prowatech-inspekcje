@@ -25,6 +25,13 @@ import {
   ChevronLeft, Upload, Loader2, Wrench, Plus, Trash2,
   Building2, Shield, Zap, HardHat, Navigation2,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -98,7 +105,7 @@ export interface TurbineOption {
   manufacturer: string
   model: string
   location_address: string
-  rated_power_kw?: number | null
+  rated_power_mw?: number | null
   hub_height_m?: number | null
   wind_farm_id: string
   wind_farms: { name: string }
@@ -624,8 +631,8 @@ export function TurbineInspectionForm({
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm">
                   <div><span className="text-muted-foreground">Producent:</span> <strong>{selectedTurbine.manufacturer}</strong></div>
                   <div><span className="text-muted-foreground">Model:</span> <strong>{selectedTurbine.model}</strong></div>
-                  {selectedTurbine.rated_power_kw != null && (
-                    <div><span className="text-muted-foreground">Moc:</span> <strong>{selectedTurbine.rated_power_kw} kW</strong></div>
+                  {selectedTurbine.rated_power_mw != null && (
+                    <div><span className="text-muted-foreground">Moc:</span> <strong>{selectedTurbine.rated_power_mw} MW</strong></div>
                   )}
                   {selectedTurbine.hub_height_m != null && (
                     <div><span className="text-muted-foreground">Wys. osi:</span> <strong>{selectedTurbine.hub_height_m} m</strong></div>
@@ -1308,16 +1315,16 @@ export function TurbineInspectionForm({
                         <button
                           type="button"
                           onClick={() => removePhoto(i)}
-                          className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-lg leading-none transition-colors"
+                          className="absolute top-1.5 right-1.5 bg-red-600/80 hover:bg-red-700 text-white rounded-full p-1 transition-colors"
                         >
-                          ×
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                       <Input
                         value={photo.description}
                         onChange={(e) => updatePhotoDesc(i, e.target.value)}
                         placeholder={`Opis zdjęcia ${i + 1}...`}
-                        className="h-10 text-sm"
+                        className="h-9 text-sm"
                       />
                     </div>
                   ))}
@@ -1330,106 +1337,100 @@ export function TurbineInspectionForm({
             <Button onClick={goPrev} variant="outline" size="lg" className="h-14 px-6 text-base gap-2">
               <ChevronLeft className="h-5 w-5" /> Wróć
             </Button>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="h-14 px-6 text-base gap-2"
+                disabled={saving}
+                onClick={() => saveInspection('draft')}
+              >
+                {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                Zapisz roboczo
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                className="h-14 px-8 text-base gap-2 bg-green-600 hover:bg-green-700"
+                disabled={submitting}
+                onClick={handleCompleteClick}
+              >
+                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                Zakończ protokół
+              </Button>
+            </div>
           </div>
         </TabsContent>
+
       </Tabs>
 
-      {/* ── Sticky footer ─────────────────────────────────────────── */}
-      <div className="sticky bottom-0 bg-background border-t pt-4 pb-6 mt-6 flex gap-4">
-        <Button
-          onClick={() => saveInspection('draft')}
-          variant="outline"
-          size="lg"
-          className="h-14 flex-1 text-base gap-2"
-          disabled={saving || submitting}
-        >
-          {saving
-            ? <Loader2 className="h-5 w-5 animate-spin" />
-            : <Save className="h-5 w-5" />}
-          Zapisz roboczo
-        </Button>
-        <Button
-          onClick={handleCompleteClick}
-          size="lg"
-          className="h-14 flex-1 text-base gap-2 bg-green-600 hover:bg-green-700"
-          disabled={saving || submitting}
-        >
-          {submitting
-            ? <Loader2 className="h-5 w-5 animate-spin" />
-            : <CheckCircle2 className="h-5 w-5" />}
-          Zakończ inspekcję
-        </Button>
-      </div>
+      {/* ── Completion Dialog ────────────────────────────────────────── */}
+      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Zakończenie protokołu
+            </DialogTitle>
+          </DialogHeader>
 
-      {/* ── Completion checklist dialog ───────────────────────────── */}
-      {showCompletionDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold">Zakończenie inspekcji</h2>
-                <p className="text-sm text-muted-foreground">Potwierdź kompletność dokumentacji</p>
-              </div>
-            </div>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Potwierdź, że wszystkie wymagane dokumenty są dostępne:
+            </p>
 
-            <div className="space-y-3">
-              {([
-                { key: 'uprawnieniaBudowlane', label: 'Uprawnienia budowlane inspektora — załączone do protokołu' },
-                { key: 'certyfikatGWO', label: 'Certyfikat GWO — załączony do protokołu' },
-                { key: 'certyfikatUDT', label: 'Certyfikat UDT — załączony do protokołu' },
-                { key: 'certyfikatSEP', label: 'Certyfikat SEP — załączony do protokołu' },
-                { key: 'dokumentacjaFotograficzna', label: 'Dokumentacja fotograficzna — kompletna' },
-              ] as { key: keyof typeof completionChecklist; label: string }[]).map(({ key, label }) => (
-                <label key={key} className="flex items-start gap-3 cursor-pointer group">
-                  <button
-                    type="button"
-                    onClick={() => setCompletionChecklist((p) => ({ ...p, [key]: !p[key] }))}
-                    className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                      completionChecklist[key]
-                        ? 'bg-green-600 border-green-600'
-                        : 'border-gray-300 group-hover:border-green-400'
-                    }`}
-                  >
-                    {completionChecklist[key] && (
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </button>
-                  <span className="text-sm leading-tight">{label}</span>
-                </label>
-              ))}
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                className="h-12 flex-1"
-                onClick={() => setShowCompletionDialog(false)}
-                disabled={submitting}
+            {([
+              { key: 'uprawnieniaBudowlane', label: 'Uprawnienia budowlane inspektora' },
+              { key: 'certyfikatGWO',        label: 'Certyfikat GWO (Global Wind Organisation)' },
+              { key: 'certyfikatUDT',        label: 'Certyfikat UDT (Urząd Dozoru Technicznego)' },
+              { key: 'certyfikatSEP',        label: 'Certyfikat SEP / uprawnienia elektryczne' },
+              { key: 'dokumentacjaFotograficzna', label: 'Dokumentacja fotograficzna' },
+            ] as { key: keyof typeof completionChecklist; label: string }[]).map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() =>
+                  setCompletionChecklist((p) => ({ ...p, [key]: !p[key] }))
+                }
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 text-sm font-medium text-left transition-all ${
+                  completionChecklist[key]
+                    ? 'bg-green-50 border-green-500 text-green-800 dark:bg-green-950/30 dark:border-green-600 dark:text-green-300'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700'
+                }`}
               >
-                Anuluj
-              </Button>
-              <Button
-                className="h-12 flex-1 bg-green-600 hover:bg-green-700 gap-2"
-                onClick={() => {
-                  setShowCompletionDialog(false)
-                  saveInspection('completed')
-                }}
-                disabled={submitting}
-              >
-                {submitting
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <CheckCircle2 className="h-4 w-4" />}
-                Zatwierdź i zakończ
-              </Button>
-            </div>
+                <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${completionChecklist[key] ? 'text-green-600' : 'text-gray-300'}`} />
+                {label}
+              </button>
+            ))}
           </div>
-        </div>
-      )}
+
+          <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setShowCompletionDialog(false)}
+              className="h-11"
+            >
+              Anuluj
+            </Button>
+            <Button
+              onClick={() => {
+                setShowCompletionDialog(false)
+                saveInspection('completed')
+              }}
+              disabled={submitting}
+              className="h-11 bg-green-600 hover:bg-green-700 gap-2"
+            >
+              {submitting
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <CheckCircle2 className="h-4 w-4" />
+              }
+              Zatwierdź i zakończ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }

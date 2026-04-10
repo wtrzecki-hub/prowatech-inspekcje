@@ -30,6 +30,8 @@ interface Inspector {
   license_number: string
   specialty: string
   chamber_membership: string
+  chamber_certificate_number: string | null
+  chamber_expiry_date: string | null
   phone: string
   email: string
   is_active: boolean
@@ -188,7 +190,7 @@ export default function InspektorzePage() {
                   </div>
                   <div className="space-y-1 text-sm text-gray-600">
                     <p><span className="font-medium">Nr uprawnień:</span> {inspector.license_number}</p>
-                    <p><span className="font-medium">Izba:</span> {inspector.chamber_membership}</p>
+                    <p><span className="font-medium">Izba:</span> {inspector.chamber_membership}{inspector.chamber_certificate_number ? ` (${inspector.chamber_certificate_number})` : ''}</p>
                     <p><span className="font-medium">Email:</span> {inspector.email}</p>
                     <p><span className="font-medium">Telefon:</span> {inspector.phone}</p>
                   </div>
@@ -257,7 +259,7 @@ export default function InspektorzePage() {
                   </TableCell>
                   <TableCell className="text-gray-600">{inspector.license_number}</TableCell>
                   <TableCell className="text-gray-600">{inspector.specialty}</TableCell>
-                  <TableCell className="text-gray-600">{inspector.chamber_membership}</TableCell>
+                  <TableCell className="text-gray-600">{inspector.chamber_membership}{inspector.chamber_certificate_number ? ` (${inspector.chamber_certificate_number})` : ''}</TableCell>
                   <TableCell className="text-gray-600">{inspector.phone}</TableCell>
                   <TableCell className="text-gray-600">{inspector.email}</TableCell>
                   <TableCell>

@@ -14,6 +14,8 @@ interface InspectorFormProps {
     license_number: string
     specialty: string
     chamber_membership: string
+    chamber_certificate_number?: string | null
+    chamber_expiry_date?: string | null
     phone: string
     email: string
     is_active: boolean
@@ -79,6 +81,8 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       license_number: formData.get('numer_uprawnien'),
       specialty: formData.get('specjalnosc'),
       chamber_membership: formData.get('izba'),
+      chamber_certificate_number: (formData.get('izba_numer') as string) || null,
+      chamber_expiry_date: (formData.get('izba_waznosc') as string) || null,
       phone: formData.get('telefon'),
       email: formData.get('email'),
       is_active: aktywny,
@@ -195,15 +199,40 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
         />
       </div>
 
-      <div>
-        <Label htmlFor="izba">Izba</Label>
-        <Input
-          id="izba"
-          name="izba"
-          className="h-12"
-          defaultValue={initialData?.chamber_membership || ''}
-          placeholder="Izba Inżynierów"
-        />
+      <div className="p-3 border rounded-lg space-y-3 bg-gray-50/50">
+        <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Izba Inżynierów</p>
+        <div>
+          <Label htmlFor="izba">Nazwa izby</Label>
+          <Input
+            id="izba"
+            name="izba"
+            className="h-12"
+            defaultValue={initialData?.chamber_membership || ''}
+            placeholder="np. Kujawsko-Pomorska Okręgowa Izba Inżynierów Budownictwa"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="izba_numer">Nr zaświadczenia</Label>
+            <Input
+              id="izba_numer"
+              name="izba_numer"
+              className="h-12"
+              defaultValue={initialData?.chamber_certificate_number || ''}
+              placeholder="np. KUP/0244/PWBKb/21"
+            />
+          </div>
+          <div>
+            <Label htmlFor="izba_waznosc">Data ważności</Label>
+            <Input
+              id="izba_waznosc"
+              name="izba_waznosc"
+              type="date"
+              className="h-12"
+              defaultValue={initialData?.chamber_expiry_date || ''}
+            />
+          </div>
+        </div>
       </div>
 
       <div>
