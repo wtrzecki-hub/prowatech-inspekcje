@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { ExternalLink } from 'lucide-react'
 
 interface InspectorFormProps {
   initialData?: {
@@ -13,9 +17,12 @@ interface InspectorFormProps {
     full_name: string
     license_number: string
     specialty: string
+    specialty_description: string | null
     chamber_membership: string
     chamber_certificate_number?: string | null
     chamber_expiry_date?: string | null
+    chamber_scan_url?: string | null
+    license_scan_url?: string | null
     phone: string
     email: string
     is_active: boolean
@@ -32,36 +39,35 @@ interface InspectorFormProps {
   onSuccess?: () => void
 }
 
-interface CertSection {
-  key: 'gwo' | 'udt' | 'sep'
-  label: string
-}
-
-const CERT_SECTIONS: CertSection[] = [
-  { key: 'gwo', label: 'GWO' },
-  { key: 'udt', label: 'UDT' },
-  { key: 'sep', label: 'SEP' },
+const SPECIALTIES = [
+  { value: 'konstrukcyjna', label: 'Konstrukcyjno-budowlana' },
+  { value: 'elektryczna', label: 'Elektryczna' },
+  { value: 'sanitarna', label: 'Sanitarna' },
+  { value: 'inna', label: 'Inna' },
 ]
 
 export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [aktywny, setAktywny] = useState(initialData?.is_active ?? true)
+  const [specialty, setSpecialty] = useState(initialData?.specialty || 'konstrukcyjna')
 
-  // Certificate scan files
+  // File uploads
+  const [licenseScanFile, setLicenseScanFile] = useState<File | null>(null)
+  const [chamberScanFile, setChamberScanFile] = useState<File | null>(null)
   const [gwoFile, setGwoFile] = useState<File | null>(null)
   const [udtFile, setUdtFile] = useState<File | null>(null)
   const [sepFile, setSepFile] = useState<File | null>(null)
 
-  async function uploadScan(inspectorId: string, certKey: CertSection['key'], file: File): Promise<string | null> {
+  async function uploadScan(inspectorId: string, name: string, file: File): Promise<string | null> {
     const supabase = createClient()
     const ext = file.name.split('.').pop() || 'pdf'
-    const path = `inspectors/${inspectorId}/${certKey}.${ext}`
+    const path = `inspectors/${inspectorId}/${name}.${ext}`
     const { error: uploadError } = await supabase.storage
       .from('inspector-docs')
       .upload(path, file, { contentType: file.type, upsert: true })
     if (uploadError) {
-      console.error(`Upload ${certKey} error:`, uploadError)
+      console.error(`Upload ${name} error:`, uploadError)
       return null
     }
     const { data } = supabase.storage.from('inspector-docs').getPublicUrl(path)
@@ -69,17 +75,18 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    const supabase = createClient()
     e.preventDefault()
     setLoading(true)
     setError(null)
 
+    const supabase = createClient()
     const formData = new FormData(e.currentTarget)
 
     const data: Record<string, unknown> = {
       full_name: `${formData.get('imie')} ${formData.get('nazwisko')}`.trim(),
       license_number: formData.get('numer_uprawnien'),
-      specialty: formData.get('specjalnosc'),
+      specialty: specialty,
+      specialty_description: (formData.get('specjalnosc_opis') as string) || null,
       chamber_membership: formData.get('izba'),
       chamber_certificate_number: (formData.get('izba_numer') as string) || null,
       chamber_expiry_date: (formData.get('izba_waznosc') as string) || null,
@@ -113,9 +120,17 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
         inspectorId = inserted.id
       }
 
-      // Upload scans if provided
+      // Upload scans
       if (inspectorId) {
         const scanUpdates: Record<string, string | null> = {}
+        if (licenseScanFile) {
+          const url = await uploadScan(inspectorId, 'uprawnienia', licenseScanFile)
+          if (url) scanUpdates.license_scan_url = url
+        }
+        if (chamberScanFile) {
+          const url = await uploadScan(inspectorId, 'izba', chamberScanFile)
+          if (url) scanUpdates.chamber_scan_url = url
+        }
         if (gwoFile) {
           const url = await uploadScan(inspectorId, 'gwo', gwoFile)
           if (url) scanUpdates.gwo_scan_url = url
@@ -141,199 +156,193 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
     }
   }
 
+  function ScanLink({ url, label }: { url?: string | null; label: string }) {
+    if (!url) return null
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+        <ExternalLink className="h-3 w-3" /> {label}
+      </a>
+    )
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
       {error && (
-        <div className="p-3 bg-red-50 text-red-700 rounded text-sm">
-          {error}
-        </div>
+        <div className="p-3 bg-red-50 text-red-700 rounded text-sm">{error}</div>
       )}
 
+      {/* Dane osobowe */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="imie">Imię</Label>
-          <Input
-            id="imie"
-            name="imie"
-            required
-            className="h-12"
-            defaultValue={initialData?.full_name?.split(' ')[0] || ''}
-            placeholder="Jan"
-          />
+          <Input id="imie" name="imie" required className="h-12"
+            defaultValue={initialData?.full_name?.split(' ')[0] || ''} placeholder="Jan" />
         </div>
-
         <div>
           <Label htmlFor="nazwisko">Nazwisko</Label>
-          <Input
-            id="nazwisko"
-            name="nazwisko"
-            required
-            className="h-12"
-            defaultValue={initialData?.full_name?.split(' ').slice(1).join(' ') || ''}
-            placeholder="Kowalski"
-          />
-        </div>
-      </div>
-
-      <div>
-        <Label htmlFor="numer_uprawnien">Numer uprawnień budowlanych</Label>
-        <Input
-          id="numer_uprawnien"
-          name="numer_uprawnien"
-          required
-          className="h-12"
-          defaultValue={initialData?.license_number || ''}
-          placeholder="123/2024"
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="specjalnosc">Specjalność</Label>
-        <Input
-          id="specjalnosc"
-          name="specjalnosc"
-          required
-          className="h-12"
-          defaultValue={initialData?.specialty || ''}
-          placeholder="Elektryk, Mechanik, itp."
-        />
-      </div>
-
-      <div className="p-3 border rounded-lg space-y-3 bg-gray-50/50">
-        <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Izba Inżynierów</p>
-        <div>
-          <Label htmlFor="izba">Nazwa izby</Label>
-          <Input
-            id="izba"
-            name="izba"
-            className="h-12"
-            defaultValue={initialData?.chamber_membership || ''}
-            placeholder="np. Kujawsko-Pomorska Okręgowa Izba Inżynierów Budownictwa"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="izba_numer">Nr zaświadczenia</Label>
-            <Input
-              id="izba_numer"
-              name="izba_numer"
-              className="h-12"
-              defaultValue={initialData?.chamber_certificate_number || ''}
-              placeholder="np. KUP/0244/PWBKb/21"
-            />
-          </div>
-          <div>
-            <Label htmlFor="izba_waznosc">Data ważności</Label>
-            <Input
-              id="izba_waznosc"
-              name="izba_waznosc"
-              type="date"
-              className="h-12"
-              defaultValue={initialData?.chamber_expiry_date || ''}
-            />
-          </div>
+          <Input id="nazwisko" name="nazwisko" required className="h-12"
+            defaultValue={initialData?.full_name?.split(' ').slice(1).join(' ') || ''} placeholder="Kowalski" />
         </div>
       </div>
 
       <div>
         <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          required
-          className="h-12"
-          defaultValue={initialData?.email || ''}
-          placeholder="jan@example.com"
-        />
+        <Input id="email" name="email" type="email" required className="h-12"
+          defaultValue={initialData?.email || ''} placeholder="jan@example.com" />
       </div>
 
       <div>
         <Label htmlFor="telefon">Telefon</Label>
-        <Input
-          id="telefon"
-          name="telefon"
-          className="h-12"
-          defaultValue={initialData?.phone || ''}
-          placeholder="+48 123 456 789"
-        />
+        <Input id="telefon" name="telefon" className="h-12"
+          defaultValue={initialData?.phone || ''} placeholder="+48 123 456 789" />
       </div>
 
-      {/* ── Uprawnienia GWO / UDT / SEP ─────────────────────── */}
-      <div className="border-t pt-4">
-        <p className="text-sm font-semibold text-gray-700 mb-3">Uprawnienia branżowe</p>
-        <div className="space-y-4">
-          {CERT_SECTIONS.map(({ key, label }) => {
-            const numberField = `${key}_number`
-            const expiryField = `${key}_expiry`
-            const defaultNumber = initialData?.[`${key}_certificate_number` as keyof typeof initialData] as string | null
-            const defaultExpiry = initialData?.[`${key}_expiry_date` as keyof typeof initialData] as string | null
-            const existingScan = initialData?.[`${key}_scan_url` as keyof typeof initialData] as string | null
-            const setFile = key === 'gwo' ? setGwoFile : key === 'udt' ? setUdtFile : setSepFile
+      {/* Uprawnienia budowlane */}
+      <div className="p-3 border rounded-lg space-y-3 bg-blue-50/50">
+        <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Uprawnienia budowlane</p>
+        <div>
+          <Label htmlFor="numer_uprawnien">Numer ewidencyjny uprawnień</Label>
+          <Input id="numer_uprawnien" name="numer_uprawnien" required className="h-12"
+            defaultValue={initialData?.license_number || ''} placeholder="np. KUP/0113/OWOK/05" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Specjalność</Label>
+            <Select value={specialty} onValueChange={setSpecialty}>
+              <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {SPECIALTIES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="specjalnosc_opis">Opis specjalności</Label>
+            <Input id="specjalnosc_opis" name="specjalnosc_opis" className="h-12"
+              defaultValue={initialData?.specialty_description || ''}
+              placeholder="np. bez ograniczeń" />
+          </div>
+        </div>
+        <div>
+          <Label>Skan uprawnień (PDF/JPG)</Label>
+          <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="h-10 text-sm"
+            onChange={(e) => setLicenseScanFile(e.target.files?.[0] || null)} />
+          <ScanLink url={initialData?.license_scan_url} label="Aktualny skan uprawnień" />
+        </div>
+      </div>
 
-            return (
-              <div key={key} className="p-3 border rounded-lg space-y-2 bg-gray-50/50">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-500">{label}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label htmlFor={numberField} className="text-xs">Nr certyfikatu</Label>
-                    <Input
-                      id={numberField}
-                      name={numberField}
-                      className="h-10 text-sm"
-                      defaultValue={defaultNumber || ''}
-                      placeholder={`${label}-2024-001`}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor={expiryField} className="text-xs">Data ważności</Label>
-                    <Input
-                      id={expiryField}
-                      name={expiryField}
-                      type="date"
-                      className="h-10 text-sm"
-                      defaultValue={defaultExpiry || ''}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Skan certyfikatu (PDF/JPG)</Label>
-                  <Input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="h-10 text-sm file:mr-2 file:text-xs"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  />
-                  {existingScan && (
-                    <a
-                      href={existingScan}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline mt-1 inline-block"
-                    >
-                      Aktualny skan →
-                    </a>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+      {/* Izba Inżynierów */}
+      <div className="p-3 border rounded-lg space-y-3 bg-green-50/50">
+        <p className="text-xs font-bold uppercase tracking-wider text-green-700">Izba Inżynierów</p>
+        <div>
+          <Label htmlFor="izba">Nazwa izby</Label>
+          <Input id="izba" name="izba" className="h-12"
+            defaultValue={initialData?.chamber_membership || ''}
+            placeholder="np. Kujawsko-Pomorska OIIB" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="izba_numer">Nr zaświadczenia</Label>
+            <Input id="izba_numer" name="izba_numer" className="h-12"
+              defaultValue={initialData?.chamber_certificate_number || ''}
+              placeholder="np. KUP/BO/0189/06" />
+          </div>
+          <div>
+            <Label htmlFor="izba_waznosc">Ważne do</Label>
+            <Input id="izba_waznosc" name="izba_waznosc" type="date" className="h-12"
+              defaultValue={initialData?.chamber_expiry_date || ''} />
+          </div>
+        </div>
+        <div>
+          <Label>Skan zaświadczenia (PDF/JPG)</Label>
+          <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="h-10 text-sm"
+            onChange={(e) => setChamberScanFile(e.target.files?.[0] || null)} />
+          <ScanLink url={initialData?.chamber_scan_url} label="Aktualny skan zaświadczenia" />
+        </div>
+      </div>
+
+      {/* GWO */}
+      <div className="p-3 border rounded-lg space-y-3 bg-cyan-50/50">
+        <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">GWO (Global Wind Organisation)</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="gwo_number">WINDA ID</Label>
+            <Input id="gwo_number" name="gwo_number" className="h-12"
+              defaultValue={initialData?.gwo_certificate_number || ''}
+              placeholder="np. WT335238PL" />
+          </div>
+          <div>
+            <Label htmlFor="gwo_expiry">Data ważności</Label>
+            <Input id="gwo_expiry" name="gwo_expiry" type="date" className="h-12"
+              defaultValue={initialData?.gwo_expiry_date || ''} />
+          </div>
+        </div>
+        <div>
+          <Label>Skan certyfikatu GWO (PDF/JPG)</Label>
+          <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="h-10 text-sm"
+            onChange={(e) => setGwoFile(e.target.files?.[0] || null)} />
+          <ScanLink url={initialData?.gwo_scan_url} label="Aktualny skan GWO" />
+        </div>
+      </div>
+
+      {/* UDT */}
+      <div className="p-3 border rounded-lg space-y-3 bg-orange-50/50">
+        <p className="text-xs font-bold uppercase tracking-wider text-orange-700">UDT</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="udt_number">Nr certyfikatu</Label>
+            <Input id="udt_number" name="udt_number" className="h-12"
+              defaultValue={initialData?.udt_certificate_number || ''}
+              placeholder="np. UDT-2024-001" />
+          </div>
+          <div>
+            <Label htmlFor="udt_expiry">Data ważności</Label>
+            <Input id="udt_expiry" name="udt_expiry" type="date" className="h-12"
+              defaultValue={initialData?.udt_expiry_date || ''} />
+          </div>
+        </div>
+        <div>
+          <Label>Skan certyfikatu UDT (PDF/JPG)</Label>
+          <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="h-10 text-sm"
+            onChange={(e) => setUdtFile(e.target.files?.[0] || null)} />
+          <ScanLink url={initialData?.udt_scan_url} label="Aktualny skan UDT" />
+        </div>
+      </div>
+
+      {/* SEP */}
+      <div className="p-3 border rounded-lg space-y-3 bg-purple-50/50">
+        <p className="text-xs font-bold uppercase tracking-wider text-purple-700">SEP</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="sep_number">Nr certyfikatu</Label>
+            <Input id="sep_number" name="sep_number" className="h-12"
+              defaultValue={initialData?.sep_certificate_number || ''}
+              placeholder="np. SEP-E-1/2024" />
+          </div>
+          <div>
+            <Label htmlFor="sep_expiry">Data ważności</Label>
+            <Input id="sep_expiry" name="sep_expiry" type="date" className="h-12"
+              defaultValue={initialData?.sep_expiry_date || ''} />
+          </div>
+        </div>
+        <div>
+          <Label>Skan certyfikatu SEP (PDF/JPG)</Label>
+          <Input type="file" accept=".pdf,.jpg,.jpeg,.png" className="h-10 text-sm"
+            onChange={(e) => setSepFile(e.target.files?.[0] || null)} />
+          <ScanLink url={initialData?.sep_scan_url} label="Aktualny skan SEP" />
         </div>
       </div>
 
       <div className="flex items-center space-x-2">
-        <Checkbox
-          id="aktywny"
-          checked={aktywny}
-          onCheckedChange={(checked) => setAktywny(checked === true)}
-        />
-        <Label htmlFor="aktywny" className="font-normal">
-          Inspektor aktywny
-        </Label>
+        <Checkbox id="aktywny" checked={aktywny}
+          onCheckedChange={(checked) => setAktywny(checked === true)} />
+        <Label htmlFor="aktywny" className="font-normal">Inspektor aktywny</Label>
       </div>
 
       <Button type="submit" disabled={loading} className="w-full h-12">
-        {loading ? 'Zapisywanie...' : initialData ? 'Zaktualizuj' : 'Dodaj'}
+        {loading ? 'Zapisywanie...' : initialData ? 'Zaktualizuj' : 'Dodaj inspektora'}
       </Button>
     </form>
   )
