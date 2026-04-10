@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -277,12 +277,20 @@ export function TurbineInspectionForm({
   // ── Tab 4: Wnioski ────────────────────────────────────────────────
 
   const [repairRecs, setRepairRecs]             = useState<RepairRecommendation[]>([])
-  const [overallAssessment, setOverallAssessment] = useState('')
-  const [hazardInformation, setHazardInformation] = useState('')
+  const [overallAssessment, setOverallAssessment] = useState(
+    'Elementy obiektu znajdują się w należytym stanie technicznym, zapewniającym jego sprawność techniczną i dalsze, bezpieczne jego użytkowanie.\nWskazane jest, aby dołączać do Książki Obiektu Budowlanego protokoły serwisanta z kontroli elementów konstrukcyjnych turbiny.'
+  )
+  const [hazardInformation, setHazardInformation] = useState(
+    'W wyniku przeprowadzonej kontroli nie stwierdzono zagrożeń dla życia lub zdrowia ludzi oraz mogących mieć wpływ na bezpieczeństwo mienia lub środowiska.'
+  )
 
   // ── Tab 5: Zdjęcia ────────────────────────────────────────────────
 
   const [photos, setPhotos] = useState<PhotoEntry[]>([])
+
+  // ── Turbine search ────────────────────────────────────────────────
+
+  const [turbineSearch, setTurbineSearch] = useState('')
 
   // ── Completion dialog ─────────────────────────────────────────────
 
@@ -301,6 +309,13 @@ export function TurbineInspectionForm({
   const filteredTurbines = selectedFarmName
     ? turbines.filter((t) => t.wind_farms?.name === selectedFarmName)
     : turbines
+  const filteredTurbinesForSearch = filteredTurbines.filter((t) =>
+    turbineSearch === '' ||
+    t.turbine_code.toLowerCase().includes(turbineSearch.toLowerCase()) ||
+    t.serial_number.toLowerCase().includes(turbineSearch.toLowerCase()) ||
+    t.manufacturer.toLowerCase().includes(turbineSearch.toLowerCase()) ||
+    t.location_address?.toLowerCase().includes(turbineSearch.toLowerCase())
+  )
   const selectedTurbine = turbines.find((t) => t.id === selectedTurbineId)
   const completedCount  = elements.filter((e) => e.rating !== null).length
   const issueCount      = elements.filter(
@@ -375,6 +390,20 @@ export function TurbineInspectionForm({
   function updatePhotoDesc(i: number, description: string) {
     setPhotos((p) => p.map((x, idx) => idx === i ? { ...x, description } : x))
   }
+
+  // ── Auto-calculate next inspection date ──────────────────────────
+
+  useEffect(() => {
+    if (inspectionDate) {
+      const date = new Date(inspectionDate)
+      const nextYear = date.getFullYear() + 1
+      const nextMonth = date.getMonth() + 1
+      const lastDayOfMonth = new Date(nextYear, nextMonth, 0).getDate()
+      setNextInspectionDate(
+        `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`
+      )
+    }
+  }, [inspectionDate])
 
   // ── Navigation ────────────────────────────────────────────────────
 
@@ -451,7 +480,7 @@ export function TurbineInspectionForm({
         }))
 
       if (elementRows.length > 0) {
-        const { error } = await supabase.from('inspection_elements').insert(elementRows)
+        const { error } = await supabase.from('inspection_elements').upsert(elementRows, { onConflict: 'inspection_id,element_definition_id' })
         if (error) throw error
       }
 
@@ -623,13 +652,19 @@ export function TurbineInspectionForm({
 
               <div className="space-y-2">
                 <Label className="text-base">Turbina *</Label>
+                <Input
+                  value={turbineSearch}
+                  onChange={(e) => setTurbineSearch(e.target.value)}
+                  placeholder="Szukaj turbinę (kod, nr seryjny, producent, lokalizacja)..."
+                  className="h-11 text-sm"
+                />
                 <Select value={selectedTurbineId || 'none'} onValueChange={(v) => setSelectedTurbineId(v === 'none' ? '' : v)}>
                   <SelectTrigger className="h-12 text-base">
                     <SelectValue placeholder="Wybierz turbinę..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— wybierz turbinę —</SelectItem>
-                    {filteredTurbines.map((t) => (
+                    {filteredTurbinesForSearch.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {t.turbine_code} — {t.manufacturer} {t.model}
                         {!selectedFarmName && ` (${t.wind_farms?.name})`}
@@ -1297,9 +1332,9 @@ export function TurbineInspectionForm({
                       >
                         <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="NG">NG — głęboka naprawa</SelectItem>
-                          <SelectItem value="NB">NB — niezbędne bieżąco</SelectItem>
-                          <SelectItem value="K">K — konieczne</SelectItem>
+                          <SelectItem value="NG">NG — Naprawa główna</SelectItem>
+                          <SelectItem value="NB">NB — Naprawa bieżąca</SelectItem>
+                          <SelectItem value="K">K — Konserwacja</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1311,10 +1346,10 @@ export function TurbineInspectionForm({
                       >
                         <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="I">I — natychmiast</SelectItem>
-                          <SelectItem value="II">II — do 3 miesięcy</SelectItem>
-                          <SelectItem value="III">III — do 1 roku</SelectItem>
-                          <SelectItem value="IV">IV — do 5 lat</SelectItem>
+                          <SelectItem value="I">I — Niezwłocznie</SelectItem>
+                          <SelectItem value="II">II — Do 3 miesięcy</SelectItem>
+                          <SelectItem value="III">III — Do 1 roku</SelectItem>
+                          <SelectItem value="IV">IV — Do 5 lat</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
