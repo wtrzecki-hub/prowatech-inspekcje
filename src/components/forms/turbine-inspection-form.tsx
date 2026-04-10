@@ -1334,7 +1334,7 @@ export function TurbineInspectionForm({
                         <SelectContent>
                           <SelectItem value="NG">NG — Naprawa główna</SelectItem>
                           <SelectItem value="NB">NB — Naprawa bieżąca</SelectItem>
-                          <SelectItem value="K">K — Konserwacja</SelectItem>
+                          <SelectItem value="K">K — Prace konserwacyjne</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
