@@ -1498,32 +1498,41 @@ export function TurbineInspectionForm({
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <Label className="text-sm">Rodzaj</Label>
-                      <Select
-                        value={rec.repairType}
-                        onValueChange={(v) => updateRepairRec(rec.id, { repairType: v as RepairType })}
-                      >
-                        <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NG">NG — Naprawa główna</SelectItem>
-                          <SelectItem value="NB">NB — Naprawa bieżąca</SelectItem>
-                          <SelectItem value="K">K — Prace konserwacyjne</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-1">
+                        {([['NG', 'NG'], ['NB', 'NB'], ['K', 'K']] as [RepairType, string][]).map(([val, label]) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => updateRepairRec(rec.id, { repairType: val })}
+                            className={`px-3 py-2 rounded-lg border-2 text-xs font-bold min-h-[44px] transition-all ${
+                              rec.repairType === val
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'border-gray-200 text-gray-600 hover:border-blue-300'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-sm">Pilność</Label>
-                      <Select
-                        value={rec.urgencyLevel}
-                        onValueChange={(v) => updateRepairRec(rec.id, { urgencyLevel: v as UrgencyLevel })}
-                      >
-                        <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="I">I — Niezwłocznie</SelectItem>
-                          <SelectItem value="II">II — Do 3 miesięcy</SelectItem>
-                          <SelectItem value="III">III — Do 1 roku</SelectItem>
-                          <SelectItem value="IV">IV — Do 5 lat</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-1">
+                        {([['I', 'I', 'bg-red-600'], ['II', 'II', 'bg-orange-500'], ['III', 'III', 'bg-yellow-500'], ['IV', 'IV', 'bg-green-600']] as [UrgencyLevel, string, string][]).map(([val, label, color]) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => updateRepairRec(rec.id, { urgencyLevel: val })}
+                            className={`px-3 py-2 rounded-lg border-2 text-xs font-bold min-h-[44px] transition-all ${
+                              rec.urgencyLevel === val
+                                ? `${color} text-white border-transparent`
+                                : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-sm">Element</Label>
@@ -1715,7 +1724,7 @@ export function TurbineInspectionForm({
             ))}
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+          <DialogFooter className="flex gap-2">
             <Button
               variant="outline"
               onClick={() => setShowCompletionDialog(false)}
