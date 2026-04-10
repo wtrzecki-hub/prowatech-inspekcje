@@ -5,6 +5,19 @@ import 'jspdf-autotable'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 
+// jsPDF (helvetica) nie obsługuje polskich znaków — transliteracja jako fallback
+const normPl = (text: string): string =>
+  (text || '')
+    .replace(/ą/g, 'a').replace(/Ą/g, 'A')
+    .replace(/ć/g, 'c').replace(/Ć/g, 'C')
+    .replace(/ę/g, 'e').replace(/Ę/g, 'E')
+    .replace(/ł/g, 'l').replace(/Ł/g, 'L')
+    .replace(/ń/g, 'n').replace(/Ń/g, 'N')
+    .replace(/ó/g, 'o').replace(/Ó/g, 'O')
+    .replace(/ś/g, 's').replace(/Ś/g, 'S')
+    .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
+    .replace(/ż/g, 'z').replace(/Ż/g, 'Z')
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
@@ -30,7 +43,7 @@ export async function GET(
 
     const inspectionId = params.id
 
-    // Fetch inspection with all relations
+    // Fetch inspection with all relations through turbines → wind_farms → clients
     const { data: inspection, error: inspectionError } = await supabase
       .from('inspections')
       .select(
@@ -49,27 +62,27 @@ export async function GET(
         inspector_signature_location,
         inspector_signature_date,
         owner_representative_name,
-        created_at,
-        turbine:turbine_id (
+        committee_members,
+        notes,
+        turbines (
           id,
-          code,
+          turbine_code,
           model,
           manufacturer,
-          power_output,
-          installation_date
-        ),
-        wind_farm:wind_farm_id (
-          id,
-          name,
-          location,
-          address
-        ),
-        client:client_id (
-          id,
-          name,
-          nip,
-          address,
-          phone
+          rated_power_mw,
+          serial_number,
+          location_address,
+          wind_farms (
+            id,
+            name,
+            location_address,
+            clients (
+              id,
+              name,
+              nip,
+              address
+            )
+          )
         )
       `
       )
@@ -80,19 +93,22 @@ export async function GET(
       return new Response('Inspekcja nie znaleziona', { status: 404 })
     }
 
+    const turbine = (inspection as any).turbines
+    const windFarm = turbine?.wind_farms
+    const client = windFarm?.clients
+
     // Fetch inspection elements with definitions
     const { data: elements } = await supabase
       .from('inspection_elements')
       .select(
         `
         id,
-        rating,
+        condition_rating,
         notes,
         element_definition:element_definition_id (
           id,
-          name,
-          description,
-          category
+          name_pl,
+          section_code
         )
       `
       )
@@ -105,7 +121,7 @@ export async function GET(
         `
         inspector:inspector_id (
           id,
-          name,
+          full_name,
           license_number,
           specialty
         )
@@ -120,19 +136,11 @@ export async function GET(
     // Fetch repair recommendations
     const { data: repairs } = await supabase
       .from('repair_recommendations')
-      .select('*')
+      .select('id, scope_description, urgency_level, deadline_date, is_completed')
       .eq('inspection_id', inspectionId)
 
-    // Fetch service info
-    const { data: serviceInfo } = await supabase
-      .from('service_history')
-      .select('*')
-      .eq('turbine_id', inspection.turbine.id)
-      .order('service_date', { ascending: false })
-      .limit(5)
-
     // Fetch electrical measurements if five-year inspection
-    let measurements = []
+    let measurements: any[] = []
     if (inspection.inspection_type === 'five_year') {
       const { data: measurementsData } = await supabase
         .from('electrical_measurements')
@@ -161,7 +169,7 @@ export async function GET(
       }
       pdf.setFontSize(12)
       pdf.setFont('helvetica', 'bold')
-      pdf.text(title, margin, yPosition)
+      pdf.text(normPl(title), margin, yPosition)
       yPosition += 8
       pdf.setDrawColor(100)
       pdf.line(margin, yPosition - 2, pageWidth - margin, yPosition - 2)
@@ -176,10 +184,10 @@ export async function GET(
         yPosition = margin
       }
       pdf.setFont('helvetica', 'bold')
-      pdf.text(label + ':', margin, yPosition)
+      pdf.text(normPl(label) + ':', margin, yPosition)
       pdf.setFont('helvetica', 'normal')
       const textWidth = pageWidth - margin * 2 - 60
-      const lines = pdf.splitTextToSize(value, textWidth)
+      const lines = pdf.splitTextToSize(normPl(value), textWidth)
       pdf.text(lines, margin + 60, yPosition)
       yPosition += Math.max(lineHeight, lines.length * 4) + 2
     }
@@ -195,8 +203,10 @@ export async function GET(
       }
 
       const tableConfig: any = {
-        head: [headers],
-        body: rows,
+        head: [headers.map(normPl)],
+        body: rows.map((row) =>
+          row.map((cell) => (typeof cell === 'string' ? normPl(cell) : cell))
+        ),
         startY: yPosition,
         margin: margin,
         columnStyles: {},
@@ -233,13 +243,13 @@ export async function GET(
     pdf.setFontSize(16)
     pdf.setFont('helvetica', 'bold')
     const inspectionTypeLabel =
-      inspection.inspection_type === 'annual' ? 'ROCZNEJ' : 'PIĘCIOLETNIEJ'
-    pdf.text(`PROTOKÓŁ Z KONTROLI ${inspectionTypeLabel}`, margin, yPosition)
+      inspection.inspection_type === 'annual' ? 'ROCZNEJ' : 'PIECIОLETNIEJ'
+    pdf.text(`PROTOKOL Z KONTROLI ${inspectionTypeLabel}`, margin, yPosition)
     yPosition += 10
 
     // Inspection info section
     addSection('Dane inspekcji')
-    addRow('Nr protokołu', inspection.protocol_number || 'Brak')
+    addRow('Nr protokolu', inspection.protocol_number || 'Brak')
     addRow(
       'Data kontroli',
       format(new Date(inspection.inspection_date), 'dd MMMM yyyy', {
@@ -248,55 +258,53 @@ export async function GET(
     )
     addRow(
       'Typ kontroli',
-      inspection.inspection_type === 'annual' ? 'Roczna' : 'Pięcioletnia'
+      inspection.inspection_type === 'annual' ? 'Roczna' : 'Pieciоletnia'
     )
-    addRow('Status', inspection.status.toUpperCase())
+    addRow('Status', (inspection.status || '').toUpperCase())
 
     // Turbine info
     addSection('Dane turbiny wiatrowej')
-    addRow('Kod turbiny', inspection.turbine.code)
+    addRow('Kod turbiny', turbine?.turbine_code || '-')
     addRow(
       'Producent i model',
-      `${inspection.turbine.manufacturer} ${inspection.turbine.model}`
+      `${turbine?.manufacturer || ''} ${turbine?.model || ''}`.trim() || '-'
     )
-    addRow('Moc nominalna', `${inspection.turbine.power_output} kW`)
-    if (inspection.turbine.installation_date) {
-      addRow(
-        'Data instalacji',
-        format(new Date(inspection.turbine.installation_date), 'dd.MM.yyyy', {
-          locale: pl,
-        })
-      )
+    addRow('Moc nominalna', turbine?.rated_power_mw ? `${turbine.rated_power_mw} MW` : '-')
+    if (turbine?.serial_number) {
+      addRow('Nr seryjny', turbine.serial_number)
+    }
+    if (turbine?.location_address) {
+      addRow('Lokalizacja turbiny', turbine.location_address)
     }
 
     // Farm info
-    addSection('Lokalizacja farmy wiatrowej')
-    addRow('Nazwa farmy', inspection.wind_farm.name)
-    addRow('Lokalizacja', inspection.wind_farm.location)
-    if (inspection.wind_farm.address) {
-      addRow('Adres', inspection.wind_farm.address)
+    if (windFarm) {
+      addSection('Lokalizacja farmy wiatrowej')
+      addRow('Nazwa farmy', windFarm.name || '-')
+      if (windFarm.location_address) {
+        addRow('Adres', windFarm.location_address)
+      }
     }
 
     // Client info
-    addSection('Dane właściciela/zarządcy')
-    addRow('Nazwa podmiotu', inspection.client.name)
-    if (inspection.client.nip) {
-      addRow('NIP', inspection.client.nip)
-    }
-    if (inspection.client.address) {
-      addRow('Adres', inspection.client.address)
-    }
-    if (inspection.client.phone) {
-      addRow('Telefon', inspection.client.phone)
+    if (client) {
+      addSection('Dane wlasciciela/zarzadcy')
+      addRow('Nazwa podmiotu', client.name || '-')
+      if (client.nip) {
+        addRow('NIP', client.nip)
+      }
+      if (client.address) {
+        addRow('Adres', client.address)
+      }
     }
 
     // Inspectors info
-    addSection('Dane inspektora/inspektorów')
+    addSection('Dane inspektora/inspektorow')
     if (inspectors.length > 0) {
       inspectors.forEach((inspector: any, idx: number) => {
         addRow(
           `Inspektor ${idx + 1}`,
-          `${inspector.name}${inspector.license_number ? ` (Nr licencji: ${inspector.license_number})` : ''}`
+          `${inspector.full_name}${inspector.license_number ? ` (Nr licencji: ${inspector.license_number})` : ''}`
         )
         if (inspector.specialty) {
           addRow('Specjalizacja', inspector.specialty)
@@ -308,69 +316,64 @@ export async function GET(
 
     // Elements assessment
     if (elements && elements.length > 0) {
-      addSection('Ocena elementów turbiny')
-      const ratingLabels: { [key: number]: string } = {
-        1: 'Bdb',
-        2: 'Db',
-        3: 'Dostateczna',
-        4: 'Słaba',
-        5: 'Niedostateczna',
+      addSection('Ocena elementow turbiny')
+      const ratingLabels: { [key: string]: string } = {
+        '1': 'Bdb',
+        '2': 'Db',
+        '3': 'Dostateczna',
+        '4': 'Slaba',
+        '5': 'Niedostateczna',
       }
 
       const elementRows = elements.map((el: any) => [
-        el.element_definition.name,
-        el.rating ? ratingLabels[el.rating] : '-',
+        el.element_definition?.name_pl || '-',
+        el.condition_rating ? (ratingLabels[String(el.condition_rating)] || String(el.condition_rating)) : '-',
         el.notes || '-',
       ])
 
       addTable(['Element', 'Ocena', 'Uwagi'], elementRows, [80, 30, 50])
     }
 
-    // Service history
-    if (serviceInfo && serviceInfo.length > 0) {
-      addSection('Historia serwisowania')
-      const serviceRows = serviceInfo.map((service: any) => [
-        format(new Date(service.service_date), 'dd.MM.yyyy', { locale: pl }),
-        service.description,
-        service.performed_by || '-',
-      ])
-      addTable(['Data', 'Opis', 'Wykonawca'], serviceRows, [30, 100, 40])
-    }
-
     // Electrical measurements (for five-year inspections)
     if (inspection.inspection_type === 'five_year' && measurements.length > 0) {
       addSection('Pomiary instalacji elektrycznej')
       const measurementRows = measurements.map((m: any) => [
-        m.parameter,
+        m.parameter || '-',
         m.value?.toString() || '-',
         m.unit || '-',
         m.status || '-',
       ])
-      addTable(['Parameter', 'Wartość', 'Jednostka', 'Status'], measurementRows)
+      addTable(['Parametr', 'Wartosc', 'Jednostka', 'Status'], measurementRows)
     }
 
     // Repair recommendations
     if (repairs && repairs.length > 0) {
       addSection('Zalecenia naprawcze')
       const repairRows = repairs.map((r: any) => [
-        r.priority || '-',
-        r.description,
-        r.estimated_cost ? `${r.estimated_cost} PLN` : '-',
+        r.urgency_level || '-',
+        r.scope_description || '-',
+        r.deadline_date
+          ? format(new Date(r.deadline_date), 'dd.MM.yyyy', { locale: pl })
+          : '-',
       ])
-      addTable(['Priorytet', 'Opis naprawy', 'Koszt'], repairRows)
+      addTable(['Priorytet', 'Opis naprawy', 'Termin'], repairRows)
     }
 
     // Overall assessment
     addSection('Wnioski')
     if (inspection.overall_condition_rating) {
-      const ratingLabels: { [key: number]: string } = {
-        1: 'Dobry',
-        2: 'Zadowalający',
-        3: 'Dostateczny',
-        4: 'Niezadowalający',
-        5: 'Zły',
+      const ratingLabels: { [key: string]: string } = {
+        dobry: 'Dobry',
+        zadowalajacy: 'Zadowalajacy',
+        sredni: 'Sredni',
+        zly: 'Zly',
+        awaryjny: 'Awaryjny',
       }
-      addRow('Ocena ogólna stanu', ratingLabels[inspection.overall_condition_rating])
+      addRow(
+        'Ocena ogolna stanu',
+        ratingLabels[inspection.overall_condition_rating] ||
+          inspection.overall_condition_rating
+      )
     }
 
     if (inspection.overall_assessment) {
@@ -382,7 +385,10 @@ export async function GET(
       pdf.text('Ocena techniczna:', margin, yPosition)
       yPosition += 5
       pdf.setFont('helvetica', 'normal')
-      const lines = pdf.splitTextToSize(inspection.overall_assessment, pageWidth - margin * 2)
+      const lines = pdf.splitTextToSize(
+        normPl(inspection.overall_assessment),
+        pageWidth - margin * 2
+      )
       pdf.text(lines, margin, yPosition)
       yPosition += lines.length * 4 + 3
     }
@@ -395,12 +401,12 @@ export async function GET(
       }
       pdf.setFont('helvetica', 'bold')
       pdf.setTextColor(220, 53, 69)
-      pdf.text('Informacja o zagrożeniach:', margin, yPosition)
+      pdf.text('Informacja o zagrozeniach:', margin, yPosition)
       yPosition += 5
       pdf.setFont('helvetica', 'normal')
       pdf.setTextColor(0)
       const lines = pdf.splitTextToSize(
-        inspection.hazard_information,
+        normPl(inspection.hazard_information),
         pageWidth - margin * 2
       )
       pdf.text(lines, margin, yPosition)
@@ -408,10 +414,10 @@ export async function GET(
     }
 
     // Next inspection dates
-    addSection('Zalecane terminy następnych kontroli')
+    addSection('Zalecane terminy nastepnych kontroli')
     if (inspection.next_annual_date) {
       addRow(
-        'Następna kontrola roczna',
+        'Nastepna kontrola roczna',
         format(new Date(inspection.next_annual_date), 'dd MMMM yyyy', {
           locale: pl,
         })
@@ -419,7 +425,7 @@ export async function GET(
     }
     if (inspection.next_five_year_date) {
       addRow(
-        'Następna kontrola pięcioletnia',
+        'Nastepna kontrola pieciоletnia',
         format(new Date(inspection.next_five_year_date), 'dd MMMM yyyy', {
           locale: pl,
         })
@@ -427,7 +433,7 @@ export async function GET(
     }
     if (inspection.next_electrical_date) {
       addRow(
-        'Następna kontrola instalacji elektrycznej',
+        'Nastepna kontrola instalacji elektrycznej',
         format(new Date(inspection.next_electrical_date), 'dd MMMM yyyy', {
           locale: pl,
         })
@@ -449,23 +455,28 @@ export async function GET(
     yPosition += 12
 
     pdf.line(margin + 70, yPosition - 12, margin + 120, yPosition - 12)
-    pdf.text('Podpis reprezentanta właściciela', margin + 70, yPosition)
+    pdf.text('Podpis reprezentanta wlasciciela', margin + 70, yPosition)
 
-    if (inspection.inspector_signature_location || inspection.inspector_signature_date) {
+    if (
+      (inspection as any).inspector_signature_location ||
+      (inspection as any).inspector_signature_date
+    ) {
       yPosition += 15
       const sigInfo = []
-      if (inspection.inspector_signature_location) {
-        sigInfo.push(inspection.inspector_signature_location)
+      if ((inspection as any).inspector_signature_location) {
+        sigInfo.push((inspection as any).inspector_signature_location)
       }
-      if (inspection.inspector_signature_date) {
+      if ((inspection as any).inspector_signature_date) {
         sigInfo.push(
-          format(new Date(inspection.inspector_signature_date), 'dd.MM.yyyy', {
-            locale: pl,
-          })
+          format(
+            new Date((inspection as any).inspector_signature_date),
+            'dd.MM.yyyy',
+            { locale: pl }
+          )
         )
       }
       pdf.setFontSize(9)
-      pdf.text(sigInfo.join(', '), margin, yPosition)
+      pdf.text(normPl(sigInfo.join(', ')), margin, yPosition)
     }
 
     // Generate PDF buffer
@@ -479,6 +490,6 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error generating PDF:', error)
-    return new Response('Błąd podczas generowania PDF', { status: 500 })
+    return new Response('Blad podczas generowania PDF', { status: 500 })
   }
 }
