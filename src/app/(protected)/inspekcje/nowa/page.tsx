@@ -28,6 +28,7 @@ function NewInspectionContent() {
   const [elementDefinitions, setElementDefinitions] = useState<ElementDefinition[]>([])
   const [selectedTurbine, setSelectedTurbine]     = useState<TurbineOption | null>(null)
   const [inspectorName, setInspectorName]         = useState('')
+  const [inspectors, setInspectors]               = useState<Array<{ id: string; full_name: string; license_number: string; specialty: string; chamber_membership: string; email: string; phone: string }>>([])
   const [loading, setLoading]                     = useState(true)
 
   useEffect(() => {
@@ -37,7 +38,7 @@ function NewInspectionContent() {
   async function fetchData() {
     const supabase = createClient()
 
-    const [turbinesRes, defsRes, sessionRes] = await Promise.all([
+    const [turbinesRes, defsRes, sessionRes, inspectorsRes] = await Promise.all([
       supabase
         .from('turbines')
         .select('id, turbine_code, serial_number, manufacturer, model, location_address, rated_power_mw, hub_height_m, wind_farm_id, wind_farms(name)')
@@ -49,10 +50,17 @@ function NewInspectionContent() {
         .eq('is_active', true)
         .order('sort_order'),
       supabase.auth.getSession(),
+      supabase
+        .from('inspectors')
+        .select('id, full_name, license_number, specialty, chamber_membership, email, phone')
+        .not('is_deleted', 'is', true)
+        .eq('is_active', true)
+        .order('full_name'),
     ])
 
     if (turbinesRes.data) setTurbines(turbinesRes.data as unknown as TurbineOption[])
     if (defsRes.data)     setElementDefinitions(defsRes.data)
+    if (inspectorsRes.data) setInspectors(inspectorsRes.data as typeof inspectors)
 
     if (sessionRes.data.session) {
       const { data: profile } = await supabase
@@ -95,6 +103,7 @@ function NewInspectionContent() {
         elementDefinitions={elementDefinitions}
         preselectedTurbine={selectedTurbine}
         inspectorName={inspectorName}
+        inspectors={inspectors}
       />
     </div>
   )

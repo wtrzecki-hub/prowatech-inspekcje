@@ -171,11 +171,22 @@ type TabKey = (typeof TABS)[number]
 
 // ── Props ──────────────────────────────────────────────────────────
 
+interface InspectorOption {
+  id: string
+  full_name: string
+  license_number: string
+  specialty: string
+  chamber_membership: string
+  email: string
+  phone: string
+}
+
 interface Props {
   turbines: TurbineOption[]
   elementDefinitions: ElementDefinition[]
   preselectedTurbine?: TurbineOption | null
   inspectorName?: string
+  inspectors?: InspectorOption[]
 }
 
 // ── Sub-component helpers ──────────────────────────────────────────
@@ -206,6 +217,7 @@ export function TurbineInspectionForm({
   elementDefinitions,
   preselectedTurbine,
   inspectorName = '',
+  inspectors = [],
 }: Props) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabKey>('dane-obiektu')
@@ -703,6 +715,31 @@ export function TurbineInspectionForm({
 
               <div className="space-y-2">
                 <Label className="text-base">Skład komisji</Label>
+                {inspectors.length > 0 ? (
+                  <Select
+                    value="none"
+                    onValueChange={(v) => {
+                      if (v === 'none') return
+                      const insp = inspectors.find((i) => i.id === v)
+                      if (!insp) return
+                      setCommitteeMembers((prev) =>
+                        prev ? `${prev}, ${insp.full_name}` : insp.full_name
+                      )
+                    }}
+                  >
+                    <SelectTrigger className="h-12 text-base">
+                      <SelectValue placeholder="Dodaj inspektora do komisji..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— dodaj inspektora —</SelectItem>
+                      {inspectors.map((insp) => (
+                        <SelectItem key={insp.id} value={insp.id}>
+                          {insp.full_name}{insp.specialty ? ` (${insp.specialty})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
                 <Input
                   value={committeeMembers}
                   onChange={(e) => setCommitteeMembers(e.target.value)}
@@ -751,7 +788,40 @@ export function TurbineInspectionForm({
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 sm:col-span-2">
                 <Label className="text-base">Imię i nazwisko</Label>
-                <Input value={inspector1.name} onChange={(e) => updI1('name', e.target.value)} placeholder="Jan Kowalski" className="h-12 text-base" />
+                {inspectors.length > 0 ? (
+                  <Select
+                    value={inspector1.name ? (inspectors.find((i) => i.full_name === inspector1.name)?.id ?? 'none') : 'none'}
+                    onValueChange={(v) => {
+                      if (v === 'none') return
+                      const insp = inspectors.find((i) => i.id === v)
+                      if (!insp) return
+                      setInspector1({
+                        name: insp.full_name,
+                        license: insp.license_number || '',
+                        specialty: insp.specialty || 'budowlana',
+                        chamber: insp.chamber_membership || '',
+                        contact: [insp.phone, insp.email].filter(Boolean).join(' / '),
+                      })
+                    }}
+                  >
+                    <SelectTrigger className="h-12 text-base">
+                      <SelectValue placeholder="Wybierz inspektora..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— wybierz inspektora —</SelectItem>
+                      {inspectors.map((insp) => (
+                        <SelectItem key={insp.id} value={insp.id}>
+                          {insp.full_name}{insp.specialty ? ` (${insp.specialty})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={inspector1.name} onChange={(e) => updI1('name', e.target.value)} placeholder="Jan Kowalski" className="h-12 text-base" />
+                )}
+                {inspectors.length > 0 && (
+                  <Input value={inspector1.name} onChange={(e) => updI1('name', e.target.value)} placeholder="Jan Kowalski" className="h-10 text-sm" />
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="text-base">Nr uprawnień budowlanych</Label>
@@ -787,7 +857,40 @@ export function TurbineInspectionForm({
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2 sm:col-span-2">
                   <Label className="text-base">Imię i nazwisko</Label>
-                  <Input value={inspector2.name} onChange={(e) => updI2('name', e.target.value)} placeholder="Jan Kowalski" className="h-12 text-base" />
+                  {inspectors.length > 0 ? (
+                    <Select
+                      value={inspector2.name ? (inspectors.find((i) => i.full_name === inspector2.name)?.id ?? 'none') : 'none'}
+                      onValueChange={(v) => {
+                        if (v === 'none') return
+                        const insp = inspectors.find((i) => i.id === v)
+                        if (!insp) return
+                        setInspector2({
+                          name: insp.full_name,
+                          license: insp.license_number || '',
+                          specialty: insp.specialty || 'elektryczna',
+                          chamber: insp.chamber_membership || '',
+                          contact: [insp.phone, insp.email].filter(Boolean).join(' / '),
+                        })
+                      }}
+                    >
+                      <SelectTrigger className="h-12 text-base">
+                        <SelectValue placeholder="Wybierz inspektora..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— wybierz inspektora —</SelectItem>
+                        {inspectors.map((insp) => (
+                          <SelectItem key={insp.id} value={insp.id}>
+                            {insp.full_name}{insp.specialty ? ` (${insp.specialty})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input value={inspector2.name} onChange={(e) => updI2('name', e.target.value)} placeholder="Jan Kowalski" className="h-12 text-base" />
+                  )}
+                  {inspectors.length > 0 && (
+                    <Input value={inspector2.name} onChange={(e) => updI2('name', e.target.value)} placeholder="Jan Kowalski" className="h-10 text-sm" />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-base">Nr uprawnień elektrycznych</Label>
