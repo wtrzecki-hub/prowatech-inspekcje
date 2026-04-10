@@ -80,6 +80,7 @@ interface ElementCheck {
   recommendations: string
   photoNumbers: string
   detailedDescription: string
+  elementPhotos: Array<{ file: File; preview: string; description: string }>
 }
 
 interface ServiceChecklistItem {
@@ -255,6 +256,23 @@ export function TurbineInspectionForm({
   const [inspector2, setInspector2] = useState<Inspector>({
     name: '', license: '', specialty: 'elektryczna', chamber: '', contact: '',
   })
+
+  // Auto-fill inspector1 data from inspectors list when name matches
+  useEffect(() => {
+    if (inspectorName && inspectors.length > 0 && !inspector1.license) {
+      const found = inspectors.find((i) => i.full_name === inspectorName)
+      if (found) {
+        setInspector1({
+          name: found.full_name,
+          license: found.license_number || '',
+          specialty: found.specialty || 'budowlana',
+          chamber: found.chamber_membership || '',
+          contact: [found.phone, found.email].filter(Boolean).join(' / '),
+        })
+      }
+    }
+  }, [inspectors, inspectorName])
+
   const [infra, setInfra] = useState<InfraState>({
     roadAccess: false, maneuvringArea: false, mvCables: false, substation: false, notes: '',
   })
@@ -275,6 +293,7 @@ export function TurbineInspectionForm({
       recommendations: '',
       photoNumbers: '',
       detailedDescription: '',
+      elementPhotos: [],
     }))
   )
 
@@ -315,6 +334,12 @@ export function TurbineInspectionForm({
   const [showLibraryDialog, setShowLibraryDialog]       = useState(false)
   const [librarySearch, setLibrarySearch]               = useState('')
   const [libraryCategory, setLibraryCategory]           = useState('__all__')
+
+  // Element-level library dialog (notes / recommendations)
+  const [showElementLibDialog, setShowElementLibDialog] = useState(false)
+  const [elementLibTarget, setElementLibTarget] = useState<{ definitionId: string; field: 'notes' | 'recommendations' } | null>(null)
+  const [elementLibSearch, setElementLibSearch] = useState('')
+  const [elementLibCategory, setElementLibCategory] = useState('__all__')
   const [completionChecklist, setCompletionChecklist] = useState({
     uprawnieniaBudowlane: false,
     certyfikatGWO: false,
@@ -1283,25 +1308,116 @@ export function TurbineInspectionForm({
                             </div>
                           )}
 
+                          {/* Photo per element */}
+                          {el.rating !== null && (
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-lg border-2 border-blue-300 text-blue-700 hover:bg-blue-50 text-xs font-semibold transition-all">
+                                <Camera className="h-4 w-4" />
+                                Dodaj zdjęcie
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (!file) return
+                                    const preview = URL.createObjectURL(file)
+                                    updateElement(el.definitionId, {
+                                      elementPhotos: [...el.elementPhotos, { file, preview, description: '' }],
+                                    })
+                                    e.target.value = ''
+                                  }}
+                                />
+                              </label>
+                              {el.elementPhotos.length > 0 && (
+                                <div className="flex flex-wrap gap-3">
+                                  {el.elementPhotos.map((ep, pi) => (
+                                    <div key={pi} className="w-28 space-y-1">
+                                      <div className="relative w-28 h-20 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border">
+                                        <img src={ep.preview} alt="" className="w-full h-full object-cover" />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            URL.revokeObjectURL(ep.preview)
+                                            updateElement(el.definitionId, {
+                                              elementPhotos: el.elementPhotos.filter((_, idx) => idx !== pi),
+                                            })
+                                          }}
+                                          className="absolute top-1 right-1 bg-red-600/80 hover:bg-red-700 text-white rounded-full p-0.5 transition-colors"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                      <Input
+                                        value={ep.description}
+                                        onChange={(e) => {
+                                          const updated = el.elementPhotos.map((x, idx) =>
+                                            idx === pi ? { ...x, description: e.target.value } : x
+                                          )
+                                          updateElement(el.definitionId, { elementPhotos: updated })
+                                        }}
+                                        placeholder="Opis..."
+                                        className="h-7 text-xs"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Notes / Recommendations — for non-good ratings */}
                           {el.rating && !['dobry', 'zadowalajacy'].includes(el.rating) && (
                             <div className="space-y-2">
-                              <Textarea
-                                placeholder="Opis stanu / uwagi..."
-                                value={el.notes}
-                                onChange={(e) =>
-                                  updateElement(el.definitionId, { notes: e.target.value })
-                                }
-                                className="min-h-[64px] text-base resize-none"
-                              />
-                              <Textarea
-                                placeholder="Zalecenia naprawcze..."
-                                value={el.recommendations}
-                                onChange={(e) =>
-                                  updateElement(el.definitionId, { recommendations: e.target.value })
-                                }
-                                className="min-h-[64px] text-base resize-none"
-                              />
+                              <div className="space-y-1">
+                                {defectLibrary.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setElementLibTarget({ definitionId: el.definitionId, field: 'notes' })
+                                      setElementLibSearch('')
+                                      setElementLibCategory('__all__')
+                                      setShowElementLibDialog(true)
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                  >
+                                    <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (uwagi)
+                                  </button>
+                                )}
+                                <Textarea
+                                  placeholder="Opis stanu / uwagi..."
+                                  value={el.notes}
+                                  onChange={(e) =>
+                                    updateElement(el.definitionId, { notes: e.target.value })
+                                  }
+                                  className="min-h-[64px] text-base resize-none"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                {defectLibrary.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setElementLibTarget({ definitionId: el.definitionId, field: 'recommendations' })
+                                      setElementLibSearch('')
+                                      setElementLibCategory('__all__')
+                                      setShowElementLibDialog(true)
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                  >
+                                    <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (zalecenia)
+                                  </button>
+                                )}
+                                <Textarea
+                                  placeholder="Zalecenia naprawcze..."
+                                  value={el.recommendations}
+                                  onChange={(e) =>
+                                    updateElement(el.definitionId, { recommendations: e.target.value })
+                                  }
+                                  className="min-h-[64px] text-base resize-none"
+                                />
+                              </div>
                             </div>
                           )}
 
@@ -1846,6 +1962,93 @@ export function TurbineInspectionForm({
                   <Plus className="h-4 w-4" /> Wpisz własne zalecenie...
                 </button>
               </div>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Element Library Dialog (notes / recommendations) ──────── */}
+      <Dialog open={showElementLibDialog} onOpenChange={(open) => {
+        setShowElementLibDialog(open)
+        if (!open) { setElementLibTarget(null); setElementLibSearch(''); setElementLibCategory('__all__') }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-blue-600" />
+              {elementLibTarget?.field === 'notes' ? 'Biblioteka opisów usterek' : 'Biblioteka zaleceń'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex gap-2 mt-2 shrink-0">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Szukaj..."
+                value={elementLibSearch}
+                onChange={(e) => setElementLibSearch(e.target.value)}
+                className="pl-9 h-10"
+              />
+            </div>
+            <Select value={elementLibCategory} onValueChange={setElementLibCategory}>
+              <SelectTrigger className="w-52 h-10"><SelectValue placeholder="Kategoria" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Wszystkie kategorie</SelectItem>
+                {Array.from(new Set(defectLibrary.map((d) => d.category))).sort().map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <ScrollArea className="flex-1 mt-3 pr-1">
+            <div className="space-y-1">
+              {(() => {
+                const items = defectLibrary.filter((d) => {
+                  const matchCat = elementLibCategory === '__all__' || d.category === elementLibCategory
+                  const matchQ   = elementLibSearch === '' || d.name_pl.toLowerCase().includes(elementLibSearch.toLowerCase())
+                  return matchCat && matchQ
+                })
+                const grouped = items.reduce<Record<string, DefectLibraryItem[]>>((acc, d) => {
+                  acc[d.category] = acc[d.category] || []
+                  acc[d.category].push(d)
+                  return acc
+                }, {})
+                const cats = Object.keys(grouped).sort()
+                if (cats.length === 0) return (
+                  <p className="text-center text-muted-foreground py-8 text-sm">Brak wyników</p>
+                )
+                return cats.map((cat) => (
+                  <div key={cat} className="mb-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">{cat}</p>
+                    {grouped[cat].map((item) => (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => {
+                          if (!elementLibTarget) return
+                          const el = elements.find((e) => e.definitionId === elementLibTarget.definitionId)
+                          if (!el) return
+                          const field = elementLibTarget.field
+                          const text = field === 'notes' ? item.name_pl : item.recommendation_template || item.name_pl
+                          const prev = el[field]
+                          updateElement(elementLibTarget.definitionId, {
+                            [field]: prev ? `${prev}\n${text}` : text,
+                          })
+                          setShowElementLibDialog(false)
+                          setElementLibTarget(null)
+                          setElementLibSearch('')
+                          setElementLibCategory('__all__')
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-md hover:bg-accent transition-colors flex items-start gap-3"
+                      >
+                        <span className="flex-1 text-sm leading-snug">{item.name_pl}</span>
+                        <Badge variant="outline" className="text-xs h-5 px-1.5 shrink-0">{item.category}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                ))
+              })()}
             </div>
           </ScrollArea>
         </DialogContent>
