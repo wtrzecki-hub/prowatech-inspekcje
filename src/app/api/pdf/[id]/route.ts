@@ -4,19 +4,15 @@ import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
+import fs from 'fs'
+import path from 'path'
 
-// jsPDF (helvetica) nie obsługuje polskich znaków — transliteracja jako fallback
-const normPl = (text: string): string =>
-  (text || '')
-    .replace(/ą/g, 'a').replace(/Ą/g, 'A')
-    .replace(/ć/g, 'c').replace(/Ć/g, 'C')
-    .replace(/ę/g, 'e').replace(/Ę/g, 'E')
-    .replace(/ł/g, 'l').replace(/Ł/g, 'L')
-    .replace(/ń/g, 'n').replace(/Ń/g, 'N')
-    .replace(/ó/g, 'o').replace(/Ó/g, 'O')
-    .replace(/ś/g, 's').replace(/Ś/g, 'S')
-    .replace(/ź/g, 'z').replace(/Ź/g, 'Z')
-    .replace(/ż/g, 'z').replace(/Ż/g, 'Z')
+const robotoRegularBase64 = fs.readFileSync(
+  path.join(process.cwd(), 'src/fonts/Roboto-Regular.ttf')
+).toString('base64')
+const robotoBoldBase64 = fs.readFileSync(
+  path.join(process.cwd(), 'src/fonts/Roboto-Bold.ttf')
+).toString('base64')
 
 export async function GET(
   request: Request,
@@ -156,6 +152,12 @@ export async function GET(
       format: 'a4',
     })
 
+    pdf.addFileToVFS('Roboto-Regular.ttf', robotoRegularBase64)
+    pdf.addFont('Roboto-Regular.ttf', 'Roboto', 'normal')
+    pdf.addFileToVFS('Roboto-Bold.ttf', robotoBoldBase64)
+    pdf.addFont('Roboto-Bold.ttf', 'Roboto', 'bold')
+    pdf.setFont('Roboto')
+
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
     const margin = 15
@@ -168,13 +170,13 @@ export async function GET(
         yPosition = margin
       }
       pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text(normPl(title), margin, yPosition)
+      pdf.setFont('Roboto', 'bold')
+      pdf.text(title, margin, yPosition)
       yPosition += 8
       pdf.setDrawColor(100)
       pdf.line(margin, yPosition - 2, pageWidth - margin, yPosition - 2)
       yPosition += 4
-      pdf.setFont('helvetica', 'normal')
+      pdf.setFont('Roboto', 'normal')
       pdf.setFontSize(10)
     }
 
@@ -183,11 +185,11 @@ export async function GET(
         pdf.addPage()
         yPosition = margin
       }
-      pdf.setFont('helvetica', 'bold')
-      pdf.text(normPl(label) + ':', margin, yPosition)
-      pdf.setFont('helvetica', 'normal')
+      pdf.setFont('Roboto', 'bold')
+      pdf.text(label + ':', margin, yPosition)
+      pdf.setFont('Roboto', 'normal')
       const textWidth = pageWidth - margin * 2 - 60
-      const lines = pdf.splitTextToSize(normPl(value), textWidth)
+      const lines = pdf.splitTextToSize(value, textWidth)
       pdf.text(lines, margin + 60, yPosition)
       yPosition += Math.max(lineHeight, lines.length * 4) + 2
     }
@@ -203,22 +205,22 @@ export async function GET(
       }
 
       const tableConfig: any = {
-        head: [headers.map(normPl)],
-        body: rows.map((row) =>
-          row.map((cell) => (typeof cell === 'string' ? normPl(cell) : cell))
-        ),
+        head: [headers],
+        body: rows,
         startY: yPosition,
         margin: margin,
         columnStyles: {},
         styles: {
+          font: 'Roboto',
           fontSize: 9,
           cellPadding: 3,
           overflow: 'linebreak',
         },
         headStyles: {
+          font: 'Roboto',
+          fontStyle: 'bold',
           fillColor: [66, 133, 244],
           textColor: 255,
-          fontStyle: 'bold',
         },
         alternateRowStyles: {
           fillColor: [242, 242, 242],
@@ -241,15 +243,15 @@ export async function GET(
 
     // Title
     pdf.setFontSize(16)
-    pdf.setFont('helvetica', 'bold')
+    pdf.setFont('Roboto', 'bold')
     const inspectionTypeLabel =
-      inspection.inspection_type === 'annual' ? 'ROCZNEJ' : 'PIECIОLETNIEJ'
-    pdf.text(`PROTOKOL Z KONTROLI ${inspectionTypeLabel}`, margin, yPosition)
+      inspection.inspection_type === 'annual' ? 'ROCZNEJ' : 'PIĘCIOLETNIEJ'
+    pdf.text(`PROTOKÓŁ Z KONTROLI ${inspectionTypeLabel}`, margin, yPosition)
     yPosition += 10
 
     // Inspection info section
     addSection('Dane inspekcji')
-    addRow('Nr protokolu', inspection.protocol_number || 'Brak')
+    addRow('Nr protokołu', inspection.protocol_number || 'Brak')
     addRow(
       'Data kontroli',
       format(new Date(inspection.inspection_date), 'dd MMMM yyyy', {
@@ -258,7 +260,7 @@ export async function GET(
     )
     addRow(
       'Typ kontroli',
-      inspection.inspection_type === 'annual' ? 'Roczna' : 'Pieciоletnia'
+      inspection.inspection_type === 'annual' ? 'Roczna' : 'Pięcioletnia'
     )
     addRow('Status', (inspection.status || '').toUpperCase())
 
@@ -277,6 +279,7 @@ export async function GET(
       addRow('Lokalizacja turbiny', turbine.location_address)
     }
 
+
     // Farm info
     if (windFarm) {
       addSection('Lokalizacja farmy wiatrowej')
@@ -288,7 +291,7 @@ export async function GET(
 
     // Client info
     if (client) {
-      addSection('Dane wlasciciela/zarzadcy')
+      addSection('Dane właściciela/zarządcy')
       addRow('Nazwa podmiotu', client.name || '-')
       if (client.nip) {
         addRow('NIP', client.nip)
@@ -299,7 +302,7 @@ export async function GET(
     }
 
     // Inspectors info
-    addSection('Dane inspektora/inspektorow')
+    addSection('Dane inspektora/inspektorów')
     if (inspectors.length > 0) {
       inspectors.forEach((inspector: any, idx: number) => {
         addRow(
@@ -316,12 +319,12 @@ export async function GET(
 
     // Elements assessment
     if (elements && elements.length > 0) {
-      addSection('Ocena elementow turbiny')
+      addSection('Ocena elementów turbiny')
       const ratingLabels: { [key: string]: string } = {
         '1': 'Bdb',
         '2': 'Db',
         '3': 'Dostateczna',
-        '4': 'Slaba',
+        '4': 'Słaba',
         '5': 'Niedostateczna',
       }
 
@@ -343,7 +346,7 @@ export async function GET(
         m.unit || '-',
         m.status || '-',
       ])
-      addTable(['Parametr', 'Wartosc', 'Jednostka', 'Status'], measurementRows)
+      addTable(['Parametr', 'Wartość', 'Jednostka', 'Status'], measurementRows)
     }
 
     // Repair recommendations
@@ -364,13 +367,13 @@ export async function GET(
     if (inspection.overall_condition_rating) {
       const ratingLabels: { [key: string]: string } = {
         dobry: 'Dobry',
-        zadowalajacy: 'Zadowalajacy',
-        sredni: 'Sredni',
-        zly: 'Zly',
+        zadowalajacy: 'Zadowalający',
+        sredni: 'Średni',
+        zly: 'Zły',
         awaryjny: 'Awaryjny',
       }
       addRow(
-        'Ocena ogolna stanu',
+        'Ocena ogólna stanu',
         ratingLabels[inspection.overall_condition_rating] ||
           inspection.overall_condition_rating
       )
@@ -381,12 +384,12 @@ export async function GET(
         pdf.addPage()
         yPosition = margin
       }
-      pdf.setFont('helvetica', 'bold')
+      pdf.setFont('Roboto', 'bold')
       pdf.text('Ocena techniczna:', margin, yPosition)
       yPosition += 5
-      pdf.setFont('helvetica', 'normal')
+      pdf.setFont('Roboto', 'normal')
       const lines = pdf.splitTextToSize(
-        normPl(inspection.overall_assessment),
+        inspection.overall_assessment,
         pageWidth - margin * 2
       )
       pdf.text(lines, margin, yPosition)
@@ -399,14 +402,14 @@ export async function GET(
         pdf.addPage()
         yPosition = margin
       }
-      pdf.setFont('helvetica', 'bold')
+      pdf.setFont('Roboto', 'bold')
       pdf.setTextColor(220, 53, 69)
-      pdf.text('Informacja o zagrozeniach:', margin, yPosition)
+      pdf.text('Informacja o zagrożeniach:', margin, yPosition)
       yPosition += 5
-      pdf.setFont('helvetica', 'normal')
+      pdf.setFont('Roboto', 'normal')
       pdf.setTextColor(0)
       const lines = pdf.splitTextToSize(
-        normPl(inspection.hazard_information),
+        inspection.hazard_information,
         pageWidth - margin * 2
       )
       pdf.text(lines, margin, yPosition)
@@ -414,10 +417,10 @@ export async function GET(
     }
 
     // Next inspection dates
-    addSection('Zalecane terminy nastepnych kontroli')
+    addSection('Zalecane terminy następnych kontroli')
     if (inspection.next_annual_date) {
       addRow(
-        'Nastepna kontrola roczna',
+        'Następna kontrola roczna',
         format(new Date(inspection.next_annual_date), 'dd MMMM yyyy', {
           locale: pl,
         })
@@ -425,7 +428,7 @@ export async function GET(
     }
     if (inspection.next_five_year_date) {
       addRow(
-        'Nastepna kontrola pieciоletnia',
+        'Następna kontrola pięcioletnia',
         format(new Date(inspection.next_five_year_date), 'dd MMMM yyyy', {
           locale: pl,
         })
@@ -433,7 +436,7 @@ export async function GET(
     }
     if (inspection.next_electrical_date) {
       addRow(
-        'Nastepna kontrola instalacji elektrycznej',
+        'Następna kontrola instalacji elektrycznej',
         format(new Date(inspection.next_electrical_date), 'dd MMMM yyyy', {
           locale: pl,
         })
@@ -450,12 +453,12 @@ export async function GET(
     yPosition += 10
     pdf.line(margin, yPosition, margin + 50, yPosition)
     yPosition += 2
-    pdf.setFont('helvetica', 'normal')
+    pdf.setFont('Roboto', 'normal')
     pdf.text('Podpis inspektora', margin, yPosition)
     yPosition += 12
 
     pdf.line(margin + 70, yPosition - 12, margin + 120, yPosition - 12)
-    pdf.text('Podpis reprezentanta wlasciciela', margin + 70, yPosition)
+    pdf.text('Podpis reprezentanta właściciela', margin + 70, yPosition)
 
     if (
       (inspection as any).inspector_signature_location ||
@@ -476,7 +479,7 @@ export async function GET(
         )
       }
       pdf.setFontSize(9)
-      pdf.text(normPl(sigInfo.join(', ')), margin, yPosition)
+      pdf.text(sigInfo.join(', '), margin, yPosition)
     }
 
     // Generate PDF buffer
