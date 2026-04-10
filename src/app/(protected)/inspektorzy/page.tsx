@@ -33,6 +33,15 @@ interface Inspector {
   phone: string
   email: string
   is_active: boolean
+  gwo_certificate_number: string | null
+  gwo_expiry_date: string | null
+  gwo_scan_url: string | null
+  udt_certificate_number: string | null
+  udt_expiry_date: string | null
+  udt_scan_url: string | null
+  sep_certificate_number: string | null
+  sep_expiry_date: string | null
+  sep_scan_url: string | null
 }
 
 export default function InspektorzePage() {
@@ -130,7 +139,7 @@ export default function InspektorzePage() {
               Dodaj inspektora
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-xl">
             <DialogHeader>
               <DialogTitle>
                 {editingId ? 'Edytuj inspektora' : 'Nowy inspektor'}
@@ -183,6 +192,17 @@ export default function InspektorzePage() {
                     <p><span className="font-medium">Email:</span> {inspector.email}</p>
                     <p><span className="font-medium">Telefon:</span> {inspector.phone}</p>
                   </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {inspector.gwo_certificate_number && (
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-xs">GWO ✓</Badge>
+                    )}
+                    {inspector.udt_certificate_number && (
+                      <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">UDT ✓</Badge>
+                    )}
+                    {inspector.sep_certificate_number && (
+                      <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs">SEP ✓</Badge>
+                    )}
+                  </div>
                   <div className="flex gap-2 pt-1">
                     <Button
                       size="sm"
@@ -224,6 +244,7 @@ export default function InspektorzePage() {
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Izba</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Telefon</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Email</TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Uprawnienia</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Status</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Akcje</TableHead>
               </TableRow>
@@ -239,6 +260,19 @@ export default function InspektorzePage() {
                   <TableCell className="text-gray-600">{inspector.chamber_membership}</TableCell>
                   <TableCell className="text-gray-600">{inspector.phone}</TableCell>
                   <TableCell className="text-gray-600">{inspector.email}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {inspector.gwo_certificate_number && (
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-xs">GWO ✓</Badge>
+                      )}
+                      {inspector.udt_certificate_number && (
+                        <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">UDT ✓</Badge>
+                      )}
+                      {inspector.sep_certificate_number && (
+                        <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs">SEP ✓</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Badge
                       variant={inspector.is_active ? 'default' : 'secondary'}

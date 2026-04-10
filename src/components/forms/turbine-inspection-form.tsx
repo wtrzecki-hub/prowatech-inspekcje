@@ -100,6 +100,7 @@ export interface TurbineOption {
   location_address: string
   rated_power_kw?: number | null
   hub_height_m?: number | null
+  wind_farm_id: string
   wind_farms: { name: string }
 }
 
@@ -206,6 +207,7 @@ export function TurbineInspectionForm({
 
   // ── Tab 1: Dane obiektu ───────────────────────────────────────────
 
+  const [selectedFarmName, setSelectedFarmName]   = useState(preselectedTurbine?.wind_farms?.name || '')
   const [selectedTurbineId, setSelectedTurbineId] = useState(preselectedTurbine?.id || '')
   const [inspectionType, setInspectionType]       = useState<'annual' | 'five_year'>('annual')
   const [inspectionDate, setInspectionDate]       = useState(new Date().toISOString().split('T')[0])
@@ -263,8 +265,23 @@ export function TurbineInspectionForm({
 
   const [photos, setPhotos] = useState<PhotoEntry[]>([])
 
+  // ── Completion dialog ─────────────────────────────────────────────
+
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [completionChecklist, setCompletionChecklist] = useState({
+    uprawnieniaBudowlane: false,
+    certyfikatGWO: false,
+    certyfikatUDT: false,
+    certyfikatSEP: false,
+    dokumentacjaFotograficzna: false,
+  })
+
   // ── Derived ───────────────────────────────────────────────────────
 
+  const farmNames = Array.from(new Set(turbines.map((t) => t.wind_farms?.name).filter(Boolean))).sort()
+  const filteredTurbines = selectedFarmName
+    ? turbines.filter((t) => t.wind_farms?.name === selectedFarmName)
+    : turbines
   const selectedTurbine = turbines.find((t) => t.id === selectedTurbineId)
   const completedCount  = elements.filter((e) => e.rating !== null).length
   const issueCount      = elements.filter(
@@ -347,6 +364,15 @@ export function TurbineInspectionForm({
   const goPrev = () => { if (currentIndex > 0) setActiveTab(TABS[currentIndex - 1]) }
 
   // ── Save / Submit ─────────────────────────────────────────────────
+
+  function handleCompleteClick() {
+    if (!selectedTurbineId) {
+      alert('Wybierz turbinę')
+      setActiveTab('dane-obiektu')
+      return
+    }
+    setShowCompletionDialog(true)
+  }
 
   async function saveInspection(status: 'draft' | 'completed') {
     if (!selectedTurbineId) {
@@ -555,15 +581,39 @@ export function TurbineInspectionForm({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <Label className="text-base">Farma wiatrowa</Label>
+                <Select
+                  value={selectedFarmName || 'all'}
+                  onValueChange={(v) => {
+                    const farm = v === 'all' ? '' : v
+                    setSelectedFarmName(farm)
+                    setSelectedTurbineId('')
+                  }}
+                >
+                  <SelectTrigger className="h-12 text-base">
+                    <SelectValue placeholder="Wybierz farmę..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Wszystkie farmy</SelectItem>
+                    {farmNames.map((name) => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <Label className="text-base">Turbina *</Label>
-                <Select value={selectedTurbineId} onValueChange={setSelectedTurbineId}>
+                <Select value={selectedTurbineId || 'none'} onValueChange={(v) => setSelectedTurbineId(v === 'none' ? '' : v)}>
                   <SelectTrigger className="h-12 text-base">
                     <SelectValue placeholder="Wybierz turbinę..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {turbines.map((t) => (
+                    <SelectItem value="none">— wybierz turbinę —</SelectItem>
+                    {filteredTurbines.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
-                        {t.turbine_code} — {t.manufacturer} {t.model} ({t.wind_farms?.name})
+                        {t.turbine_code} — {t.manufacturer} {t.model}
+                        {!selectedFarmName && ` (${t.wind_farms?.name})`}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1299,7 +1349,7 @@ export function TurbineInspectionForm({
           Zapisz roboczo
         </Button>
         <Button
-          onClick={() => saveInspection('completed')}
+          onClick={handleCompleteClick}
           size="lg"
           className="h-14 flex-1 text-base gap-2 bg-green-600 hover:bg-green-700"
           disabled={saving || submitting}
@@ -1310,6 +1360,76 @@ export function TurbineInspectionForm({
           Zakończ inspekcję
         </Button>
       </div>
+
+      {/* ── Completion checklist dialog ───────────────────────────── */}
+      {showCompletionDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <CheckCircle2 className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">Zakończenie inspekcji</h2>
+                <p className="text-sm text-muted-foreground">Potwierdź kompletność dokumentacji</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {([
+                { key: 'uprawnieniaBudowlane', label: 'Uprawnienia budowlane inspektora — załączone do protokołu' },
+                { key: 'certyfikatGWO', label: 'Certyfikat GWO — załączony do protokołu' },
+                { key: 'certyfikatUDT', label: 'Certyfikat UDT — załączony do protokołu' },
+                { key: 'certyfikatSEP', label: 'Certyfikat SEP — załączony do protokołu' },
+                { key: 'dokumentacjaFotograficzna', label: 'Dokumentacja fotograficzna — kompletna' },
+              ] as { key: keyof typeof completionChecklist; label: string }[]).map(({ key, label }) => (
+                <label key={key} className="flex items-start gap-3 cursor-pointer group">
+                  <button
+                    type="button"
+                    onClick={() => setCompletionChecklist((p) => ({ ...p, [key]: !p[key] }))}
+                    className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                      completionChecklist[key]
+                        ? 'bg-green-600 border-green-600'
+                        : 'border-gray-300 group-hover:border-green-400'
+                    }`}
+                  >
+                    {completionChecklist[key] && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  <span className="text-sm leading-tight">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="h-12 flex-1"
+                onClick={() => setShowCompletionDialog(false)}
+                disabled={submitting}
+              >
+                Anuluj
+              </Button>
+              <Button
+                className="h-12 flex-1 bg-green-600 hover:bg-green-700 gap-2"
+                onClick={() => {
+                  setShowCompletionDialog(false)
+                  saveInspection('completed')
+                }}
+                disabled={submitting}
+              >
+                {submitting
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <CheckCircle2 className="h-4 w-4" />}
+                Zatwierdź i zakończ
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
