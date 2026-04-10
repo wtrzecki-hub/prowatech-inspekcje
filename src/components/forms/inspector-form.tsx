@@ -28,6 +28,10 @@ interface InspectorFormProps {
     is_active: boolean
     gwo_certificate_number?: string | null
     gwo_expiry_date?: string | null
+    gwo_first_aid_expiry?: string | null
+    gwo_manual_handling_expiry?: string | null
+    gwo_fire_awareness_expiry?: string | null
+    gwo_working_at_heights_expiry?: string | null
     gwo_scan_url?: string | null
     udt_certificate_number?: string | null
     udt_expiry_date?: string | null
@@ -95,6 +99,10 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       is_active: aktywny,
       gwo_certificate_number: (formData.get('gwo_number') as string) || null,
       gwo_expiry_date: (formData.get('gwo_expiry') as string) || null,
+      gwo_first_aid_expiry: (formData.get('gwo_first_aid') as string) || null,
+      gwo_manual_handling_expiry: (formData.get('gwo_manual_handling') as string) || null,
+      gwo_fire_awareness_expiry: (formData.get('gwo_fire_awareness') as string) || null,
+      gwo_working_at_heights_expiry: (formData.get('gwo_working_at_heights') as string) || null,
       udt_certificate_number: (formData.get('udt_number') as string) || null,
       udt_expiry_date: (formData.get('udt_expiry') as string) || null,
       sep_certificate_number: (formData.get('sep_number') as string) || null,
@@ -266,17 +274,33 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       {/* GWO */}
       <div className="p-3 border rounded-lg space-y-3 bg-cyan-50/50">
         <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">GWO (Global Wind Organisation)</p>
+        <div>
+          <Label htmlFor="gwo_number">WINDA ID</Label>
+          <Input id="gwo_number" name="gwo_number" className="h-12"
+            defaultValue={initialData?.gwo_certificate_number || ''}
+            placeholder="np. WT335238PL" />
+        </div>
+        <p className="text-xs font-semibold text-gray-600 pt-1">Kursy — daty ważności:</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="gwo_number">WINDA ID</Label>
-            <Input id="gwo_number" name="gwo_number" className="h-12"
-              defaultValue={initialData?.gwo_certificate_number || ''}
-              placeholder="np. WT335238PL" />
+            <Label htmlFor="gwo_first_aid" className="text-xs">First Aid Refresher</Label>
+            <Input id="gwo_first_aid" name="gwo_first_aid" type="date" className="h-10 text-sm"
+              defaultValue={initialData?.gwo_first_aid_expiry || ''} />
           </div>
           <div>
-            <Label htmlFor="gwo_expiry">Data ważności</Label>
-            <Input id="gwo_expiry" name="gwo_expiry" type="date" className="h-12"
-              defaultValue={initialData?.gwo_expiry_date || ''} />
+            <Label htmlFor="gwo_manual_handling" className="text-xs">Manual Handling Refresher</Label>
+            <Input id="gwo_manual_handling" name="gwo_manual_handling" type="date" className="h-10 text-sm"
+              defaultValue={initialData?.gwo_manual_handling_expiry || ''} />
+          </div>
+          <div>
+            <Label htmlFor="gwo_fire_awareness" className="text-xs">Fire Awareness Refresher</Label>
+            <Input id="gwo_fire_awareness" name="gwo_fire_awareness" type="date" className="h-10 text-sm"
+              defaultValue={initialData?.gwo_fire_awareness_expiry || ''} />
+          </div>
+          <div>
+            <Label htmlFor="gwo_working_at_heights" className="text-xs">Working at Heights Refresher</Label>
+            <Input id="gwo_working_at_heights" name="gwo_working_at_heights" type="date" className="h-10 text-sm"
+              defaultValue={initialData?.gwo_working_at_heights_expiry || ''} />
           </div>
         </div>
         <div>
