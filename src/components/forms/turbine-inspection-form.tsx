@@ -1236,9 +1236,10 @@ export function TurbineInspectionForm({
                             ))}
                           </div>
 
-                          {/* % zużycia + nr zdjęcia */}
+                          {/* % zużycia (tylko 5-letnie) + nr zdjęcia */}
                           {el.rating !== null && (
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className={`grid gap-3 ${inspectionType === 'five_year' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                              {inspectionType === 'five_year' && (
                               <div className="space-y-2">
                                 <Label className="text-sm">
                                   % zużycia: <strong>{el.wearPercentage ?? 0}%</strong>
@@ -1254,6 +1255,7 @@ export function TurbineInspectionForm({
                                   className="mt-2"
                                 />
                               </div>
+                              )}
                               <div className="space-y-1">
                                 <Label className="text-sm">Nr zdjęcia</Label>
                                 <Input
