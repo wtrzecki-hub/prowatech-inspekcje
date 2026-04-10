@@ -137,7 +137,7 @@ export default function InspectionsPage() {
         { count: 'exact' }
       )
       .not('is_deleted', 'is', true)
-      .range(offset, offset + pageSize - 1)
+      .range(offset, offset + ((clientFilter !== 'all' || searchFilter) ? 250 : pageSize) - 1)
       .order('created_at', { ascending: false })
 
     if (statusFilter && statusFilter !== 'all') {
@@ -148,17 +148,33 @@ export default function InspectionsPage() {
       query = query.eq('inspection_type', typeFilter)
     }
 
-    if (searchFilter) {
-      query = query.or(
-        `protocol_number.ilike.%${searchFilter}%`
-      )
-    }
+    // Search filter is handled client-side (see below) for better multi-field search
 
     const { data, count, error } = await query
 
     if (!error && data) {
-      setInspections(data)
-      setTotalCount(count || 0)
+      // Client-side filter by client name (cannot filter nested relation in Supabase)
+      let filtered = data as Inspection[]
+      if (clientFilter && clientFilter !== 'all') {
+        const selectedClient = clients.find(c => c.id === clientFilter)
+        if (selectedClient) {
+          filtered = filtered.filter(i =>
+            i.turbines?.wind_farms?.clients?.name === selectedClient.name
+          )
+        }
+      }
+      // Client-side search by turbine code, farm name, client name
+      if (searchFilter) {
+        const s = searchFilter.toLowerCase()
+        filtered = filtered.filter(i =>
+          i.protocol_number?.toLowerCase().includes(s) ||
+          i.turbines?.turbine_code?.toLowerCase().includes(s) ||
+          i.turbines?.wind_farms?.name?.toLowerCase().includes(s) ||
+          i.turbines?.wind_farms?.clients?.name?.toLowerCase().includes(s)
+        )
+      }
+      setInspections(filtered)
+      setTotalCount(clientFilter !== 'all' || searchFilter ? filtered.length : (count || 0))
     }
 
     setLoading(false)
