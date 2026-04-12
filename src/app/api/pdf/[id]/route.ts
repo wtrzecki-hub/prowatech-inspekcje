@@ -241,23 +241,68 @@ export async function GET(
       yPosition = (pdf as any).lastAutoTable.finalY + 5
     }
 
-    // Title
+    // Reusable protocol metadata
+    const protocolNumber = inspection.protocol_number || inspectionId
+    const inspectionDate = format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
+    const typeLabel =
+      inspection.inspection_type === 'annual'
+        ? 'kontroli okresowej wykonywanej co najmniej raz w roku'
+        : 'kontroli okresowej wykonywanej raz na pięć lat'
+    const artPoint = inspection.inspection_type === 'annual' ? '1' : '2'
+
+    // --- Company header (page 1) ---
     pdf.setFontSize(16)
     pdf.setFont('Roboto', 'bold')
-    const inspectionTypeLabel =
-      inspection.inspection_type === 'annual' ? 'ROCZNEJ' : 'PIĘCIOLETNIEJ'
-    pdf.text(`PROTOKÓŁ Z KONTROLI ${inspectionTypeLabel}`, margin, yPosition)
+    pdf.setTextColor(37, 99, 235) // #2563EB
+    pdf.text('ProWaTech', margin, yPosition)
+    pdf.setTextColor(0)
+
+    // Right side: company details (8pt, normal, right-aligned)
+    const companyLines = [
+      'PROWATECH SPÓŁKA Z O.O.',
+      'Posada ul. Reymonta 23',
+      '62-530 Kazimierz Biskupi',
+      'NIP: 6653045169',
+      'Email: wtrzecki@prowatech.pl',
+    ]
+    pdf.setFont('Roboto', 'normal')
+    pdf.setFontSize(8)
+    companyLines.forEach((line, i) => {
+      pdf.text(line, pageWidth - margin, yPosition + i * 3.8, { align: 'right' })
+    })
+    yPosition += 22
+
+    // Separator line
+    pdf.setDrawColor(37, 99, 235)
+    pdf.setLineWidth(0.5)
+    pdf.line(margin, yPosition, pageWidth - margin, yPosition)
+    pdf.setDrawColor(0)
+    pdf.setLineWidth(0.2)
     yPosition += 10
+
+    // --- Protocol title (centered, bold) ---
+    pdf.setFont('Roboto', 'bold')
+    pdf.setFontSize(14)
+    pdf.text(`PROTOKÓŁ NR ${protocolNumber}`, pageWidth / 2, yPosition, { align: 'center' })
+    yPosition += 7
+    pdf.text(`z dnia ${inspectionDate}`, pageWidth / 2, yPosition, { align: 'center' })
+    yPosition += 7
+    pdf.setFontSize(11)
+    pdf.text(typeLabel, pageWidth / 2, yPosition, { align: 'center' })
+    yPosition += 6
+    pdf.text(`na podstawie art. 62 ust. 1 pkt ${artPoint}`, pageWidth / 2, yPosition, { align: 'center' })
+    yPosition += 6
+    pdf.text('ustawy Prawo budowlane z dnia 7 lipca 1994 r.', pageWidth / 2, yPosition, { align: 'center' })
+    yPosition += 6
+    pdf.setFontSize(10)
+    pdf.text('(t.j. Dz. U. z 2024 r., poz. 725 z późn. zm.)', pageWidth / 2, yPosition, { align: 'center' })
+    yPosition += 14
+    pdf.setFont('Roboto', 'normal')
 
     // Inspection info section
     addSection('Dane inspekcji')
     addRow('Nr protokołu', inspection.protocol_number || 'Brak')
-    addRow(
-      'Data kontroli',
-      format(new Date(inspection.inspection_date), 'dd MMMM yyyy', {
-        locale: pl,
-      })
-    )
+    addRow('Data kontroli', format(new Date(inspection.inspection_date), 'dd MMMM yyyy', { locale: pl }))
     addRow(
       'Typ kontroli',
       inspection.inspection_type === 'annual' ? 'Roczna' : 'Pięcioletnia'
@@ -480,6 +525,24 @@ export async function GET(
       }
       pdf.setFontSize(9)
       pdf.text(sigInfo.join(', '), margin, yPosition)
+    }
+
+    // Add header to pages 2+
+    const totalPages = pdf.getNumberOfPages()
+    for (let i = 2; i <= totalPages; i++) {
+      pdf.setPage(i)
+      pdf.setFont('Roboto', 'normal')
+      pdf.setFontSize(8)
+      pdf.setTextColor(80)
+      const headerLeft = `PROTOKÓŁ NR ${protocolNumber} z dnia ${inspectionDate} — ${typeLabel}`
+      pdf.text(headerLeft, margin, 8)
+      pdf.text(`Strona ${i} z ${totalPages}`, pageWidth - margin, 8, { align: 'right' })
+      pdf.setDrawColor(180)
+      pdf.setLineWidth(0.3)
+      pdf.line(margin, 10, pageWidth - margin, 10)
+      pdf.setTextColor(0)
+      pdf.setDrawColor(0)
+      pdf.setLineWidth(0.2)
     }
 
     // Generate PDF buffer
