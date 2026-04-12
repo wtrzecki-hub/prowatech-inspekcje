@@ -251,11 +251,20 @@ export async function GET(
     const artPoint = inspection.inspection_type === 'annual' ? '1' : '2'
 
     // --- Company header (page 1) ---
-    pdf.setFontSize(16)
-    pdf.setFont('Roboto', 'bold')
-    pdf.setTextColor(37, 99, 235) // #2563EB
-    pdf.text('ProWaTech', margin, yPosition)
-    pdf.setTextColor(0)
+    // Try to load logo image
+    try {
+      const logoPath = path.join(process.cwd(), 'public', 'logo-prowatech.png')
+      const logoData = fs.readFileSync(logoPath)
+      const logoBase64 = logoData.toString('base64')
+      pdf.addImage(logoBase64, 'PNG', margin, yPosition - 8, 30, 18)
+    } catch {
+      // Fallback to text if logo not found
+      pdf.setFontSize(16)
+      pdf.setFont('Roboto', 'bold')
+      pdf.setTextColor(37, 99, 235)
+      pdf.text('ProWaTech', margin, yPosition)
+      pdf.setTextColor(0)
+    }
 
     // Right side: company details (8pt, normal, right-aligned)
     const companyLines = [
