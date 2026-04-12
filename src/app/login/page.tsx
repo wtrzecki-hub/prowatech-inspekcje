@@ -37,9 +37,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
-            <div className="bg-blue-100 p-4 rounded-full">
-              <Wind className="h-12 w-12 text-blue-600" />
-            </div>
+            <img src="/logo-prowatech.png" alt="ProWaTech" className="h-20 w-auto" />
           </div>
           <div>
             <CardTitle className="text-3xl font-bold text-gray-900">

@@ -52,10 +52,7 @@ export function Header({ onMenuClick, user }: HeaderProps) {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <div className="p-1 bg-blue-600 rounded-lg">
-              <Wind className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-bold text-sm text-gray-900">Prowatech</span>
+            <img src="/logo-prowatech.png" alt="ProWaTech" className="h-7 w-auto" />
           </div>
         </div>
 

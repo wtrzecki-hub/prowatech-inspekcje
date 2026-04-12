@@ -66,15 +66,12 @@ export function Sidebar({ user }: SidebarProps) {
       <div className="p-4 flex items-center justify-between h-16 border-b border-gray-100">
         {!isCollapsed && (
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-blue-600 rounded-lg">
-              <Wind className="h-5 w-5 text-white" />
-            </div>
-            <span className="font-bold text-base text-gray-900 tracking-tight">Prowatech</span>
+            <img src="/logo-prowatech.png" alt="ProWaTech" className="h-9 w-auto" />
           </div>
         )}
         {isCollapsed && (
-          <div className="p-1.5 bg-blue-600 rounded-lg mx-auto">
-            <Wind className="h-5 w-5 text-white" />
+          <div className="mx-auto">
+            <img src="/logo-prowatech.png" alt="ProWaTech" className="h-8 w-auto" />
           </div>
         )}
         <Button
