@@ -33,7 +33,7 @@ import {
   INSPECTION_TYPES,
   CONDITION_RATINGS,
 } from '@/lib/constants'
-import { AlertCircle, Download } from 'lucide-react'
+import { AlertCircle, Download, FileText } from 'lucide-react'
 
 type ConditionRating = 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny'
 type InspectionStatus = 'draft' | 'in_progress' | 'review' | 'completed' | 'signed'
@@ -451,6 +451,14 @@ export default function InspectionDetailPage() {
           >
             <Download className="h-4 w-4" />
             Generuj PDF
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => window.open(`/api/docx/${inspection.id}`, '_blank')}
+          >
+            <FileText className="h-4 w-4" />
+            Generuj DOCX
           </Button>
         </div>
       </div>
