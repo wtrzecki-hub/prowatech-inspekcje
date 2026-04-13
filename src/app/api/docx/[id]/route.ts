@@ -14,11 +14,10 @@ import {
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumber,
+  PageNumberElement,
   ImageRun,
   HeadingLevel,
   PageOrientation,
-  convertInchesToTwip,
   LevelFormat,
 } from 'docx'
 import { format } from 'date-fns'
@@ -259,6 +258,7 @@ export async function GET(
                   type: 'png',
                   data: logoBuffer,
                   transformation: { width: 120, height: 60 },
+                  altText: { title: 'ProWaTech Logo', description: 'Logo firmy ProWaTech', name: 'logo-prowatech' },
                 }),
               ],
             }),
@@ -832,7 +832,7 @@ export async function GET(
             top: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
           },
           children: [
-            new PageNumber(),
+            new PageNumberElement(),
             new TextRun({ text: ' | Strona', font: 'Arial', size: 16, color: '555555' }),
           ],
         }),
