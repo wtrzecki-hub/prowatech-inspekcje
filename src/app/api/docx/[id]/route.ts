@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import {
@@ -14,7 +16,7 @@ import {
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumberElement,
+  PageNumber,
   ImageRun,
   HeadingLevel,
   PageOrientation,
@@ -113,7 +115,7 @@ export async function GET(
           getAll() {
             return cookieStore.getAll()
           },
-          setAll(cookiesToSet) {
+          setAll(cookiesToSet: { name: string; value: string; options: Parameters<typeof cookieStore.set>[2] }[]) {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             )
@@ -311,8 +313,8 @@ export async function GET(
         bottom: { style: BorderStyle.NONE, size: 0 },
         left: { style: BorderStyle.NONE, size: 0 },
         right: { style: BorderStyle.NONE, size: 0 },
-        insideH: { style: BorderStyle.NONE, size: 0 },
-        insideV: { style: BorderStyle.NONE, size: 0 },
+        insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+        insideVertical: { style: BorderStyle.NONE, size: 0 },
       },
       rows: [new TableRow({ children: [logoCell, companyInfoCell] })],
     })
@@ -738,8 +740,8 @@ export async function GET(
         bottom: { style: BorderStyle.NONE, size: 0 },
         left: { style: BorderStyle.NONE, size: 0 },
         right: { style: BorderStyle.NONE, size: 0 },
-        insideH: { style: BorderStyle.NONE, size: 0 },
-        insideV: { style: BorderStyle.NONE, size: 0 },
+        insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+        insideVertical: { style: BorderStyle.NONE, size: 0 },
       },
       rows: [
         new TableRow({
@@ -832,7 +834,7 @@ export async function GET(
             top: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
           },
           children: [
-            new PageNumberElement(),
+            new TextRun({ children: [PageNumber.CURRENT], font: 'Arial', size: 16, color: '555555' }),
             new TextRun({ text: ' | Strona', font: 'Arial', size: 16, color: '555555' }),
           ],
         }),
@@ -927,13 +929,15 @@ export async function GET(
       ],
     })
 
-    const buffer = await Packer.toBuffer(doc)
+    const uint8 = await Packer.toBuffer(doc)
+    const nodeBuffer = Buffer.from(uint8)
 
-    return new Response(buffer, {
+    return new Response(nodeBuffer, {
       headers: {
         'Content-Type':
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename=protokol-${inspection.protocol_number || inspectionId}.docx`,
+        'Content-Disposition': `attachment; filename="protokol-${inspection.protocol_number || inspectionId}.docx"`,
+        'Content-Length': nodeBuffer.length.toString(),
       },
     })
   } catch (error) {
