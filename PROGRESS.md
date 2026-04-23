@@ -80,6 +80,19 @@ Pogrupowane tematycznie (kolejność chronologiczna w obrębie grupy):
 
 **Faza 3 — następna:** Re-layout Dashboard (sparkline, kalendarz 14-dniowy, rozkład ocen bar-chart). Patrz `design/prowatech-redesign.md` krok 3.
 
+**Faza 3 — Portal klienta ZAIMPLEMENTOWANA (2026-04-23), wymaga konfiguracji Vercel:**
+- ✅ Blok 1 — Migracja DB (`client_users`, `profiles.force_password_change`) + `/api/portal/create-account` + UI w `/klienci/[id]`
+- ✅ Blok 2 — `/portal/login` (email+hasło, reset hasła), `/portal/auth/reset`, `/portal/(client)/layout.tsx` (guard roli), `auth/callback` (redirect per rola)
+- ✅ Blok 3 — `/portal/(client)/dashboard` (KPI cards, ostatnie protokoły, nadchodzące inspekcje), `/portal/(client)/farmy` (grid z chipem zdrowia)
+- ✅ Blok 4 — `/portal/(client)/turbiny/[id]` (read-only, access check), `/portal/(client)/protokoly` (tabela, PDF/DOCX download)
+- ✅ Blok 5 — `/portal/(client)/konto` (zmiana hasła + force_password_change)
+- ✅ Zabezpieczenie `/api/pdf/[id]` i `/api/docx/[id]` — auth check + weryfikacja dostępu dla `client_user`
+
+**⚠️ Wymagane kroki manualne po deploymencie Vercel:**
+1. Dodaj `SUPABASE_SERVICE_ROLE_KEY` do zmiennych środowiskowych na Vercelu (i do `.env.local` lokalnie).
+2. W Supabase → Authentication → URL Configuration → Additional Redirect URLs: dodaj `https://prowatech-inspekcje.vercel.app/portal/auth/reset`
+3. Zweryfikuj z testowym kontem klienta na Vercelu.
+
 Poza propozycją designu brak innych jawnie udokumentowanych prac w toku w repo, ale na podstawie stanu gałęzi i nietrackowanych plików można przypuszczać następujące otwarte wątki:
 
 - **Kosmetyczny diff CRLF/LF** — prawie wszystkie śledzone pliki `src/` mają uncommitted diff polegający wyłącznie na zmianie końców linii. Do rozważenia: `.gitattributes` z `* text=auto eol=lf` (lub `eol=crlf`) + `git add --renormalize .` aby usunąć szum raz na zawsze. Jeśli użytkownik pracuje na Windows i pliki spontanicznie zmieniają się na CRLF, jest to prawdopodobne źródło.
@@ -313,6 +326,7 @@ Dzięki temu klasy `bg-background`, `border-input`, `ring-ring`, `ring-offset-ba
 
 Brief log kolejnych sesji pracy z Claude nad tym projektem. Każda nowa sesja powinna **dodać jedną linię** na górę tej sekcji.
 
+- **2026-04-23** — **Faza 3 — Portal klienta** (commit `d301abf`). 14 nowych plików: migracja SQL (`client_users` + `force_password_change`), `/api/portal/create-account` (service role, temp password XXXX-XXXX-XXXX), UI portalu w `/klienci/[id]` (karta "Portal klienta", tworzenie konta, wyświetlanie hasła tymczasowego z kopiowaniem), `/portal/login` (email+hasło, reset hasła), `/portal/auth/reset` (route handler), `/portal/(client)/layout.tsx` (guard `client_user`, sidebar, force_password_change redirect), `auth/callback` (redirect per rola), dashboard, farmy, turbiny/[id], protokoly, konto. Zabezpieczone `/api/pdf` i `/api/docx` (auth check + weryfikacja `client_id` dla `client_user`). Pliki `design/next-steps.md` i `database.types.ts` zaktualizowane.
 - **2026-04-23** — **Faza 2 wdrożona** (commit `a43d457`). Re-skin 15 plików: Dashboard (page+stats+recent+alerts), Inspekcje (lista+detail+StatusBar+ElementCard+RatingBadge), Formularz inspekcji (turbine-inspection-form), Klienci (lista+detail), Farmy (lista+detail), Turbiny (detail+PhotoSlot+InfoItem). Wzorce: font-mono dla dat/kodów/liczb, `text-[11px] uppercase tracking-wider text-graphite-400` dla nagłówków tabel, `h-[52px] hover:bg-graphite-50/50` dla wierszy, `border-graphite-200 shadow-xs rounded-xl` dla kart. Build czysty `✓ Compiled successfully`. Wypchnięto na `main`.
 - **2026-04-23** — **Faza 1 wdrożona** (commit `0c4fd3c`). Tokeny kolorystyczne (#259648 primary), typografia (Inter 400/500/600 + JetBrains Mono 400/500 via next/font), palety graphite/semantic, shadcn base tokens, cienie xs–lg. Komponenty: badge (5 wariantów semantycznych), button (danger), card (shadow-xs), table (graphite), sheet/slider (primary). Layout: sidebar/header avatar+aktywny stan blue→primary, body bg→graphite-50. constants.ts: STATUS_COLORS/CONDITION_COLORS na nowe tokeny. Build przeszedł czysto. Vercel deploy w toku.
 - **2026-04-23** — Propozycja nowego designu aplikacji (panel inspektora + portal klienta + protokół PDF). Deliverable: `design/prowatech-prototype.html` (klikany prototyp) + `design/prowatech-redesign.md` (dokument). Decyzje: primary #259648 (delikatnie jaśniejszy od logo #1F7F3A), JetBrains Mono na dane/kody, portal klienta email+hasło (Faza 3), ton portalu „Państwo/Państwa". **Logo protokołów zostaje bez zmian** — oryginalna wersja (`public/logo-prowatech.png`) w dokumentach wychodzących. Stylizowany znak SVG pozostaje w UI wewnętrznym.

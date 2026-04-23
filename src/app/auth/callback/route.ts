@@ -58,6 +58,17 @@ export async function GET(request: NextRequest) {
     if (profileError) {
       console.error("Profile upsert error:", profileError);
     }
+
+    // Redirect based on role
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role === "client_user") {
+      return NextResponse.redirect(new URL("/portal/dashboard", request.url));
+    }
   }
 
   return NextResponse.redirect(new URL("/dashboard", request.url));

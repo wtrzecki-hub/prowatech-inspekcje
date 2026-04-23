@@ -39,6 +39,42 @@ export async function GET(
 
     const inspectionId = params.id
 
+    // Auth: require session; client_user may only access their own inspections
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return new Response('Unauthorized', { status: 401 })
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile) return new Response('Forbidden', { status: 403 })
+
+    if (profile.role === 'client_user') {
+      const { data: clientUser } = await supabase
+        .from('client_users')
+        .select('client_id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (!clientUser) return new Response('Forbidden', { status: 403 })
+
+      const { data: inspCheck } = await supabase
+        .from('inspections')
+        .select('id, turbines!inner(wind_farms!inner(client_id))')
+        .eq('id', inspectionId)
+        .single()
+
+      const farmClientId = (
+        inspCheck?.turbines as unknown as { wind_farms: { client_id: string } } | null
+      )?.wind_farms?.client_id
+
+      if (farmClientId !== clientUser.client_id) {
+        return new Response('Forbidden', { status: 403 })
+      }
+    }
+
     // Fetch inspection with all relations through turbines → wind_farms → clients
     const { data: inspection, error: inspectionError } = await supabase
       .from('inspections')

@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { ClientForm } from '@/components/forms/client-form'
 import { WindFarmForm } from '@/components/forms/wind-farm-form'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Plus, Wind } from 'lucide-react'
+import { ArrowLeft, Plus, Wind, Globe, Copy, CheckCircle2, AlertCircle, UserPlus } from 'lucide-react'
 import { STATUS_COLORS, INSPECTION_STATUSES } from '@/lib/constants'
 import { RatingBadge } from '@/components/inspection/rating-badge'
 
@@ -67,6 +67,12 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isWindFarmDialogOpen, setIsWindFarmDialogOpen] = useState(false)
 
+  const [portalAccountExists, setPortalAccountExists] = useState(false)
+  const [portalLoading, setPortalLoading] = useState(false)
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
+  const [portalError, setPortalError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
   useEffect(() => {
     fetchClientData()
   }, [clientId])
@@ -106,11 +112,53 @@ export default function ClientDetailPage() {
 
       if (inspectionsError) throw inspectionsError
       setInspections(inspectionsData || [])
+
+      // Check if portal account exists for this client
+      const { data: existingPortal } = await supabase
+        .from('client_users')
+        .select('id')
+        .eq('client_id', clientId)
+        .limit(1)
+      setPortalAccountExists((existingPortal?.length ?? 0) > 0)
     } catch (error) {
       console.error('Błąd przy pobieraniu danych klienta:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleCreatePortalAccount() {
+    if (!client?.contact_email) return
+    setPortalLoading(true)
+    setPortalError(null)
+    try {
+      const res = await fetch('/api/portal/create-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          email: client.contact_email,
+          full_name: client.contact_person || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setPortalError(json.error || 'Błąd tworzenia konta')
+        return
+      }
+      setTempPassword(json.tempPassword)
+      setPortalAccountExists(true)
+    } catch {
+      setPortalError('Błąd połączenia z serwerem')
+    } finally {
+      setPortalLoading(false)
+    }
+  }
+
+  function handleCopy(text: string) {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const handleWindFarmAdded = () => {
@@ -172,6 +220,97 @@ export default function ClientDetailPage() {
         </CardHeader>
         <CardContent className="pt-4">
           <ClientForm initialData={client} onSuccess={handleClientUpdated} />
+        </CardContent>
+      </Card>
+
+      {/* Portal klienta */}
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
+        <CardHeader className="border-b border-graphite-100 pb-4">
+          <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+            <Globe className="h-4 w-4 text-graphite-500" />
+            Portal klienta
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {portalAccountExists && !tempPassword ? (
+            <div className="flex items-center gap-2 text-sm text-success-800">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              Konto portalu jest aktywne dla{' '}
+              <span className="font-semibold">{client.contact_email}</span>
+              <Badge className="bg-success-100 text-success-800 hover:bg-success-100">
+                Aktywne
+              </Badge>
+            </div>
+          ) : tempPassword ? (
+            <div className="space-y-3">
+              <div className="p-4 bg-warning-50 border border-warning-100 rounded-xl">
+                <p className="text-sm font-semibold text-warning-800 mb-2">
+                  Konto utworzone — przekaż dane klientowi
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-graphite-500 w-14">Email:</span>
+                    <code className="text-xs font-mono bg-white px-2 py-1 rounded border border-graphite-200 flex-1">
+                      {client.contact_email}
+                    </code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-graphite-500 w-14">Hasło:</span>
+                    <code className="text-xs font-mono bg-white px-2 py-1 rounded border border-graphite-200 flex-1 font-bold tracking-widest">
+                      {tempPassword}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 gap-1 text-xs"
+                      onClick={() =>
+                        handleCopy(
+                          `Email: ${client.contact_email}\nHasło: ${tempPassword}\nAdres: ${window.location.origin}/portal/login`
+                        )
+                      }
+                    >
+                      {copied ? (
+                        <CheckCircle2 className="h-3 w-3 text-success" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                      {copied ? 'Skopiowano' : 'Kopiuj'}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-warning-700 mt-2">
+                  Hasło widoczne tylko teraz. Klient będzie musiał je zmienić przy pierwszym logowaniu.
+                </p>
+              </div>
+            </div>
+          ) : !client.contact_email ? (
+            <p className="text-sm text-graphite-500">
+              Uzupełnij email kontaktowy klienta, aby móc utworzyć konto portalu.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-graphite-600">
+                Brak konta portalu dla{' '}
+                <span className="font-semibold">{client.contact_email}</span>. Po
+                utworzeniu klient zaloguje się hasłem tymczasowym i ustawi własne.
+              </p>
+              {portalError && (
+                <div className="flex items-center gap-2 p-3 bg-danger-50 border border-danger-100 rounded-lg text-danger-800 text-sm">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  {portalError}
+                </div>
+              )}
+              <Button
+                size="sm"
+                onClick={handleCreatePortalAccount}
+                disabled={portalLoading}
+                className="gap-2"
+              >
+                <UserPlus className="h-4 w-4" />
+                {portalLoading ? 'Tworzenie…' : 'Utwórz konto portalu'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
