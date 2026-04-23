@@ -71,7 +71,7 @@ export function Header({ onMenuClick, user }: HeaderProps) {
                   src={user?.user_metadata?.avatar_url}
                   alt={userName}
                 />
-                <AvatarFallback className="bg-blue-600 text-white text-xs font-semibold">
+                <AvatarFallback className="bg-primary-600 text-white text-xs font-semibold">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>

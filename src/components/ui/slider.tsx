@@ -40,7 +40,7 @@ const Slider = React.forwardRef<HTMLInputElement, SliderProps>(
         onChange={(e) => onValueChange?.([parseFloat(e.target.value)])}
         disabled={disabled}
         className={cn(
-          'w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600',
+          'w-full h-2 bg-graphite-200 rounded-lg appearance-none cursor-pointer accent-primary',
           disabled && 'opacity-50 cursor-not-allowed',
           className
         )}

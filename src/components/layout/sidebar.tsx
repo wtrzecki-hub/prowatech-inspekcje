@@ -78,7 +78,7 @@ export function Sidebar({ user }: SidebarProps) {
           variant="ghost"
           size="sm"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={cn("p-1.5 h-auto text-gray-400 hover:text-gray-600", isCollapsed && "hidden")}
+          className={cn("p-1.5 h-auto text-graphite-500 hover:text-graphite-800", isCollapsed && "hidden")}
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -87,7 +87,7 @@ export function Sidebar({ user }: SidebarProps) {
             variant="ghost"
             size="sm"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1.5 h-auto text-gray-400 hover:text-gray-600 absolute bottom-20 left-4"
+            className="p-1.5 h-auto text-graphite-500 hover:text-graphite-800 absolute bottom-20 left-4"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -108,21 +108,21 @@ export function Sidebar({ user }: SidebarProps) {
                     "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer",
                     isCollapsed && "justify-center px-2",
                     isActive
-                      ? "bg-blue-50 text-blue-700 font-semibold"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
+                      ? "bg-primary-50 text-primary-700 font-semibold"
+                      : "text-graphite-500 hover:bg-graphite-50 hover:text-graphite-900 font-medium"
                   )}
                 >
                   <Icon
                     className={cn(
                       "h-5 w-5 flex-shrink-0",
-                      isActive ? "text-blue-600" : "text-gray-400"
+                      isActive ? "text-primary-600" : "text-graphite-500"
                     )}
                   />
                   {!isCollapsed && (
                     <span className="text-sm">{item.label}</span>
                   )}
                   {isActive && !isCollapsed && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-600" />
+                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-600" />
                   )}
                 </div>
               </Link>
@@ -144,7 +144,7 @@ export function Sidebar({ user }: SidebarProps) {
               src={user?.user_metadata?.avatar_url}
               alt={userName}
             />
-            <AvatarFallback className="bg-blue-600 text-white text-xs font-semibold">
+            <AvatarFallback className="bg-primary-600 text-white text-xs font-semibold">
               {userInitials}
             </AvatarFallback>
           </Avatar>

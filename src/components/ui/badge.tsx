@@ -8,6 +8,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
+        // Shadcn defaults (backward compat)
         default:
           "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
         secondary:
@@ -15,6 +16,17 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
+        // Warianty semantyczne
+        neutral:
+          "border-transparent bg-graphite-100 text-graphite-800",
+        success:
+          "border-transparent bg-success-100 text-success-800",
+        warning:
+          "border-transparent bg-warning-100 text-warning-800",
+        danger:
+          "border-transparent bg-danger-100 text-danger-800",
+        info:
+          "border-transparent bg-info-100 text-info-800",
       },
     },
     defaultVariants: {

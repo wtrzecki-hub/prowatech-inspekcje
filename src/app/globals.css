@@ -2,6 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* ─── Tokeny kolorystyczne ─────────────────────────────────────────────── */
+  /* Primary / brand — zmiana jednolinijkowa: zaktualizuj primary-600 w tailwind.config.ts */
+  --color-primary: 37 150 72;           /* #259648 */
+  --color-primary-hover: 31 127 58;     /* #1F7F3A */
+  --color-primary-muted: 240 249 241;   /* #F0F9F1 */
+
+  /* Semantyczne */
+  --color-success: 46 159 74;           /* #2E9F4A */
+  --color-warning: 245 158 11;          /* #F59E0B */
+  --color-danger: 220 38 38;            /* #DC2626 */
+  --color-info: 2 132 199;              /* #0284C7 */
+
+  /* Powierzchnie (surface-0 najjaśniejsza) */
+  --color-surface-0: 255 255 255;
+  --color-surface-1: 247 249 251;       /* graphite-50  #F7F9FB */
+  --color-surface-2: 238 241 245;       /* graphite-100 #EEF1F5 */
+  --color-surface-3: 221 227 234;       /* graphite-200 #DDE3EA */
+
+  /* Tekst */
+  --color-fg-default: 15 21 32;         /* graphite-900 #0F1520 */
+  --color-fg-muted: 95 107 122;         /* graphite-500 #5F6B7A */
+  --color-fg-subtle: 138 150 163;
+
+  /* Ramki */
+  --color-border: 221 227 234;          /* graphite-200 */
+  --color-border-strong: 95 107 122;    /* graphite-500 */
+
+  /* ─── Cienie ────────────────────────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(15,23,32,0.04);
+  --shadow-sm: 0 1px 3px rgba(15,23,32,0.06), 0 1px 2px rgba(15,23,32,0.04);
+  --shadow-md: 0 4px 12px rgba(15,23,32,0.06), 0 1px 2px rgba(15,23,32,0.04);
+  --shadow-lg: 0 12px 32px rgba(15,23,32,0.10), 0 2px 4px rgba(15,23,32,0.05);
+  --shadow-focus: 0 0 0 4px rgba(37,150,72,0.22);
+
+  /* ─── Promienie ─────────────────────────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -13,45 +56,8 @@ html {
 }
 
 body {
-  background-color: #f3f4f6;
-  color: #111827;
-}
-
-/* Dark mode body */
-.dark body {
-  background-color: #0f172a;
-  color: #f1f5f9;
-}
-
-/* Dark mode CSS variables */
-:root {
-  --background: 249 250 251;
-  --foreground: 17 24 39;
-  --card: 255 255 255;
-  --card-foreground: 17 24 39;
-  --border: 229 231 235;
-  --muted: 243 244 246;
-  --muted-foreground: 107 114 128;
-  --primary: 37 99 235;
-  --primary-foreground: 255 255 255;
-  --destructive: 220 38 38;
-  --destructive-foreground: 255 255 255;
-  --success: 22 163 74;
-  --success-foreground: 255 255 255;
-  --warning: 217 119 6;
-  --warning-foreground: 255 255 255;
-}
-
-.dark {
-  --background: 15 23 42;
-  --foreground: 241 245 249;
-  --card: 30 41 59;
-  --card-foreground: 241 245 249;
-  --border: 51 65 85;
-  --muted: 30 41 59;
-  --muted-foreground: 148 163 184;
-  --primary: 59 130 246;
-  --primary-foreground: 255 255 255;
+  background-color: #F7F9FB;  /* graphite-50 */
+  color: #0F1520;              /* graphite-900 */
 }
 
 /* Custom animations */
@@ -122,22 +128,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #EEF1F5;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #DDE3EA;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-.dark ::-webkit-scrollbar-track {
-  background: #1e293b;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #5F6B7A;
 }
