@@ -3,7 +3,7 @@
 > **Ten plik jest aktualizowany na koniec każdej sesji pracy nad projektem.**
 > **Jeśli jesteś Claude rozpoczynającym nową sesję pracy nad Prowatech Inspekcje — przeczytaj ten plik w pierwszej kolejności**, zanim zaczniesz eksplorować repo lub pytać użytkownika o kontekst. Zaktualizuj go na końcu sesji (sekcje "Ostatnio zrobione", "W toku / następne kroki" oraz "Historia sesji").
 
-_Ostatnia aktualizacja: 2026-04-23 — sesja inicjująca plik PROGRESS.md. Ostatni commit w repo: `329e6ca` z 2026-04-13._
+_Ostatnia aktualizacja: 2026-04-23 — Faza 2 zakończona (commit `a43d457`). Wszystkie ekrany wewnętrzne przemalowane na tokeny z Fazy 1._
 
 ---
 
@@ -74,9 +74,11 @@ Pogrupowane tematycznie (kolejność chronologiczna w obrębie grupy):
 
 ## W toku / następne kroki
 
-**Redesign — Faza 1 DONE (2026-04-23).** Tokeny, fonty i komponenty bazowe wdrożone w commit `0c4fd3c`. Fazy 2–8 czekają — patrz `design/prowatech-redesign.md` sekcja 5.
+**Redesign — Faza 1 DONE (2026-04-23).** Tokeny, fonty i komponenty bazowe wdrożone w commit `0c4fd3c`.
 
-**Faza 2 — następna:** Re-skin indywidualnych ekranów aplikacji (Dashboard, Klienci, Farmy, Inspekcje, Turbiny). Ekrany nadal używają hard-coded `blue-*`/`gray-*` klas — Faza 1 wniosła tokeny, Faza 2 je konsumuje.
+**Redesign — Faza 2 DONE (2026-04-23).** Re-skin wszystkich ekranów wewnętrznych wdrożony w commit `a43d457`. Zero hard-coded `blue-*`/`gray-*`; wszystkie klasy tokeny z Fazy 1.
+
+**Faza 3 — następna:** Re-layout Dashboard (sparkline, kalendarz 14-dniowy, rozkład ocen bar-chart). Patrz `design/prowatech-redesign.md` krok 3.
 
 Poza propozycją designu brak innych jawnie udokumentowanych prac w toku w repo, ale na podstawie stanu gałęzi i nietrackowanych plików można przypuszczać następujące otwarte wątki:
 
@@ -311,6 +313,7 @@ Dzięki temu klasy `bg-background`, `border-input`, `ring-ring`, `ring-offset-ba
 
 Brief log kolejnych sesji pracy z Claude nad tym projektem. Każda nowa sesja powinna **dodać jedną linię** na górę tej sekcji.
 
+- **2026-04-23** — **Faza 2 wdrożona** (commit `a43d457`). Re-skin 15 plików: Dashboard (page+stats+recent+alerts), Inspekcje (lista+detail+StatusBar+ElementCard+RatingBadge), Formularz inspekcji (turbine-inspection-form), Klienci (lista+detail), Farmy (lista+detail), Turbiny (detail+PhotoSlot+InfoItem). Wzorce: font-mono dla dat/kodów/liczb, `text-[11px] uppercase tracking-wider text-graphite-400` dla nagłówków tabel, `h-[52px] hover:bg-graphite-50/50` dla wierszy, `border-graphite-200 shadow-xs rounded-xl` dla kart. Build czysty `✓ Compiled successfully`. Wypchnięto na `main`.
 - **2026-04-23** — **Faza 1 wdrożona** (commit `0c4fd3c`). Tokeny kolorystyczne (#259648 primary), typografia (Inter 400/500/600 + JetBrains Mono 400/500 via next/font), palety graphite/semantic, shadcn base tokens, cienie xs–lg. Komponenty: badge (5 wariantów semantycznych), button (danger), card (shadow-xs), table (graphite), sheet/slider (primary). Layout: sidebar/header avatar+aktywny stan blue→primary, body bg→graphite-50. constants.ts: STATUS_COLORS/CONDITION_COLORS na nowe tokeny. Build przeszedł czysto. Vercel deploy w toku.
 - **2026-04-23** — Propozycja nowego designu aplikacji (panel inspektora + portal klienta + protokół PDF). Deliverable: `design/prowatech-prototype.html` (klikany prototyp) + `design/prowatech-redesign.md` (dokument). Decyzje: primary #259648 (delikatnie jaśniejszy od logo #1F7F3A), JetBrains Mono na dane/kody, portal klienta email+hasło (Faza 3), ton portalu „Państwo/Państwa". **Logo protokołów zostaje bez zmian** — oryginalna wersja (`public/logo-prowatech.png`) w dokumentach wychodzących. Stylizowany znak SVG pozostaje w UI wewnętrznym.
 - **2026-04-23** — utworzenie tego pliku PROGRESS.md. Read-only rekonesans: git log, struktura repo, stan gałęzi. Nie wprowadzono zmian w kodzie.
