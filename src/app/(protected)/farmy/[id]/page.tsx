@@ -23,6 +23,7 @@ import {
 import { WindFarmForm } from '@/components/forms/wind-farm-form'
 import { TurbineForm } from '@/components/forms/turbine-form'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ArrowLeft, Plus, Wind } from 'lucide-react'
 
 interface WindFarm {
   id: string
@@ -105,8 +106,12 @@ export default function FarmDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-9 w-20 rounded-lg" />
+          <Skeleton className="h-8 w-56 rounded-xl" />
+        </div>
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
       </div>
     )
   }
@@ -114,7 +119,7 @@ export default function FarmDetailPage() {
   if (!windFarm) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Farma nie znaleziona</p>
+        <p className="text-graphite-500">Farma nie znaleziona</p>
         <Button
           onClick={() => router.push('/farmy')}
           className="mt-4"
@@ -133,62 +138,38 @@ export default function FarmDetailPage() {
           onClick={() => router.back()}
           variant="outline"
           size="sm"
+          className="border-graphite-200"
         >
+          <ArrowLeft className="h-4 w-4 mr-1" />
           Wróć
         </Button>
-        <h1 className="text-3xl font-bold">{windFarm.name}</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-graphite-900">{windFarm.name}</h1>
+          <p className="text-sm text-graphite-500">{windFarm.clients.name}</p>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Szczegóły farmy</CardTitle>
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
+        <CardHeader className="border-b border-graphite-100 pb-4">
+          <CardTitle className="text-[15px] font-bold text-graphite-900">Szczegóły farmy</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-600">Klient</label>
-              <p className="text-lg">{windFarm.clients.name}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Moc łączna</label>
-              <p className="text-lg">{windFarm.total_capacity_mw} MW</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Lokalizacja</label>
-              <p className="text-lg">{windFarm.location_address}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">Liczba turbin</label>
-              <p className="text-lg">{windFarm.number_of_turbines}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">
-                Współrzędne geograficzne
-              </label>
-              <p className="text-sm">
-                {windFarm.latitude}, {windFarm.longitude}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600">
-                Data uruchomienia
-              </label>
-              <p className="text-lg">
-                {windFarm.commissioning_date
-                  ? new Date(windFarm.commissioning_date).toLocaleDateString('pl-PL')
-                  : 'Brak danych'}
-              </p>
-            </div>
-          </div>
+        <CardContent className="pt-4">
+          <WindFarmForm initialData={windFarm} onSuccess={handleFarmUpdated} />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Turbiny w farmie</CardTitle>
+      <Card className="rounded-xl border border-graphite-200 shadow-xs overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-graphite-100 pb-4">
+          <div>
+            <CardTitle className="text-[15px] font-bold text-graphite-900">Turbiny w farmie</CardTitle>
+            <p className="font-mono text-[12px] text-graphite-500 mt-0.5">{turbines.length} turbin</p>
+          </div>
           <Dialog open={isTurbineDialogOpen} onOpenChange={setIsTurbineDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm">Dodaj turbinę</Button>
+              <Button size="sm" className="h-9 gap-1.5">
+                <Plus className="h-4 w-4" />
+                Dodaj turbinę
+              </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
@@ -201,40 +182,44 @@ export default function FarmDetailPage() {
             </DialogContent>
           </Dialog>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {turbines.length === 0 ? (
-            <p className="text-gray-500">Brak turbin w tej farmie</p>
-          ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Kod</TableHead>
-                    <TableHead>Producent</TableHead>
-                    <TableHead>Model</TableHead>
-                    <TableHead>Moc MW</TableHead>
-                    <TableHead>Wysokość wieży</TableHead>
-                    <TableHead>Nr seryjny</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {turbines.map((turbine) => (
-                    <TableRow
-                      key={turbine.id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => router.push(`/turbiny/${turbine.id}`)}
-                    >
-                      <TableCell className="font-medium">{turbine.turbine_code}</TableCell>
-                      <TableCell>{turbine.manufacturer}</TableCell>
-                      <TableCell>{turbine.model}</TableCell>
-                      <TableCell>{turbine.rated_power_mw}</TableCell>
-                      <TableCell>{turbine.tower_height_m} m</TableCell>
-                      <TableCell>{turbine.serial_number}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="p-3 bg-graphite-50 rounded-2xl mb-3">
+                <Wind className="h-8 w-8 text-graphite-200" />
+              </div>
+              <p className="text-sm font-semibold text-graphite-800">Brak turbin w tej farmie</p>
+              <p className="text-xs text-graphite-500 mt-1">Dodaj pierwszą turbinę, aby zacząć</p>
             </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-graphite-50/50 hover:bg-graphite-50/50 border-b border-graphite-100">
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 px-5">Kod</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Producent</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Model</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Moc MW</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Wys. wieży</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Nr seryjny</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {turbines.map((turbine) => (
+                  <TableRow
+                    key={turbine.id}
+                    className="cursor-pointer hover:bg-graphite-50/50 transition-colors border-b border-graphite-100 h-[52px]"
+                    onClick={() => router.push(`/turbiny/${turbine.id}`)}
+                  >
+                    <TableCell className="font-mono font-semibold text-graphite-900 px-5 text-[13px]">{turbine.turbine_code}</TableCell>
+                    <TableCell className="text-graphite-500 text-[13px]">{turbine.manufacturer}</TableCell>
+                    <TableCell className="text-graphite-500 text-[13px]">{turbine.model}</TableCell>
+                    <TableCell className="font-mono text-graphite-800 font-medium text-[13px]">{turbine.rated_power_mw}</TableCell>
+                    <TableCell className="font-mono text-graphite-500 text-[13px]">{turbine.tower_height_m} m</TableCell>
+                    <TableCell className="font-mono text-graphite-500 text-[13px]">{turbine.serial_number}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

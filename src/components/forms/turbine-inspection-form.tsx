@@ -137,11 +137,11 @@ export interface ElementDefinition {
 // ── Constants ──────────────────────────────────────────────────────
 
 const RATINGS: { value: NonNullable<ConditionRating>; label: string; color: string; activeColor: string }[] = [
-  { value: 'dobry',       label: 'DOBRY',     color: 'border-green-300  text-green-700  hover:bg-green-50',  activeColor: 'bg-green-600  text-white border-green-600' },
-  { value: 'zadowalajacy',label: 'ZADOW.',    color: 'border-blue-300   text-blue-700   hover:bg-blue-50',   activeColor: 'bg-blue-600   text-white border-blue-600' },
-  { value: 'sredni',      label: 'ŚREDNI',    color: 'border-yellow-300 text-yellow-700 hover:bg-yellow-50', activeColor: 'bg-yellow-500 text-white border-yellow-500' },
-  { value: 'zly',         label: 'ZŁY',       color: 'border-orange-300 text-orange-700 hover:bg-orange-50', activeColor: 'bg-orange-600 text-white border-orange-600' },
-  { value: 'awaryjny',    label: 'AWARYJNY',  color: 'border-red-300    text-red-700    hover:bg-red-50',    activeColor: 'bg-red-600    text-white border-red-600' },
+  { value: 'dobry',       label: 'DOBRY',     color: 'border-success-100 text-success-800 hover:bg-success-50',   activeColor: 'bg-success text-white border-success' },
+  { value: 'zadowalajacy',label: 'ZADOW.',    color: 'border-info-100 text-info-800 hover:bg-info-50',             activeColor: 'bg-info text-white border-info' },
+  { value: 'sredni',      label: 'ŚREDNI',    color: 'border-warning-100 text-warning-800 hover:bg-warning-50',   activeColor: 'bg-warning text-white border-warning' },
+  { value: 'zly',         label: 'ZŁY',       color: 'border-orange-300 text-orange-700 hover:bg-orange-50',      activeColor: 'bg-orange-600 text-white border-orange-600' },
+  { value: 'awaryjny',    label: 'AWARYJNY',  color: 'border-danger-100 text-danger-800 hover:bg-danger-50',      activeColor: 'bg-danger text-white border-danger' },
 ]
 
 const SECTION_NAMES: Record<string, string> = {
@@ -216,8 +216,8 @@ function ToggleButton({
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-medium text-sm min-h-[48px] transition-all ${
         checked
-          ? 'bg-green-600 text-white border-green-600'
-          : 'border-gray-200 text-gray-600 hover:border-green-400'
+          ? 'bg-primary-600 text-white border-primary-600'
+          : 'border-graphite-200 text-graphite-600 hover:border-primary-400'
       }`}
     >
       <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
@@ -728,7 +728,7 @@ export function TurbineInspectionForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Wind className="h-5 w-5 text-blue-600" />
+                <Wind className="h-5 w-5 text-primary-600" />
                 Obiekt kontrolowany
               </CardTitle>
             </CardHeader>
@@ -780,7 +780,7 @@ export function TurbineInspectionForm({
               </div>
 
               {selectedTurbine && (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 bg-primary-50 rounded-lg text-sm">
                   <div><span className="text-muted-foreground">Producent:</span> <strong>{selectedTurbine.manufacturer}</strong></div>
                   <div><span className="text-muted-foreground">Model:</span> <strong>{selectedTurbine.model}</strong></div>
                   {selectedTurbine.rated_power_mw != null && (
@@ -894,7 +894,7 @@ export function TurbineInspectionForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Navigation2 className="h-5 w-5 text-blue-600" />
+                <Navigation2 className="h-5 w-5 text-primary-600" />
                 Infrastruktura
               </CardTitle>
             </CardHeader>
@@ -921,7 +921,7 @@ export function TurbineInspectionForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <User className="h-5 w-5 text-blue-600" />
+                <User className="h-5 w-5 text-primary-600" />
                 Inspektor — branża budowlana
               </CardTitle>
             </CardHeader>
@@ -984,12 +984,12 @@ export function TurbineInspectionForm({
 
           {/* Inspektor 2 — tylko przy 5-letniej */}
           {inspectionType === 'five_year' && (
-            <Card className="border-yellow-300 dark:border-yellow-700">
+            <Card className="border-warning-100">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <User className="h-5 w-5 text-yellow-600" />
+                  <User className="h-5 w-5 text-warning-800" />
                   Inspektor — branża elektryczna
-                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">
+                  <Badge className="bg-warning-100 text-warning-800 border-warning-100 text-xs">
                     5-letnia
                   </Badge>
                 </CardTitle>
@@ -1057,7 +1057,7 @@ export function TurbineInspectionForm({
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-blue-600" />
+                  <FileText className="h-5 w-5 text-primary-600" />
                   Poprzednie kontrole
                 </CardTitle>
                 <Button type="button" variant="outline" size="sm" onClick={addPrevInspection} className="h-10 gap-1.5">
@@ -1072,7 +1072,7 @@ export function TurbineInspectionForm({
                     <button
                       type="button"
                       onClick={() => removePrevInspection(pi.id)}
-                      className="absolute top-3 right-3 text-gray-400 hover:text-red-500 transition-colors"
+                      className="absolute top-3 right-3 text-graphite-400 hover:text-danger transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1141,8 +1141,8 @@ export function TurbineInspectionForm({
                         }
                         className={`px-3 py-2 rounded-lg border-2 text-xs font-semibold transition-all min-h-[40px] ${
                           f.currentStatus === 'done'
-                            ? 'bg-green-600 text-white border-green-600'
-                            : 'border-green-300 text-green-700 hover:bg-green-50'
+                            ? 'bg-success text-white border-success'
+                            : 'border-success-100 text-success-800 hover:bg-success-50'
                         }`}
                       >
                         Wykonano
@@ -1158,8 +1158,8 @@ export function TurbineInspectionForm({
                         }
                         className={`px-3 py-2 rounded-lg border-2 text-xs font-semibold transition-all min-h-[40px] ${
                           f.currentStatus === 'not_done'
-                            ? 'bg-red-600 text-white border-red-600'
-                            : 'border-red-300 text-red-700 hover:bg-red-50'
+                            ? 'bg-danger text-white border-danger'
+                            : 'border-danger-100 text-danger-800 hover:bg-danger-50'
                         }`}
                       >
                         Nie wykonano
@@ -1175,15 +1175,15 @@ export function TurbineInspectionForm({
                         }
                         className={`px-3 py-2 rounded-lg border-2 text-xs font-semibold transition-all min-h-[40px] ${
                           f.currentStatus === 'not_checked'
-                            ? 'bg-gray-500 text-white border-gray-500'
-                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                            ? 'bg-graphite-500 text-white border-graphite-500'
+                            : 'border-graphite-200 text-graphite-600 hover:bg-graphite-50'
                         }`}
                       >
                         Nie sprawdzono
                       </button>
                     </div>
                     {f.currentStatus === 'not_done' && (
-                      <p className="text-xs text-red-600 font-medium">
+                      <p className="text-xs text-danger font-medium">
                         Zalecenie zostanie automatycznie dodane do Wniosków (Tab Wnioski).
                       </p>
                     )}
@@ -1210,12 +1210,12 @@ export function TurbineInspectionForm({
               {completedCount}/{elements.length} oceniono
             </Badge>
             {issueCount > 0 && (
-              <Badge className="h-10 px-4 text-sm gap-2 bg-red-100 text-red-800 border-red-300">
+              <Badge className="h-10 px-4 text-sm gap-2 bg-danger-100 text-danger-800 border-danger-100">
                 <AlertTriangle className="h-4 w-4" /> Problemy: {issueCount}
               </Badge>
             )}
             {inspectionType === 'five_year' && (
-              <Badge className="h-10 px-4 text-sm gap-2 bg-yellow-100 text-yellow-800 border-yellow-300">
+              <Badge className="h-10 px-4 text-sm gap-2 bg-warning-100 text-warning-800 border-warning-100">
                 Zakres 5-letni aktywny
               </Badge>
             )}
@@ -1231,11 +1231,11 @@ export function TurbineInspectionForm({
                   const SectionIcon = SECTION_ICONS[el.sectionCode] ?? Building2
 
                   const cardBorder =
-                    el.rating === 'awaryjny' ? 'border-red-400 bg-red-50/50 dark:border-red-700 dark:bg-red-950/30' :
-                    el.rating === 'zly'      ? 'border-orange-300 bg-orange-50/50 dark:border-orange-700 dark:bg-orange-950/30' :
-                    el.rating === 'sredni'   ? 'border-yellow-300 bg-yellow-50/50 dark:border-yellow-700 dark:bg-yellow-950/30' :
+                    el.rating === 'awaryjny' ? 'border-danger-100 bg-danger-50/50' :
+                    el.rating === 'zly'      ? 'border-orange-300 bg-orange-50/50' :
+                    el.rating === 'sredni'   ? 'border-warning-100 bg-warning-50/50' :
                     (el.rating === 'dobry' || el.rating === 'zadowalajacy')
-                      ? 'border-green-300 bg-green-50/30 dark:border-green-700 dark:bg-green-950/20' : ''
+                      ? 'border-success-100 bg-success-50/30' : ''
 
                   return (
                     <div key={el.definitionId}>
@@ -1311,7 +1311,7 @@ export function TurbineInspectionForm({
                           {/* Photo per element */}
                           {el.rating !== null && (
                             <div className="space-y-2">
-                              <label className="flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-lg border-2 border-blue-300 text-blue-700 hover:bg-blue-50 text-xs font-semibold transition-all">
+                              <label className="flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-lg border-2 border-primary-200 text-primary-700 hover:bg-primary-50 text-xs font-semibold transition-all">
                                 <Camera className="h-4 w-4" />
                                 Dodaj zdjęcie
                                 <input
@@ -1334,7 +1334,7 @@ export function TurbineInspectionForm({
                                 <div className="flex flex-wrap gap-3">
                                   {el.elementPhotos.map((ep, pi) => (
                                     <div key={pi} className="w-28 space-y-1">
-                                      <div className="relative w-28 h-20 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border">
+                                      <div className="relative w-28 h-20 bg-graphite-100 rounded-lg overflow-hidden border border-graphite-200">
                                         <img src={ep.preview} alt="" className="w-full h-full object-cover" />
                                         <button
                                           type="button"
@@ -1344,7 +1344,7 @@ export function TurbineInspectionForm({
                                               elementPhotos: el.elementPhotos.filter((_, idx) => idx !== pi),
                                             })
                                           }}
-                                          className="absolute top-1 right-1 bg-red-600/80 hover:bg-red-700 text-white rounded-full p-0.5 transition-colors"
+                                          className="absolute top-1 right-1 bg-danger/80 hover:bg-danger-800 text-white rounded-full p-0.5 transition-colors"
                                         >
                                           <Trash2 className="h-3 w-3" />
                                         </button>
@@ -1380,7 +1380,7 @@ export function TurbineInspectionForm({
                                       setElementLibCategory('__all__')
                                       setShowElementLibDialog(true)
                                     }}
-                                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    className="flex items-center gap-1.5 text-xs text-primary-700 hover:text-primary-800 font-medium"
                                   >
                                     <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (uwagi)
                                   </button>
@@ -1404,7 +1404,7 @@ export function TurbineInspectionForm({
                                       setElementLibCategory('__all__')
                                       setShowElementLibDialog(true)
                                     }}
-                                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    className="flex items-center gap-1.5 text-xs text-primary-700 hover:text-primary-800 font-medium"
                                   >
                                     <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (zalecenia)
                                   </button>
@@ -1423,9 +1423,9 @@ export function TurbineInspectionForm({
 
                           {/* 5-year extended scope */}
                           {inspectionType === 'five_year' && (
-                            <div className="space-y-1 border-t pt-3 border-yellow-200 dark:border-yellow-800">
-                              <Label className="text-sm text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5">
-                                <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
+                            <div className="space-y-1 border-t pt-3 border-warning-100">
+                              <Label className="text-sm text-warning-800 flex items-center gap-1.5">
+                                <Badge className="text-xs bg-warning-100 text-warning-800 border-warning-100">
                                   5-letni
                                 </Badge>
                                 Szczegółowy opis — zakres rozszerzony
@@ -1467,7 +1467,7 @@ export function TurbineInspectionForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-blue-600" />
+                <Wrench className="h-5 w-5 text-primary-600" />
                 Dane firmy serwisowej
               </CardTitle>
             </CardHeader>
@@ -1509,7 +1509,7 @@ export function TurbineInspectionForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <ClipboardCheck className="h-5 w-5 text-blue-600" />
+                <ClipboardCheck className="h-5 w-5 text-primary-600" />
                 Czynności serwisowe
                 <Badge variant="secondary">
                   {serviceChecklist.filter((x) => x.checked).length}/{serviceChecklist.length}
@@ -1525,8 +1525,8 @@ export function TurbineInspectionForm({
                       onClick={() => toggleChecklistItem(item.code)}
                       className={`w-7 h-7 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                         item.checked
-                          ? 'bg-green-600 border-green-600'
-                          : 'border-gray-300 hover:border-green-400'
+                          ? 'bg-primary-600 border-primary-600'
+                          : 'border-graphite-200 hover:border-primary-400'
                       }`}
                     >
                       {item.checked && <CheckCircle2 className="h-4 w-4 text-white" />}
@@ -1565,7 +1565,7 @@ export function TurbineInspectionForm({
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-blue-600" />
+                  <AlertTriangle className="h-5 w-5 text-warning" />
                   Zestawienie robót remontowych
                 </CardTitle>
                 <div className="flex gap-2">
@@ -1595,7 +1595,7 @@ export function TurbineInspectionForm({
                     <button
                       type="button"
                       onClick={() => removeRepairRec(rec.id)}
-                      className="ml-auto text-gray-400 hover:text-red-500 transition-colors"
+                      className="ml-auto text-graphite-400 hover:text-danger transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1622,8 +1622,8 @@ export function TurbineInspectionForm({
                             onClick={() => updateRepairRec(rec.id, { repairType: val })}
                             className={`px-3 py-2 rounded-lg border-2 text-xs font-bold min-h-[44px] transition-all ${
                               rec.repairType === val
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'border-gray-200 text-gray-600 hover:border-blue-300'
+                                ? 'bg-primary-600 text-white border-primary-600'
+                                : 'border-graphite-200 text-graphite-600 hover:border-primary-300'
                             }`}
                           >
                             {label}
@@ -1634,7 +1634,7 @@ export function TurbineInspectionForm({
                     <div className="space-y-1">
                       <Label className="text-sm">Pilność</Label>
                       <div className="flex gap-1">
-                        {([['I', 'I', 'bg-red-600'], ['II', 'II', 'bg-orange-500'], ['III', 'III', 'bg-yellow-500'], ['IV', 'IV', 'bg-green-600']] as [UrgencyLevel, string, string][]).map(([val, label, color]) => (
+                        {([['I', 'I', 'bg-danger'], ['II', 'II', 'bg-orange-500'], ['III', 'III', 'bg-warning'], ['IV', 'IV', 'bg-success']] as [UrgencyLevel, string, string][]).map(([val, label, color]) => (
                           <button
                             key={val}
                             type="button"
@@ -1642,7 +1642,7 @@ export function TurbineInspectionForm({
                             className={`px-3 py-2 rounded-lg border-2 text-xs font-bold min-h-[44px] transition-all ${
                               rec.urgencyLevel === val
                                 ? `${color} text-white border-transparent`
-                                : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                                : 'border-graphite-200 text-graphite-600 hover:border-graphite-400'
                             }`}
                           >
                             {label}
@@ -1668,7 +1668,7 @@ export function TurbineInspectionForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-600" />
+                <FileText className="h-5 w-5 text-primary-600" />
                 Ocena końcowa i zagrożenia
               </CardTitle>
             </CardHeader>
@@ -1712,7 +1712,7 @@ export function TurbineInspectionForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Camera className="h-5 w-5 text-blue-600" />
+                <Camera className="h-5 w-5 text-primary-600" />
                 Dokumentacja fotograficzna
                 {photos.length > 0 && (
                   <Badge variant="secondary">{photos.length} zdjęć</Badge>
@@ -1720,10 +1720,10 @@ export function TurbineInspectionForm({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 transition-colors">
-                <Upload className="h-10 w-10 text-gray-400 mb-2" />
-                <span className="text-base text-gray-500 font-medium">Dotknij aby dodać zdjęcia</span>
-                <span className="text-sm text-gray-400 mt-0.5">Aparat lub galeria</span>
+              <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed rounded-xl cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-colors">
+                <Upload className="h-10 w-10 text-graphite-400 mb-2" />
+                <span className="text-base text-graphite-500 font-medium">Dotknij aby dodać zdjęcia</span>
+                <span className="text-sm text-graphite-400 mt-0.5">Aparat lub galeria</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -1738,7 +1738,7 @@ export function TurbineInspectionForm({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {photos.map((photo, i) => (
                     <div key={i} className="space-y-2">
-                      <div className="relative aspect-[4/3] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border">
+                      <div className="relative aspect-[4/3] bg-graphite-100 rounded-lg overflow-hidden border border-graphite-200">
                         <img
                           src={photo.preview}
                           alt={`Zdjęcie ${i + 1}`}
@@ -1750,7 +1750,7 @@ export function TurbineInspectionForm({
                         <button
                           type="button"
                           onClick={() => removePhoto(i)}
-                          className="absolute top-1.5 right-1.5 bg-red-600/80 hover:bg-red-700 text-white rounded-full p-1 transition-colors"
+                          className="absolute top-1.5 right-1.5 bg-danger/80 hover:bg-danger-800 text-white rounded-full p-1 transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -1787,7 +1787,7 @@ export function TurbineInspectionForm({
               <Button
                 type="button"
                 size="lg"
-                className="h-14 px-8 text-base gap-2 bg-green-600 hover:bg-green-700"
+                className="h-14 px-8 text-base gap-2"
                 disabled={submitting}
                 onClick={handleCompleteClick}
               >
@@ -1805,7 +1805,7 @@ export function TurbineInspectionForm({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <CheckCircle2 className="h-5 w-5 text-success" />
               Zakończenie protokołu
             </DialogTitle>
           </DialogHeader>
@@ -1830,11 +1830,11 @@ export function TurbineInspectionForm({
                 }
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 text-sm font-medium text-left transition-all ${
                   completionChecklist[key]
-                    ? 'bg-green-50 border-green-500 text-green-800 dark:bg-green-950/30 dark:border-green-600 dark:text-green-300'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700'
+                    ? 'bg-success-50 border-success text-success-800'
+                    : 'border-graphite-200 text-graphite-600 hover:border-graphite-400'
                 }`}
               >
-                <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${completionChecklist[key] ? 'text-green-600' : 'text-gray-300'}`} />
+                <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${completionChecklist[key] ? 'text-success' : 'text-graphite-200'}`} />
                 {label}
               </button>
             ))}
@@ -1854,7 +1854,7 @@ export function TurbineInspectionForm({
                 saveInspection('completed')
               }}
               disabled={submitting}
-              className="h-11 bg-green-600 hover:bg-green-700 gap-2"
+              className="h-11 gap-2"
             >
               {submitting
                 ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1871,7 +1871,7 @@ export function TurbineInspectionForm({
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-600" /> Biblioteka zaleceń
+              <BookOpen className="h-5 w-5 text-primary-600" /> Biblioteka zaleceń
             </DialogTitle>
           </DialogHeader>
 
@@ -1975,7 +1975,7 @@ export function TurbineInspectionForm({
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-600" />
+              <BookOpen className="h-5 w-5 text-primary-600" />
               {elementLibTarget?.field === 'notes' ? 'Biblioteka opisów usterek' : 'Biblioteka zaleceń'}
             </DialogTitle>
           </DialogHeader>

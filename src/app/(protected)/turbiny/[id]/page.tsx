@@ -135,8 +135,13 @@ export default function TurbineDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full" />
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-9 w-20 rounded-lg" />
+          <Skeleton className="h-8 w-64 rounded-xl" />
+        </div>
+        <Skeleton className="h-[454px] w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <Skeleton className="h-36 w-full rounded-xl" />
       </div>
     )
   }
@@ -144,7 +149,7 @@ export default function TurbineDetailPage() {
   if (!turbine) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Turbina nie znaleziona</p>
+        <p className="text-graphite-500">Turbina nie znaleziona</p>
         <Button onClick={() => router.back()} className="mt-4" variant="outline">
           Wróć
         </Button>
@@ -163,190 +168,187 @@ export default function TurbineDetailPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      {/* Header */}
       <div className="flex items-center gap-4">
-        <Button onClick={() => router.back()} variant="outline" size="sm">
+        <Button onClick={() => router.back()} variant="outline" size="sm" className="border-graphite-200">
           <ArrowLeft className="h-4 w-4 mr-1" />
           Wróć
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">{turbine.manufacturer} {turbine.model}</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold text-graphite-900">{turbine.manufacturer} {turbine.model}</h1>
+          <p className="text-sm text-graphite-500">
             {turbine.wind_farms?.clients?.name} / {turbine.wind_farms?.name}
           </p>
         </div>
       </div>
 
-      {/* Zdjęcia: pionowa 12×7cm + 2× poziome 5.5×7cm */}
-      <div className="bg-white p-5">
-        <div style={{ display: 'flex', gap: '12px', height: '454px' }}>
-          <div style={{ width: '265px', height: '454px', flexShrink: 0 }}>
-            <PhotoSlot
-              url={turbine.photo_url}
-              alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
-              canUpload={canUpload}
-              isUploading={uploadingSlot === 1}
-              onUpload={() => {
-                const input = document.createElement('input')
-                input.type = 'file'
-                input.accept = 'image/jpeg,image/png,image/webp'
-                input.onchange = (e) => handlePhotoUpload(e as any, 1)
-                input.click()
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '265px', flexShrink: 0 }}>
-            <div style={{ width: '265px', height: '221px' }}>
+      <Card className="rounded-xl border border-graphite-200 shadow-xs overflow-hidden">
+        <CardContent className="p-5">
+          <div style={{ display: 'flex', gap: '12px', height: '454px' }}>
+            <div style={{ width: '265px', height: '454px', flexShrink: 0 }}>
               <PhotoSlot
-                url={turbine.photo_url_2}
-                alt="Zdjęcie 2"
+                url={turbine.photo_url}
+                alt={`Turbina ${turbine.manufacturer} ${turbine.model}`}
                 canUpload={canUpload}
-                isUploading={uploadingSlot === 2}
+                isUploading={uploadingSlot === 1}
                 onUpload={() => {
                   const input = document.createElement('input')
                   input.type = 'file'
                   input.accept = 'image/jpeg,image/png,image/webp'
-                  input.onchange = (e) => handlePhotoUpload(e as any, 2)
+                  input.onchange = (e) => handlePhotoUpload(e as React.ChangeEvent<HTMLInputElement>, 1)
                   input.click()
                 }}
               />
             </div>
-            <div style={{ width: '265px', height: '221px' }}>
-              <PhotoSlot
-                url={turbine.photo_url_3}
-                alt="Zdjęcie 3"
-                canUpload={canUpload}
-                isUploading={uploadingSlot === 3}
-                onUpload={() => {
-                  const input = document.createElement('input')
-                  input.type = 'file'
-                  input.accept = 'image/jpeg,image/png,image/webp'
-                  input.onchange = (e) => handlePhotoUpload(e as any, 3)
-                  input.click()
-                }}
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '265px', flexShrink: 0 }}>
+              <div style={{ width: '265px', height: '221px' }}>
+                <PhotoSlot
+                  url={turbine.photo_url_2}
+                  alt="Zdjęcie 2"
+                  canUpload={canUpload}
+                  isUploading={uploadingSlot === 2}
+                  onUpload={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/jpeg,image/png,image/webp'
+                    input.onchange = (e) => handlePhotoUpload(e as React.ChangeEvent<HTMLInputElement>, 2)
+                    input.click()
+                  }}
+                />
+              </div>
+              <div style={{ width: '265px', height: '221px' }}>
+                <PhotoSlot
+                  url={turbine.photo_url_3}
+                  alt="Zdjęcie 3"
+                  canUpload={canUpload}
+                  isUploading={uploadingSlot === 3}
+                  onUpload={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/jpeg,image/png,image/webp'
+                    input.onchange = (e) => handlePhotoUpload(e as React.ChangeEvent<HTMLInputElement>, 3)
+                    input.click()
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Alert: Next inspection */}
-      {turbine.next_inspection_date && (
-        <div className={`flex items-center gap-3 p-4 rounded-lg border ${
-          isOverdue
-            ? 'bg-red-50 border-red-200 text-red-800'
-            : daysUntilInspection !== null && daysUntilInspection <= 90
-              ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
-              : 'bg-green-50 border-green-200 text-green-800'
-        }`}>
-          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-          <div>
-            <p className="font-medium">
-              {isOverdue
-                ? `Przegląd przeterminowany! Termin: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')}`
-                : `Następny przegląd: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')} (za ${daysUntilInspection} dni)`
-              }
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Main info card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wind className="h-5 w-5" />
-            Dane techniczne
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <InfoItem label="Producent" value={turbine.manufacturer} />
-            <InfoItem label="Model / Typ" value={turbine.model} />
-            <InfoItem label="Moc znamionowa" value={turbine.rated_power_mw ? `${turbine.rated_power_mw} MW` : '-'} />
-            <InfoItem label="Numer seryjny" value={turbine.serial_number} />
-            <InfoItem label="Kod turbiny" value={turbine.turbine_code} />
-            <InfoItem label="Wysokość wieży" value={turbine.tower_height_m ? `${turbine.tower_height_m} m` : '-'} />
-            <InfoItem label="Średnica wirnika" value={turbine.rotor_diameter_m ? `${turbine.rotor_diameter_m} m` : '-'} />
-            <InfoItem label="Wysokość piasty" value={turbine.hub_height_m ? `${turbine.hub_height_m} m` : '-'} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Location card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+      {turbine.next_inspection_date && (
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+          isOverdue
+            ? 'bg-danger-50 border-danger-100 text-danger-800'
+            : daysUntilInspection !== null && daysUntilInspection <= 90
+              ? 'bg-warning-50 border-warning-100 text-warning-800'
+              : 'bg-success-50 border-success-100 text-success-800'
+        }`}>
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+          <p className="text-sm font-medium">
+            {isOverdue
+              ? `Przegląd przeterminowany! Termin: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')}`
+              : `Następny przegląd: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')} (za ${daysUntilInspection} dni)`
+            }
+          </p>
+        </div>
+      )}
+
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
+        <CardHeader className="border-b border-graphite-100 pb-4">
+          <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+            <Wind className="h-4 w-4 text-primary-600" />
+            Dane techniczne
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <InfoItem label="Producent" value={turbine.manufacturer} />
+            <InfoItem label="Model / Typ" value={turbine.model} />
+            <InfoItem label="Moc znamionowa" value={turbine.rated_power_mw ? `${turbine.rated_power_mw} MW` : '-'} mono />
+            <InfoItem label="Numer seryjny" value={turbine.serial_number} mono />
+            <InfoItem label="Kod turbiny" value={turbine.turbine_code} mono />
+            <InfoItem label="Wysokość wieży" value={turbine.tower_height_m ? `${turbine.tower_height_m} m` : '-'} mono />
+            <InfoItem label="Średnica wirnika" value={turbine.rotor_diameter_m ? `${turbine.rotor_diameter_m} m` : '-'} mono />
+            <InfoItem label="Wysokość piasty" value={turbine.hub_height_m ? `${turbine.hub_height_m} m` : '-'} mono />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
+        <CardHeader className="border-b border-graphite-100 pb-4">
+          <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary-600" />
             Lokalizacja
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <InfoItem label="Miejscowość" value={turbine.location_address} />
-            <InfoItem label="Działka" value={turbine.cadastral_parcel} />
+            <InfoItem label="Działka katastralna" value={turbine.cadastral_parcel} mono />
             <InfoItem label="Gmina" value={turbine.location_gmina} />
             <InfoItem label="Powiat" value={turbine.location_powiat} />
             <InfoItem label="Województwo" value={turbine.location_voivodeship} />
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Współrzędne</p>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Współrzędne</span>
               {turbine.latitude && turbine.longitude ? (
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">
+                  <span className="font-mono text-[13px] font-medium text-graphite-900">
                     {turbine.latitude.toFixed(6)}°N, {turbine.longitude.toFixed(6)}°E
-                  </p>
+                  </span>
                   {googleMapsUrl && (
-                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700">
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   )}
                 </div>
               ) : (
-                <p className="text-sm">-</p>
+                <span className="text-[13px] text-graphite-500">-</span>
               )}
             </div>
           </div>
-          <div className="mt-4">
+          <div className="mt-4 pt-4 border-t border-graphite-100">
             <InfoItem label="Farma wiatrowa" value={turbine.wind_farms?.name} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Previous inspections card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
+        <CardHeader className="border-b border-graphite-100 pb-4">
+          <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary-600" />
             Dane kontroli
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <InfoItem
               label="Data ostatniego przeglądu"
               value={turbine.last_inspection_date
                 ? new Date(turbine.last_inspection_date).toLocaleDateString('pl-PL')
                 : 'Brak danych'}
+              mono
             />
             <InfoItem
               label="Nr protokołu"
               value={turbine.last_inspection_protocol || 'Brak danych'}
+              mono
             />
             <InfoItem
               label="Data następnego przeglądu"
               value={turbine.next_inspection_date
                 ? new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')
                 : 'Brak danych'}
-              highlight={isOverdue ? 'red' : undefined}
+              mono
+              danger={!!isOverdue}
             />
           </div>
           {turbine.inspection_notes && (
-            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="mt-4 p-3 bg-warning-50 border border-warning-100 rounded-xl">
               <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <FileText className="h-4 w-4 text-warning-800 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-amber-800">Uwagi</p>
-                  <p className="text-sm text-amber-700 mt-1">{turbine.inspection_notes}</p>
+                  <p className="text-sm font-medium text-warning-800">Uwagi</p>
+                  <p className="text-sm text-warning-800 mt-1 opacity-80">{turbine.inspection_notes}</p>
                 </div>
               </div>
             </div>
@@ -354,16 +356,15 @@ export default function TurbineDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Previous findings */}
       {turbine.previous_findings && turbine.previous_findings !== 'Brak robót' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+        <Card className="rounded-xl border border-graphite-200 shadow-xs">
+          <CardHeader className="border-b border-graphite-100 pb-4">
+            <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary-600" />
               Ustalenia i zalecenia z ostatniej kontroli
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             <div className="space-y-3">
               {turbine.previous_findings.split('\n').map((finding, i) => {
                 const statusLines = turbine.previous_findings_status?.split('\n') || []
@@ -375,18 +376,18 @@ export default function TurbineDetailPage() {
                   <div key={i} className="flex gap-3 items-start">
                     <span className={`mt-1 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
                       isCompleted
-                        ? 'bg-green-100 text-green-700'
+                        ? 'bg-success-50 text-success-800'
                         : isNotCompleted
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-gray-100 text-gray-700'
+                          ? 'bg-danger-50 text-danger-800'
+                          : 'bg-graphite-100 text-graphite-500'
                     }`}>
                       {i + 1}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm">{finding}</p>
+                      <p className="text-sm text-graphite-800">{finding}</p>
                       {status && (
                         <p className={`text-xs mt-1 ${
-                          isCompleted ? 'text-green-600' : isNotCompleted ? 'text-red-600' : 'text-gray-500'
+                          isCompleted ? 'text-success-800' : isNotCompleted ? 'text-danger' : 'text-graphite-500'
                         }`}>
                           {status}
                         </p>
@@ -400,12 +401,11 @@ export default function TurbineDetailPage() {
         </Card>
       )}
 
-      {/* Actions */}
       <div className="flex gap-3">
         <Button onClick={() => router.push(`/farmy/${turbine.wind_farm_id}`)}>
           Zobacz farmę
         </Button>
-        <Button variant="outline" onClick={() => router.push(`/klienci/${turbine.wind_farms?.client_id}`)}>
+        <Button variant="outline" className="border-graphite-200" onClick={() => router.push(`/klienci/${turbine.wind_farms?.client_id}`)}>
           Zobacz klienta
         </Button>
       </div>
@@ -430,15 +430,15 @@ function PhotoSlot({
     <div className="relative group w-full h-full">
       {url ? (
         <>
-          <div className="w-full h-full bg-white overflow-hidden border border-gray-300">
+          <div className="w-full h-full bg-graphite-50 overflow-hidden border border-graphite-200 rounded-lg">
             <img src={url} alt={alt} className="w-full h-full object-cover" />
           </div>
           {canUpload && (
-            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
               <button
                 onClick={onUpload}
                 disabled={isUploading}
-                className="bg-white hover:bg-gray-50 text-gray-800 text-xs font-medium px-3 py-1.5 rounded shadow flex items-center gap-1"
+                className="bg-white hover:bg-graphite-50 text-graphite-800 text-xs font-medium px-3 py-1.5 rounded shadow flex items-center gap-1"
               >
                 {isUploading ? (
                   <><Loader2 className="h-3 w-3 animate-spin" /> Wgrywanie...</>
@@ -451,14 +451,14 @@ function PhotoSlot({
         </>
       ) : (
         <div
-          className={`w-full h-full bg-white border border-gray-300 flex flex-col items-center justify-center gap-2 ${canUpload ? 'cursor-pointer hover:bg-gray-50' : ''} transition-colors`}
+          className={`w-full h-full bg-graphite-50 border border-graphite-200 rounded-lg flex flex-col items-center justify-center gap-2 ${canUpload ? 'cursor-pointer hover:bg-graphite-100' : ''} transition-colors`}
           onClick={canUpload ? onUpload : undefined}
         >
-          <Camera className="h-6 w-6 text-gray-300" />
+          <Camera className="h-6 w-6 text-graphite-300" />
           {canUpload && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-graphite-400">
               {isUploading ? 'Wgrywanie...' : 'Dodaj zdjęcie'}
-                       </p>
+            </p>
           )}
         </div>
       )}
@@ -466,11 +466,13 @@ function PhotoSlot({
   )
 }
 
-function InfoItem({ label, value }: { label: string; value?: string | null }) {
+function InfoItem({ label, value, mono, danger }: { label: string; value?: string | null; mono?: boolean; danger?: boolean }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-800">{value || '-'}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">{label}</span>
+      <span className={`text-[13px] font-medium ${mono ? 'font-mono' : ''} ${danger ? 'text-danger' : 'text-graphite-900'}`}>
+        {value || '-'}
+      </span>
     </div>
   )
 }

@@ -70,15 +70,15 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
 
   return (
     <Card
-      className={`transition-opacity ${
-        element.not_applicable ? 'opacity-60 bg-gray-50' : ''
+      className={`transition-opacity rounded-xl border-graphite-200 ${
+        element.not_applicable ? 'opacity-60 bg-graphite-50' : ''
       }`}
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <span className="text-sm font-semibold text-gray-600">
+              <span className="text-sm font-semibold text-graphite-500">
                 {element.element_number}.
               </span>
               <span>{element.definition.name_pl}</span>
@@ -116,27 +116,27 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
           </div>
 
           {element.not_applicable ? (
-            <div className="text-sm text-gray-500 py-4">
+            <div className="text-sm text-graphite-500 py-4">
               Element oznaczony jako nie dotyczący. Pozostałe pola są wyłączone.
             </div>
           ) : (
             <>
               {/* Scope Section */}
               {hasScope && (
-                <div className="border rounded-lg p-3 bg-blue-50">
+                <div className="border border-primary-100 rounded-xl p-3 bg-primary-50">
                   <button
                     onClick={() => setIsScopeExpanded(!isScopeExpanded)}
-                    className="flex items-center gap-2 w-full font-medium text-sm text-blue-900 hover:text-blue-700 transition"
+                    className="flex items-center gap-2 w-full font-medium text-sm text-primary-900 hover:text-primary-700 transition"
                   >
                     {isScopeExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     Zakres kontroli
                   </button>
                   {isScopeExpanded && (
-                    <div className="mt-3 space-y-2 text-sm text-blue-800">
+                    <div className="mt-3 space-y-2 text-sm text-primary-800">
                       {element.definition.scope_annual && (
                         <div>
                           <p className="font-medium mb-1">Co roku:</p>
-                          <p className="text-blue-700">
+                          <p className="text-primary-700">
                             {element.definition.scope_annual}
                           </p>
                         </div>
@@ -144,7 +144,7 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                       {element.definition.scope_five_year_additional && (
                         <div>
                           <p className="font-medium mb-1">Co 5 lat (dodatkowe):</p>
-                          <p className="text-blue-700">
+                          <p className="text-primary-700">
                             {element.definition.scope_five_year_additional}
                           </p>
                         </div>
@@ -189,7 +189,7 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                   <Label htmlFor={`wear-${element.id}`} className="font-medium">
                     Zużycie (%)
                   </Label>
-                  <span className="text-sm font-semibold text-gray-700">
+                  <span className="font-mono text-sm font-semibold text-graphite-800">
                     {element.wear_percentage}%
                   </span>
                 </div>
@@ -275,7 +275,7 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
           )}
 
           {isLoading && (
-            <div className="text-xs text-gray-500 text-right">
+            <div className="text-xs text-graphite-400 text-right">
               Zapisywanie...
             </div>
           )}

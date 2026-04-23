@@ -410,56 +410,59 @@ export default function InspectionDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b pb-6">
-        <div className="flex justify-between items-start gap-4">
+      <div className="border-b border-graphite-100 pb-6">
+        <div className="flex justify-between items-start gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold mb-2">
-              {inspection.turbine?.turbine_code} - {inspection.wind_farm?.name}
+            <h1 className="text-2xl font-bold text-graphite-900 mb-2">
+              <span className="font-mono">{inspection.turbine?.turbine_code}</span>
+              {' — '}{inspection.wind_farm?.name}
             </h1>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground">Nr protokołu</p>
-                <p className="font-medium">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Nr protokołu</p>
+                <p className="font-mono font-medium text-graphite-900 text-[13px]">
                   {inspection.protocol_number || 'Brak'}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Data kontroli</p>
-                <p className="font-medium">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Data kontroli</p>
+                <p className="font-mono font-medium text-graphite-900 text-[13px]">
                   {format(new Date(inspection.inspection_date), 'dd.MM.yyyy', {
                     locale: pl,
                   })}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Turbina</p>
-                <p className="font-medium">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Turbina</p>
+                <p className="font-medium text-graphite-800 text-[13px]">
                   {inspection.turbine?.manufacturer} {inspection.turbine?.model}
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Klient</p>
-                <p className="font-medium">{inspection.client?.name}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Klient</p>
+                <p className="font-medium text-graphite-800 text-[13px]">{inspection.client?.name}</p>
               </div>
             </div>
           </div>
-          <Button
-            className="gap-2"
-            onClick={() =>
-              window.open(`/api/pdf/${inspection.id}`, '_blank')
-            }
-          >
-            <Download className="h-4 w-4" />
-            Generuj PDF
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => window.open(`/api/docx/${inspection.id}`, '_blank')}
-          >
-            <FileText className="h-4 w-4" />
-            Generuj DOCX
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              className="gap-2"
+              onClick={() =>
+                window.open(`/api/pdf/${inspection.id}`, '_blank')
+              }
+            >
+              <Download className="h-4 w-4" />
+              Generuj PDF
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2 border-graphite-200"
+              onClick={() => window.open(`/api/docx/${inspection.id}`, '_blank')}
+            >
+              <FileText className="h-4 w-4" />
+              Generuj DOCX
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -486,8 +489,8 @@ export default function InspectionDetailPage() {
         {/* Tab: Elements */}
         <TabsContent value="elementy" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Elementy do inspekcji</h2>
-            <label className="flex items-center gap-2 text-sm">
+            <h2 className="text-[15px] font-bold text-graphite-900">Elementy do inspekcji</h2>
+            <label className="flex items-center gap-2 text-sm text-graphite-700 cursor-pointer">
               <input
                 type="checkbox"
                 checked={showOnlyNotes}
@@ -519,33 +522,33 @@ export default function InspectionDetailPage() {
 
         {/* Tab: Service */}
         <TabsContent value="serwis" className="space-y-4">
-          <h2 className="text-xl font-semibold">Historia serwisowania</h2>
+          <h2 className="text-[15px] font-bold text-graphite-900">Historia serwisowania</h2>
           <ServiceChecklist inspectionId={inspection.id} />
         </TabsContent>
 
         {/* Tab: Measurements (only for 5-year) */}
         {inspection.inspection_type === 'five_year' && (
           <TabsContent value="pomiary" className="space-y-4">
-            <h2 className="text-xl font-semibold">Pomiary elektryczne</h2>
+            <h2 className="text-[15px] font-bold text-graphite-900">Pomiary elektryczne</h2>
             <ElectricalMeasurements inspectionId={inspection.id} />
           </TabsContent>
         )}
 
         {/* Tab: Repairs */}
         <TabsContent value="zalecenia" className="space-y-4">
-          <h2 className="text-xl font-semibold">Zalecenia naprawcze</h2>
+          <h2 className="text-[15px] font-bold text-graphite-900">Zalecenia naprawcze</h2>
           <RepairTable inspectionId={inspection.id} elements={elementIds} />
         </TabsContent>
 
         {/* Tab: Photos */}
         <TabsContent value="zdjecia" className="space-y-4">
-          <h2 className="text-xl font-semibold">Zdjęcia</h2>
+          <h2 className="text-[15px] font-bold text-graphite-900">Zdjęcia</h2>
           <PhotoGallery inspectionId={inspection.id} elements={elementIds} />
         </TabsContent>
 
         {/* Tab: Assessment & Conclusions */}
         <TabsContent value="wnioski" className="space-y-6">
-          <h2 className="text-xl font-semibold">Wnioski i ocena</h2>
+          <h2 className="text-[15px] font-bold text-graphite-900">Wnioski i ocena</h2>
 
           <div className="grid gap-6">
             {/* Overall Condition Rating */}
@@ -643,8 +646,8 @@ export default function InspectionDetailPage() {
             </div>
 
             {/* Inspector Signature */}
-            <div className="border-t pt-4 space-y-4">
-              <h3 className="font-semibold">Podpis inspektora</h3>
+            <div className="border-t border-graphite-100 pt-4 space-y-4">
+              <h3 className="font-semibold text-graphite-900">Podpis inspektora</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -677,7 +680,7 @@ export default function InspectionDetailPage() {
             </div>
 
             {/* Owner Representative */}
-            <div className="border-t pt-4 space-y-2">
+            <div className="border-t border-graphite-100 pt-4 space-y-2">
               <Label htmlFor="owner-rep">Imię i nazwisko reprezentanta właściciela</Label>
               <Input
                 id="owner-rep"

@@ -65,7 +65,7 @@ export function AlertsPanel() {
 
   const getUrgencyColor = (level: string) => {
     const urgency = URGENCY_LEVEL[level as keyof typeof URGENCY_LEVEL];
-    return urgency?.color || "bg-gray-100 text-gray-800";
+    return urgency?.color || "bg-graphite-100 text-graphite-800";
   };
 
   const getUrgencyLabel = (level: string) => {
@@ -75,11 +75,11 @@ export function AlertsPanel() {
 
   if (loading) {
     return (
-      <Card className="lg:col-span-1 rounded-xl border border-gray-100 shadow-sm">
+      <Card className="lg:col-span-1 rounded-xl border border-graphite-200 shadow-xs">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            Przeterminowane zalecenia
+          <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-danger" />
+            Najpilniejsze zalecenia
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -94,54 +94,59 @@ export function AlertsPanel() {
   }
 
   return (
-    <Card className="lg:col-span-1 rounded-xl border border-gray-100 shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 text-red-500" />
-          Przeterminowane zalecenia
+    <Card className="lg:col-span-1 rounded-xl border border-graphite-200 shadow-xs">
+      <CardHeader className="pb-0 pt-5 px-5 border-b border-graphite-100 pb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-danger" />
+              Najpilniejsze zalecenia
+            </CardTitle>
+            <p className="text-[12px] text-graphite-500 mt-0.5">Wymagają zajęcia się</p>
+          </div>
           {recommendations.length > 0 && (
-            <span className="ml-auto text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-semibold bg-danger-50 text-danger-700 px-2 py-0.5 rounded-full">
               {recommendations.length}
             </span>
           )}
-        </CardTitle>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         {recommendations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="p-3 bg-green-50 rounded-2xl mb-3">
-              <CheckCircle2 className="h-8 w-8 text-green-500" />
+          <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
+            <div className="p-3 bg-success-50 rounded-2xl mb-3">
+              <CheckCircle2 className="h-8 w-8 text-success" />
             </div>
-            <p className="text-sm font-semibold text-gray-700">Wszystko w porządku</p>
-            <p className="text-xs text-gray-400 mt-1">Brak przeterminowanych zaleceń</p>
+            <p className="text-sm font-semibold text-graphite-800">Wszystko w porządku</p>
+            <p className="text-xs text-graphite-500 mt-1">Brak przeterminowanych zaleceń</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <ul className="divide-y divide-graphite-100">
             {recommendations.map((rec) => (
-              <div
+              <li
                 key={rec.id}
-                className="p-3 rounded-xl border border-red-100 bg-red-50 cursor-pointer hover:bg-red-100 transition-colors"
+                className="p-4 hover:bg-graphite-50/50 cursor-pointer transition-colors"
                 onClick={() => handleCardClick(rec.inspection_id)}
               >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-gray-900 truncate">
-                      {rec.element_name}
-                    </p>
-                    <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
-                      {rec.scope_description}
-                    </p>
-                  </div>
-                  <Badge className={`${getUrgencyColor(rec.urgency_level)} flex-shrink-0`}>
+                <div className="flex items-start gap-3">
+                  <Badge className={`${getUrgencyColor(rec.urgency_level)} shrink-0 mt-0.5`}>
                     {getUrgencyLabel(rec.urgency_level)}
                   </Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-semibold text-graphite-900 leading-tight">
+                      {rec.element_name}
+                    </p>
+                    <p className="text-[12px] text-graphite-500 mt-0.5 line-clamp-2">
+                      {rec.scope_description}
+                    </p>
+                    <p className="font-mono text-[11px] text-danger mt-1 font-semibold">
+                      Termin: {new Date(rec.deadline_date).toLocaleDateString("pl-PL")}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-red-600 font-semibold">
-                  Termin: {new Date(rec.deadline_date).toLocaleDateString("pl-PL")}
-                </p>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </CardContent>
     </Card>

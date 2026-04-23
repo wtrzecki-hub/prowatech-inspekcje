@@ -22,19 +22,19 @@ const statusOrder: ('draft' | 'in_progress' | 'review' | 'completed' | 'signed')
 ]
 
 const statusColors: Record<string, string> = {
-  draft: 'bg-gray-200',
-  in_progress: 'bg-blue-200',
-  review: 'bg-yellow-200',
-  completed: 'bg-green-200',
-  signed: 'bg-emerald-200',
+  draft: 'bg-graphite-100',
+  in_progress: 'bg-info-100',
+  review: 'bg-warning-100',
+  completed: 'bg-success-100',
+  signed: 'bg-success-100',
 }
 
 const statusTextColors: Record<string, string> = {
-  draft: 'text-gray-800',
-  in_progress: 'text-blue-800',
-  review: 'text-yellow-800',
-  completed: 'text-green-800',
-  signed: 'text-emerald-800',
+  draft: 'text-graphite-800',
+  in_progress: 'text-info-800',
+  review: 'text-warning-800',
+  completed: 'text-success-800',
+  signed: 'text-success-800',
 }
 
 export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarProps) {
@@ -90,16 +90,16 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
                     isCompleted
-                      ? 'bg-green-500 text-white'
+                      ? 'bg-success text-white'
                       : isCurrent
                         ? `${statusColors[s]} ${statusTextColors[s]}`
-                        : 'bg-gray-100 text-gray-600'
+                        : 'bg-graphite-100 text-graphite-500'
                   }`}
                 >
                   {isCompleted ? <Check size={20} /> : index + 1}
                 </div>
                 <div className="text-sm font-medium">{label}</div>
-                {index < statusOrder.length - 1 && <ChevronRight size={16} className="text-gray-400" />}
+                {index < statusOrder.length - 1 && <ChevronRight size={16} className="text-graphite-400" />}
               </div>
             )
           })}
@@ -110,7 +110,7 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
             <Button
               onClick={() => handleStatusAdvance(statusOrder[currentIndex + 1])}
               disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className=""
             >
               Przejdź do: {INSPECTION_STATUSES.find((item) => item.value === statusOrder[currentIndex + 1])?.label}
             </Button>
@@ -130,7 +130,7 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
             <Button variant="outline" onClick={() => setConfirmDialog(false)}>
               Anuluj
             </Button>
-            <Button onClick={confirmStatusChange} disabled={isLoading} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={confirmStatusChange} disabled={isLoading}>
               {isLoading ? 'Aktualizowanie...' : 'Potwierdź'}
             </Button>
           </div>

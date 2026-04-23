@@ -10,7 +10,7 @@ interface RatingBadgeProps {
 export function RatingBadge({ rating }: RatingBadgeProps) {
   if (!rating) {
     return (
-      <Badge variant="outline" className="bg-gray-100 text-gray-800">
+      <Badge variant="outline" className="bg-graphite-100 text-graphite-800">
         Brak oceny
       </Badge>
     )

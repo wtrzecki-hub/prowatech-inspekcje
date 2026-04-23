@@ -79,36 +79,36 @@ export function StatsCards() {
       subtitle: "Wszystkie zarejestrowane",
       value: stats.totalInspections,
       icon: BarChart3,
-      iconColor: "text-blue-600",
-      iconBg: "bg-blue-50",
-      valueColor: "text-blue-700",
+      iconColor: "text-primary-600",
+      iconBg: "bg-primary-50",
+      valueColor: "text-graphite-900",
     },
     {
       label: "Inspekcje w toku",
       subtitle: "Aktualnie prowadzone",
       value: stats.inProgressInspections,
       icon: Clock,
-      iconColor: "text-amber-600",
-      iconBg: "bg-amber-50",
-      valueColor: "text-amber-700",
+      iconColor: "text-warning",
+      iconBg: "bg-warning-50",
+      valueColor: "text-graphite-900",
     },
     {
       label: "Otwarte zalecenia",
       subtitle: "Wymagające naprawy",
       value: stats.openRecommendations,
       icon: AlertCircle,
-      iconColor: "text-red-600",
-      iconBg: "bg-red-50",
-      valueColor: "text-red-700",
+      iconColor: "text-danger",
+      iconBg: "bg-danger-50",
+      valueColor: "text-danger",
     },
     {
       label: "Zakończone w tym miesiącu",
       subtitle: "Zamknięte inspekcje",
       value: stats.completedThisMonth,
       icon: CheckCircle2,
-      iconColor: "text-green-600",
-      iconBg: "bg-green-50",
-      valueColor: "text-green-700",
+      iconColor: "text-success",
+      iconBg: "bg-success-50",
+      valueColor: "text-graphite-900",
     },
   ];
 
@@ -117,8 +117,8 @@ export function StatsCards() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i} className="rounded-xl">
-            <CardContent className="p-6">
-              <Skeleton className="h-10 w-10 rounded-xl mb-4" />
+            <CardContent className="p-5">
+              <Skeleton className="h-9 w-9 rounded-lg mb-4" />
               <Skeleton className="h-8 w-16 mb-2" />
               <Skeleton className="h-4 w-32" />
             </CardContent>
@@ -133,16 +133,18 @@ export function StatsCards() {
       {statCards.map((stat, index) => {
         const Icon = stat.icon;
         return (
-          <Card key={index} className="rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className={`inline-flex p-2.5 rounded-xl ${stat.iconBg} mb-4`}>
-                <Icon className={`h-5 w-5 ${stat.iconColor}`} />
+          <Card key={index} className="rounded-xl border border-graphite-200 shadow-xs hover:shadow-sm transition-shadow">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div className={`w-9 h-9 rounded-lg ${stat.iconBg} flex items-center justify-center`}>
+                  <Icon className={`h-[18px] w-[18px] ${stat.iconColor}`} />
+                </div>
               </div>
-              <div className={`text-4xl font-bold mb-1 ${stat.valueColor}`}>
+              <div className={`font-mono text-[32px] font-bold leading-none mt-3 ${stat.valueColor}`}>
                 {stat.value}
               </div>
-              <div className="text-sm font-semibold text-gray-700">{stat.label}</div>
-              <div className="text-xs text-gray-400 mt-0.5">{stat.subtitle}</div>
+              <div className="text-sm font-semibold text-graphite-800 mt-1">{stat.label}</div>
+              <div className="text-xs text-graphite-500 mt-0.5">{stat.subtitle}</div>
             </CardContent>
           </Card>
         );

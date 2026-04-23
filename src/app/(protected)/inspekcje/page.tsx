@@ -148,12 +148,9 @@ export default function InspectionsPage() {
       query = query.eq('inspection_type', typeFilter)
     }
 
-    // Search filter is handled client-side (see below) for better multi-field search
-
     const { data, count, error } = await query
 
     if (!error && data) {
-      // Client-side filter by client name (cannot filter nested relation in Supabase)
       let filtered = data as Inspection[]
       if (clientFilter && clientFilter !== 'all') {
         const selectedClient = clients.find(c => c.id === clientFilter)
@@ -163,7 +160,6 @@ export default function InspectionsPage() {
           )
         }
       }
-      // Client-side search by turbine code, farm name, client name
       if (searchFilter) {
         const s = searchFilter.toLowerCase()
         filtered = filtered.filter(i =>
@@ -187,11 +183,11 @@ export default function InspectionsPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <Skeleton className="h-8 w-32 rounded-xl" />
-          <Skeleton className="h-12 w-40 rounded-xl" />
+          <Skeleton className="h-10 w-40 rounded-xl" />
         </div>
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            <Skeleton key={i} className="h-[52px] w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -202,10 +198,10 @@ export default function InspectionsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inspekcje</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{totalCount} inspekcji łącznie</p>
+          <h1 className="text-2xl font-bold text-graphite-900">Inspekcje</h1>
+          <p className="font-mono text-sm text-graphite-500 mt-0.5">{totalCount} inspekcji łącznie</p>
         </div>
-        <Button asChild className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 gap-2 px-5">
+        <Button asChild className="h-10 gap-2 px-5">
           <Link href="/inspekcje/nowa">
             <Plus className="h-4 w-4" />
             Nowa inspekcja
@@ -214,11 +210,11 @@ export default function InspectionsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="rounded-xl border border-gray-100 shadow-sm">
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-12 rounded-xl border-gray-200">
+              <SelectTrigger className="h-10 rounded-lg border-graphite-200">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -231,7 +227,7 @@ export default function InspectionsPage() {
             </Select>
 
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="h-12 rounded-xl border-gray-200">
+              <SelectTrigger className="h-10 rounded-lg border-graphite-200">
                 <SelectValue placeholder="Typ kontroli" />
               </SelectTrigger>
               <SelectContent>
@@ -244,7 +240,7 @@ export default function InspectionsPage() {
             </Select>
 
             <Select value={clientFilter} onValueChange={setClientFilter}>
-              <SelectTrigger className="h-12 rounded-xl border-gray-200">
+              <SelectTrigger className="h-10 rounded-lg border-graphite-200">
                 <SelectValue placeholder="Klient" />
               </SelectTrigger>
               <SelectContent>
@@ -258,7 +254,7 @@ export default function InspectionsPage() {
             </Select>
 
             <div className="relative lg:col-span-2">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-graphite-400" />
               <Input
                 placeholder="Szukaj po numerze protokołu..."
                 value={searchFilter}
@@ -266,7 +262,7 @@ export default function InspectionsPage() {
                   setSearchFilter(e.target.value)
                   setPage(1)
                 }}
-                className="h-12 pl-10 rounded-xl border-gray-200"
+                className="h-10 pl-10 rounded-lg border-graphite-200"
               />
             </div>
           </div>
@@ -275,11 +271,11 @@ export default function InspectionsPage() {
 
       {inspections.length === 0 && !loading ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="p-4 bg-gray-50 rounded-2xl mb-4">
-            <ClipboardList className="h-10 w-10 text-gray-300" />
+          <div className="p-4 bg-graphite-50 rounded-2xl mb-4">
+            <ClipboardList className="h-10 w-10 text-graphite-200" />
           </div>
-          <p className="text-sm font-semibold text-gray-700 mb-1">Brak inspekcji</p>
-          <p className="text-xs text-gray-400 mb-4">Nie znaleziono inspekcji spełniających kryteria</p>
+          <p className="text-sm font-semibold text-graphite-800 mb-1">Brak inspekcji</p>
+          <p className="text-xs text-graphite-500 mb-4">Nie znaleziono inspekcji spełniających kryteria</p>
           <Button asChild className="h-10 rounded-xl">
             <Link href="/inspekcje/nowa">Dodaj inspekcję</Link>
           </Button>
@@ -287,20 +283,20 @@ export default function InspectionsPage() {
       ) : (
         <>
           {/* Desktop Table View */}
-          <Card className="hidden md:block rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <Card className="hidden md:block rounded-xl border border-graphite-200 shadow-xs overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50 border-b border-gray-100">
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3 px-4">Nr protokołu</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Data</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Turbina</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Farma</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Klient</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Typ</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Status</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Ocena</TableHead>
+                <TableRow className="bg-graphite-50/50 hover:bg-graphite-50/50 border-b border-graphite-100">
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 px-5">Nr protokołu</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Data</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Turbina</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Farma</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Klient</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Typ</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Status</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Ocena</TableHead>
                   {userRole === 'admin' && (
-                    <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3 w-16"></TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 w-16"></TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -308,24 +304,28 @@ export default function InspectionsPage() {
                 {inspections.map((inspection) => (
                   <TableRow
                     key={inspection.id}
-                    className="cursor-pointer hover:bg-blue-50/50 transition-colors border-b border-gray-50 h-16"
+                    className="cursor-pointer hover:bg-graphite-50/50 transition-colors border-b border-graphite-100 h-[52px]"
                     onClick={() => {
                       window.location.href = `/inspekcje/${inspection.id}`
                     }}
                   >
-                    <TableCell className="font-semibold text-gray-900 px-4">
+                    <TableCell className="font-mono font-semibold text-graphite-900 px-5 text-[13px]">
                       {inspection.protocol_number || '-'}
                     </TableCell>
-                    <TableCell className="text-gray-600">
+                    <TableCell className="font-mono text-graphite-500 text-[13px]">
                       {inspection.inspection_date
                         ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
                         : '-'}
                     </TableCell>
-                    <TableCell className="text-gray-600">{inspection.turbines?.turbine_code || '-'}</TableCell>
-                    <TableCell className="text-gray-600">{inspection.turbines?.wind_farms?.name || '-'}</TableCell>
-                    <TableCell className="text-gray-600">{inspection.turbines?.wind_farms?.clients?.name || '-'}</TableCell>
+                    <TableCell className="text-[13px]">
+                      <span className="font-mono font-medium text-graphite-800">
+                        {inspection.turbines?.turbine_code || '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-graphite-500 text-[13px]">{inspection.turbines?.wind_farms?.name || '-'}</TableCell>
+                    <TableCell className="text-graphite-500 text-[13px]">{inspection.turbines?.wind_farms?.clients?.name || '-'}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs font-medium">
+                      <Badge variant="outline" className="text-xs font-medium border-graphite-200 text-graphite-600">
                         {inspection.inspection_type === 'annual'
                           ? 'Roczna'
                           : 'Pięcioletnia'}
@@ -344,14 +344,14 @@ export default function InspectionsPage() {
                       {inspection.overall_condition_rating ? (
                         <RatingBadge rating={inspection.overall_condition_rating} />
                       ) : (
-                        <span className="text-gray-400 text-sm">-</span>
+                        <span className="text-graphite-400 text-sm">-</span>
                       )}
                     </TableCell>
                     {userRole === 'admin' && (
                       <TableCell>
                         <button
                           onClick={(e) => handleDelete(e, inspection.id)}
-                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          className="p-2 rounded-lg text-graphite-400 hover:text-danger hover:bg-danger-50 transition-colors"
                           title="Usuń inspekcję"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -368,46 +368,46 @@ export default function InspectionsPage() {
           <div className="md:hidden space-y-3">
             {inspections.map((inspection) => (
               <Link key={inspection.id} href={`/inspekcje/${inspection.id}`}>
-                <Card className="hover:shadow-md cursor-pointer transition-all rounded-xl border border-gray-100">
+                <Card className="hover:shadow-sm cursor-pointer transition-all rounded-xl border border-graphite-200">
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start gap-2">
                         <div>
-                          <p className="text-xs text-gray-400">Nr protokołu</p>
-                          <p className="font-semibold text-gray-900">
+                          <p className="text-xs text-graphite-500">Nr protokołu</p>
+                          <p className="font-mono font-semibold text-graphite-900">
                             {inspection.protocol_number || '-'}
                           </p>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0 mt-1" />
+                        <ChevronRight className="h-5 w-5 text-graphite-400 flex-shrink-0 mt-1" />
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
-                          <p className="text-xs text-gray-400">Data</p>
-                          <p className="font-medium text-gray-700">
+                          <p className="text-xs text-graphite-500">Data</p>
+                          <p className="font-mono font-medium text-graphite-800">
                             {inspection.inspection_date
                               ? format(new Date(inspection.inspection_date), 'dd.MM.yyyy', { locale: pl })
                               : '-'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-400">Turbina</p>
-                          <p className="font-medium text-gray-700">{inspection.turbines?.turbine_code || '-'}</p>
+                          <p className="text-xs text-graphite-500">Turbina</p>
+                          <p className="font-mono font-medium text-graphite-800">{inspection.turbines?.turbine_code || '-'}</p>
                         </div>
                       </div>
 
                       <div className="text-sm">
-                        <p className="text-xs text-gray-400">Farma</p>
-                        <p className="font-medium text-gray-700">{inspection.turbines?.wind_farms?.name || '-'}</p>
+                        <p className="text-xs text-graphite-500">Farma</p>
+                        <p className="font-medium text-graphite-800">{inspection.turbines?.wind_farms?.name || '-'}</p>
                       </div>
 
                       <div className="text-sm">
-                        <p className="text-xs text-gray-400">Klient</p>
-                        <p className="font-medium text-gray-700">{inspection.turbines?.wind_farms?.clients?.name || '-'}</p>
+                        <p className="text-xs text-graphite-500">Klient</p>
+                        <p className="font-medium text-graphite-800">{inspection.turbines?.wind_farms?.clients?.name || '-'}</p>
                       </div>
 
                       <div className="flex gap-2 flex-wrap pt-1">
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs border-graphite-200 text-graphite-600">
                           {inspection.inspection_type === 'annual'
                             ? 'Roczna'
                             : 'Pięcioletnia'}
@@ -437,18 +437,18 @@ export default function InspectionsPage() {
         <div className="flex justify-center items-center gap-3">
           <Button
             variant="outline"
-            className="h-10 rounded-xl border-gray-200"
+            className="h-9 rounded-lg border-graphite-200 text-graphite-700"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
           >
             Poprzednia
           </Button>
-          <span className="text-sm text-gray-500 font-medium">
+          <span className="font-mono text-sm text-graphite-500 font-medium">
             {page} / {totalPages} ({totalCount})
           </span>
           <Button
             variant="outline"
-            className="h-10 rounded-xl border-gray-200"
+            className="h-9 rounded-lg border-graphite-200 text-graphite-700"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
           >

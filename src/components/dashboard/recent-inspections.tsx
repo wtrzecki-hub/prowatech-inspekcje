@@ -76,7 +76,7 @@ export function RecentInspections() {
 
   const getStatusColor = (status: string) => {
     const statusInfo = INSPECTION_STATUS[status as keyof typeof INSPECTION_STATUS];
-    return statusInfo?.color || "bg-gray-100 text-gray-800";
+    return statusInfo?.color || "bg-graphite-100 text-graphite-800";
   };
 
   const getStatusLabel = (status: string) => {
@@ -86,9 +86,9 @@ export function RecentInspections() {
 
   if (loading) {
     return (
-      <Card className="lg:col-span-2 rounded-xl border border-gray-100 shadow-sm">
+      <Card className="lg:col-span-2 rounded-xl border border-graphite-200 shadow-xs">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-gray-900">Ostatnie inspekcje</CardTitle>
+          <CardTitle className="text-[15px] font-bold text-graphite-900">Ostatnie inspekcje</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -102,27 +102,30 @@ export function RecentInspections() {
   }
 
   return (
-    <Card className="lg:col-span-2 rounded-xl border border-gray-100 shadow-sm">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
-        <CardTitle className="text-base font-semibold text-gray-900">Ostatnie inspekcje</CardTitle>
+    <Card className="lg:col-span-2 rounded-xl border border-graphite-200 shadow-xs">
+      <CardHeader className="pb-0 pt-5 px-5 flex flex-row items-center justify-between border-b border-graphite-100 pb-4">
+        <div>
+          <CardTitle className="text-[15px] font-bold text-graphite-900">Ostatnie inspekcje</CardTitle>
+          <p className="text-[12px] text-graphite-500 mt-0.5">Ostatnio zarejestrowane</p>
+        </div>
         <Button
           variant="ghost"
           size="sm"
-          className="text-blue-600 hover:text-blue-700 h-8 px-2 text-xs gap-1"
+          className="text-primary-700 hover:text-primary-800 h-8 px-2 text-xs gap-1"
           onClick={() => router.push("/inspekcje")}
         >
-          Zobacz wszystkie
+          Wszystkie
           <ArrowRight className="h-3 w-3" />
         </Button>
       </CardHeader>
       <CardContent className="p-0">
         {inspections.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-            <div className="p-4 bg-gray-50 rounded-2xl mb-4">
-              <ClipboardList className="h-10 w-10 text-gray-300" />
+            <div className="p-4 bg-graphite-50 rounded-2xl mb-4">
+              <ClipboardList className="h-10 w-10 text-graphite-200" />
             </div>
-            <p className="text-sm font-semibold text-gray-700 mb-1">Brak inspekcji</p>
-            <p className="text-xs text-gray-400 mb-4">Dodaj pierwszą inspekcję, aby zobaczyć ją tutaj</p>
+            <p className="text-sm font-semibold text-graphite-800 mb-1">Brak inspekcji</p>
+            <p className="text-xs text-graphite-500 mb-4">Dodaj pierwszą inspekcję, aby zobaczyć ją tutaj</p>
             <Button
               size="sm"
               className="h-9 rounded-xl"
@@ -135,34 +138,41 @@ export function RecentInspections() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-gray-100">
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 px-4">Nr protokołu</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Data</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Turbina</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Farma</TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400">Status</TableHead>
+                <TableRow className="bg-graphite-50/50 hover:bg-graphite-50/50 border-b border-graphite-100">
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 px-5 py-2.5">Nr protokołu</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Data</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Turbina</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Farma</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {inspections.map((inspection) => (
                   <TableRow
                     key={inspection.id}
-                    className="cursor-pointer hover:bg-blue-50/50 transition-colors border-b border-gray-50 h-14"
+                    className="cursor-pointer hover:bg-graphite-50/50 transition-colors border-b border-graphite-100 h-[52px]"
                     onClick={() => handleRowClick(inspection.id)}
                   >
-                    <TableCell className="text-xs font-semibold text-gray-900 px-4">
+                    <TableCell className="font-mono font-semibold text-graphite-900 px-5 text-[13px]">
                       {inspection.protocol_number || "-"}
                     </TableCell>
-                    <TableCell className="text-xs text-gray-600">
+                    <TableCell className="font-mono text-graphite-500 text-[13px]">
                       {new Date(inspection.inspection_date).toLocaleDateString("pl-PL")}
                     </TableCell>
-                    <TableCell className="text-xs text-gray-600">
-                      {inspection.turbines?.turbine_code || "-"}
+                    <TableCell className="text-[13px]">
+                      <span className="font-mono font-medium text-graphite-800">
+                        {inspection.turbines?.turbine_code || "-"}
+                      </span>
+                      {inspection.turbines?.wind_farms?.name && (
+                        <span className="text-graphite-500 ml-1">
+                          {inspection.turbines.wind_farms.name}
+                        </span>
+                      )}
                     </TableCell>
-                    <TableCell className="text-xs text-gray-600">
-                      {inspection.turbines?.wind_farms?.name || "-"}
+                    <TableCell className="text-graphite-500 text-[13px]">
+                      {inspection.turbines?.wind_farms?.clients?.name || "-"}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-[13px]">
                       <Badge className={getStatusColor(inspection.status)}>
                         {getStatusLabel(inspection.status)}
                       </Badge>
