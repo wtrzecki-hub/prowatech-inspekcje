@@ -164,6 +164,149 @@ Do potwierdzenia z użytkownikiem czy gitignorować / zcommitować / usunąć:
 
 Wszystkie skrypty z rozszerzeniem `.mjs` w katalogu głównym to prawdopodobnie operacje jednorazowe (seed, upload) uruchamiane przez Node ręcznie z lokalnej maszyny.
 
+## Faza 1 — Fundamenty designu (zakończona 2026-04-23)
+
+**13 plików, 2 commity na `main`:**
+- `0c4fd3c` — `feat(design): faza 1 — tokeny kolorystyczne, typografia, komponenty bazowe`
+- `5a1ad4d` — `docs: aktualizacja PROGRESS.md i redesign.md po Fazie 1 — sekcje 2, 4, 5`
+
+### Tokeny — `tailwind.config.ts` + `src/app/globals.css`
+
+**Primary / brand**
+- `primary-600` = `#259648` (DEFAULT) — delikatnie jaśniejszy od logo #1F7F3A, ~5%. Zmiana jednolinijkowa gdy przyjdzie dokładny hex z pliku źródłowego logo.
+- `primary-700` = `#1F7F3A` — hover na CTA
+- Pełna paleta: `primary-50 / 100 / 500 / 600 / 700 / 800`
+
+**Graphite (neutralna paleta zamiast generic `gray-*`)**
+
+| Token | Hex | Zastosowanie |
+|---|---|---|
+| `graphite-50` | `#F7F9FB` | Tło strony / body |
+| `graphite-100` | `#EEF1F5` | Nagłówki tabel, tła pomocnicze |
+| `graphite-200` | `#DDE3EA` | Ramki, border default |
+| `graphite-500` | `#5F6B7A` | Tekst drugorzędny, ikony nieaktywne |
+| `graphite-800` | `#1B2230` | Nagłówki tabel (TableHead) |
+| `graphite-900` | `#0F1520` | Tekst podstawowy |
+
+**Kolory semantyczne** (każdy z odcieniami 50 / 100 / DEFAULT / foreground / 800)
+
+| Token | DEFAULT | Zastosowanie |
+|---|---|---|
+| `success` | `#2E9F4A` | Ocena Dobry, status Zakończona/Podpisana |
+| `info` | `#0284C7` | Ocena Zadowalający, status W toku |
+| `warning` | `#F59E0B` | Ocena Średni, pilność Średnia |
+| `danger` / `destructive` | `#DC2626` | Ocena Awaryjny, pilność Wysoka/Krytyczna |
+
+**Shadcn base tokens** — wcześniej niezdefiniowane, teraz poprawnie podpięte jako bezpośrednie hex w `tailwind.config.ts`:
+
+```
+background / foreground / border / input / ring
+card (DEFAULT + foreground)
+muted (DEFAULT + foreground)
+accent (DEFAULT + foreground)
+secondary (DEFAULT + foreground)
+popover (DEFAULT + foreground)
+```
+
+Dzięki temu klasy `bg-background`, `border-input`, `ring-ring`, `ring-offset-background`, `hover:bg-accent`, `bg-muted`, `text-muted-foreground` itp. faktycznie generują CSS (wcześniej cicho fallbackowały na transparent/nieokreślone).
+
+**Cienie** (subtelne, B2B — nie „jebnięte"):
+
+| Klasa | Wartość |
+|---|---|
+| `shadow-xs` | `0 1px 2px rgba(15,23,32,0.04)` |
+| `shadow-sm` | `0 1px 3px rgba(15,23,32,0.06), 0 1px 2px rgba(15,23,32,0.04)` |
+| `shadow-md` | `0 4px 12px rgba(15,23,32,0.06), 0 1px 2px rgba(15,23,32,0.04)` |
+| `shadow-lg` | `0 12px 32px rgba(15,23,32,0.10), 0 2px 4px rgba(15,23,32,0.05)` |
+| `shadow-focus` | `0 0 0 4px rgba(37,150,72,0.22)` |
+
+**Radius** — `sm=4px, md=6px, lg=8px, xl=12px, 2xl=16px` (odpowiada Tailwind defaults poza `sm`: 2px→4px).
+
+**CSS variables w `globals.css`** — `--color-primary`, `--color-fg-default`, `--color-surface-0/1/2/3`, `--color-border`, `--shadow-xs/sm/md/lg/focus`, `--radius-sm/md/lg/xl/2xl` — dla bezpośredniego użycia w CSS i przyszłego theming.
+
+---
+
+### Typografia — `src/app/layout.tsx`
+
+- **Inter** (400 / 500 / 600) via `next/font/google`, zmienna CSS `--font-inter`
+- **JetBrains Mono** (400 / 500) via `next/font/google`, zmienna CSS `--font-jetbrains-mono`
+- `body className` = `{inter.variable} {jetbrainsMono.variable} font-sans`
+- `tailwind.config.ts fontFamily` mapuje `font-sans` → `var(--font-inter)` i `font-mono` → `var(--font-jetbrains-mono)`
+- Klasa `font-mono` gotowa do użycia wszędzie tam gdzie dane liczbowe / kody / daty (Faza 2)
+- `theme-color` meta zmieniony z niebieskiego na `#259648`
+
+---
+
+### Komponenty bazowe
+
+| Komponent | Zmiana |
+|---|---|
+| `badge.tsx` | +5 wariantów semantycznych: `neutral` (graphite), `success` (zielony), `warning` (amber), `danger` (czerwony), `info` (niebieski) — backward compat: stare warianty `default/secondary/destructive/outline` bez zmian |
+| `button.tsx` | Wariant `default` → teraz zielony (bo `bg-primary` = `#259648`); +nowy wariant `danger`; hover `primary-700` zamiast `primary/90` |
+| `card.tsx` | `shadow-sm` → `shadow-xs` (subtelniejszy); jawny `border-border` |
+| `table.tsx` | `TableHeader`/`TableFooter`: `bg-gray-100` → `bg-graphite-100`; `TableRow`: `border-gray-200` → `border-graphite-200`, `hover:bg-gray-50` → `hover:bg-graphite-50`; `TableHead`: `text-gray-700` → `text-graphite-800`; `TableCaption`: `text-gray-500` → `text-graphite-500` |
+| `sheet.tsx` | Focus ring: `ring-blue-500` → `ring-ring` (zielony) |
+| `slider.tsx` | Track: `bg-gray-200` → `bg-graphite-200`; thumb: `accent-blue-600` → `accent-primary` |
+
+---
+
+### Layout
+
+**`src/components/layout/sidebar.tsx`**
+- Aktywny nav item: `bg-blue-50 text-blue-700` → `bg-primary-50 text-primary-700`
+- Aktywna ikona: `text-blue-600` → `text-primary-600`
+- Aktywna kropka: `bg-blue-600` → `bg-primary-600`
+- Avatar fallback: `bg-blue-600` → `bg-primary-600`
+- Nieaktywne ikony: `text-gray-400` → `text-graphite-500`
+- Hover nav item: `hover:bg-gray-50` → `hover:bg-graphite-50`
+
+**`src/components/layout/header.tsx`**
+- Avatar fallback: `bg-blue-600` → `bg-primary-600`
+
+**`src/app/(protected)/layout.tsx`**
+- Loading spinner: `border-blue-600` → `border-primary`
+- Kontener strony: `bg-gray-50` → `bg-graphite-50`
+
+**`src/app/globals.css`**
+- Body background: `#f3f4f6` (gray-100) → `#F7F9FB` (graphite-50)
+- Scrollbar track/thumb: zaktualizowane do graphite
+
+---
+
+### `src/lib/constants.ts`
+
+`STATUS_COLORS`, `CONDITION_COLORS`, `URGENCY_LEVEL`, `INSPECTION_STATUS` zaktualizowane do nowych tokenów semantycznych:
+
+| Klucz | Przed | Po |
+|---|---|---|
+| `in_progress` | `bg-blue-100 text-blue-800` | `bg-info-100 text-info-800` |
+| `completed` | `bg-green-100 text-green-800` | `bg-success-100 text-success-800` |
+| `signed` | `bg-emerald-100 text-emerald-800` | `bg-primary-100 text-primary-700` |
+| `draft` | `bg-gray-100 text-gray-800` | `bg-graphite-100 text-graphite-800` |
+| `review` | `bg-yellow-100 text-yellow-800` | `bg-warning-100 text-warning-800` |
+| `zadowalajacy` | `bg-blue-100 text-blue-800` | `bg-info-100 text-info-800` |
+| `dobry` | `bg-green-100 text-green-800` | `bg-success-100 text-success-800` |
+| `awaryjny` | `bg-red-100 text-red-800` | `bg-danger-100 text-danger-800` |
+| urgency `low` | `bg-blue-100 text-blue-800` | `bg-info-100 text-info-800` |
+
+---
+
+### Co NIE zostało zmienione w Fazie 1
+
+- Logika biznesowa, zapytania Supabase, typy TypeScript
+- API / propsy komponentów (żadnych zmian w sygnaturach)
+- Protokoły PDF/DOCX i logo w dokumentach (`public/logo-prowatech.png`)
+- Indywidualne ekrany aplikacji (Dashboard, Klienci, Farmy, Inspekcje, Turbiny) — nadal mają hard-coded `blue-*` i `gray-*` klasy → to jest zakres Fazy 2
+
+---
+
+### Co wymaga oczu przed Fazą 2
+
+1. **Kolor primary na żywo na Vercelu** — sprawdź czy `#259648` wygląda dobrze przy logo ProWaTech w sidebarze. Jak dostarczysz plik źródłowy logo z dokładnym hexem — zmiana jednolinijkowa w `tailwind.config.ts` (pole `primary-600` i `ring`).
+2. **Ekrany aplikacji nadal mają `blue-*`** — sidebar i header są już zielone, ale np. Dashboard (`stats-cards.tsx`, `recent-inspections.tsx`), Inspekcje, Klienci, Inspektorzy mają jeszcze stare klasy — wygląd mieszany do momentu ukończenia Fazy 2.
+
+---
+
 ## Historia sesji
 
 Brief log kolejnych sesji pracy z Claude nad tym projektem. Każda nowa sesja powinna **dodać jedną linię** na górę tej sekcji.
