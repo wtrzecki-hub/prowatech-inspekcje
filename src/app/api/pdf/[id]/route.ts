@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import fs from 'fs'
 import path from 'path'
+import { RGB, FONT_PT } from '@/lib/design/protocol-tokens'
 
 const robotoRegularBase64 = fs.readFileSync(
   path.join(process.cwd(), 'src/fonts/Roboto-Regular.ttf')
@@ -200,20 +201,29 @@ export async function GET(
     let yPosition = margin
 
     // Helper functions
+    // Nagłówek sekcji w stylu „Część I / Część II" — 11pt bold uppercase z delikatnym
+    // trackingiem (0.4 pt ≈ tracking-0.12em) i cienką kreską graphite-800 pod spodem.
     const addSection = (title: string) => {
       if (yPosition > pageHeight - 30) {
         pdf.addPage()
         yPosition = margin
       }
-      pdf.setFontSize(12)
+      pdf.setFontSize(FONT_PT.sectionHeading)
       pdf.setFont('Roboto', 'bold')
-      pdf.text(title, margin, yPosition)
-      yPosition += 8
-      pdf.setDrawColor(100)
+      pdf.setTextColor(...RGB.graphite900)
+      pdf.setCharSpace(0.4)
+      pdf.text(title.toUpperCase(), margin, yPosition)
+      pdf.setCharSpace(0)
+      yPosition += 7
+      pdf.setDrawColor(...RGB.graphite800)
+      pdf.setLineWidth(0.3)
       pdf.line(margin, yPosition - 2, pageWidth - margin, yPosition - 2)
+      pdf.setDrawColor(0)
+      pdf.setLineWidth(0.2)
       yPosition += 4
       pdf.setFont('Roboto', 'normal')
-      pdf.setFontSize(10)
+      pdf.setFontSize(FONT_PT.body)
+      pdf.setTextColor(0)
     }
 
     const addRow = (label: string, value: string, lineHeight = 5) => {
@@ -255,11 +265,17 @@ export async function GET(
         headStyles: {
           font: 'Roboto',
           fontStyle: 'bold',
-          fillColor: [66, 133, 244],
-          textColor: 255,
+          fillColor: [...RGB.graphite800],
+          textColor: [...RGB.white],
+          cellPadding: 3.5,
+        },
+        bodyStyles: {
+          textColor: [...RGB.graphite900],
+          lineColor: [...RGB.graphite200],
+          lineWidth: 0.1,
         },
         alternateRowStyles: {
-          fillColor: [242, 242, 242],
+          fillColor: [...RGB.graphite50],
         },
       }
 
@@ -297,7 +313,7 @@ export async function GET(
       // Fallback to text if logo not found
       pdf.setFontSize(16)
       pdf.setFont('Roboto', 'bold')
-      pdf.setTextColor(37, 99, 235)
+      pdf.setTextColor(...RGB.brand600)
       pdf.text('ProWaTech', margin, yPosition)
       pdf.setTextColor(0)
     }
@@ -317,9 +333,9 @@ export async function GET(
     })
     yPosition += 22
 
-    // Separator line
-    pdf.setDrawColor(37, 99, 235)
-    pdf.setLineWidth(0.5)
+    // Separator line — zielony pasek brand-500 (§ 3 prototypu).
+    pdf.setDrawColor(...RGB.brand500)
+    pdf.setLineWidth(1.2)
     pdf.line(margin, yPosition, pageWidth - margin, yPosition)
     pdf.setDrawColor(0)
     pdf.setLineWidth(0.2)
@@ -577,12 +593,12 @@ export async function GET(
     for (let i = 2; i <= totalPages; i++) {
       pdf.setPage(i)
       pdf.setFont('Roboto', 'normal')
-      pdf.setFontSize(8)
-      pdf.setTextColor(80)
+      pdf.setFontSize(FONT_PT.small)
+      pdf.setTextColor(...RGB.graphite500)
       const headerLeft = `PROTOKÓŁ NR ${protocolNumber} z dnia ${inspectionDate} — ${typeLabel}`
       pdf.text(headerLeft, margin, 8)
       pdf.text(`Strona ${i} z ${totalPages}`, pageWidth - margin, 8, { align: 'right' })
-      pdf.setDrawColor(180)
+      pdf.setDrawColor(...RGB.graphite200)
       pdf.setLineWidth(0.3)
       pdf.line(margin, 10, pageWidth - margin, 10)
       pdf.setTextColor(0)
