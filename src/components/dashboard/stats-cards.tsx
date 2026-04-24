@@ -34,28 +34,40 @@ export function StatsCards() {
       try {
         const { count: totalCount } = await supabase
           .from("inspections")
-          .select("*", { count: "exact", head: true });
+          .select("*", { count: "exact", head: true })
+          .not("is_deleted", "is", true);
 
         const { count: inProgressCount } = await supabase
           .from("inspections")
           .select("*", { count: "exact", head: true })
-          .eq("status", "in_progress");
+          .eq("status", "in_progress")
+          .not("is_deleted", "is", true);
 
+        // Otwarte zalecenia — tylko te powiązane z żywymi inspekcjami.
+        // `repair_recommendations` nie ma własnego `is_deleted`, więc
+        // filtrujemy przez inner join + flagę na parent inspection.
         const { count: openRecommendationsCount } = await supabase
           .from("repair_recommendations")
-          .select("*", { count: "exact", head: true })
-          .eq("is_completed", false);
+          .select("*, inspections!inner(is_deleted)", {
+            count: "exact",
+            head: true,
+          })
+          .eq("is_completed", false)
+          .not("inspections.is_deleted", "is", true);
 
         const now = new Date();
         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
+        // UWAGA: tabela `inspections` nie ma pola `completed_at`.
+        // Używamy `inspection_date` jako daty przeprowadzenia inspekcji.
         const { count: completedThisMonthCount } = await supabase
           .from("inspections")
           .select("*", { count: "exact", head: true })
           .eq("status", "completed")
-          .gte("completed_at", firstDay.toISOString())
-          .lte("completed_at", lastDay.toISOString());
+          .gte("inspection_date", firstDay.toISOString().slice(0, 10))
+          .lte("inspection_date", lastDay.toISOString().slice(0, 10))
+          .not("is_deleted", "is", true);
 
         setStats({
           totalInspections: totalCount || 0,

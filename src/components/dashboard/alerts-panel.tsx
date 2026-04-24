@@ -29,6 +29,8 @@ export function AlertsPanel() {
       try {
         const now = new Date().toISOString();
 
+        // Inner join z `inspections` + filter `is_deleted` — żeby nie pokazywać
+        // zaleceń z soft-deleted inspekcji.
         const { data, error } = await supabase
           .from("repair_recommendations")
           .select(
@@ -38,11 +40,13 @@ export function AlertsPanel() {
             element_name,
             urgency_level,
             deadline_date,
-            inspection_id
+            inspection_id,
+            inspections!inner(is_deleted)
           `
           )
           .eq("is_completed", false)
           .lt("deadline_date", now)
+          .not("inspections.is_deleted", "is", true)
           .order("deadline_date", { ascending: true })
           .limit(10);
 

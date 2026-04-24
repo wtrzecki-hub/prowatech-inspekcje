@@ -54,6 +54,7 @@ export function RecentInspections() {
             turbines(turbine_code, wind_farms(name, clients(name)))
           `
           )
+          .not("is_deleted", "is", true)
           .order("inspection_date", { ascending: false })
           .limit(10);
 

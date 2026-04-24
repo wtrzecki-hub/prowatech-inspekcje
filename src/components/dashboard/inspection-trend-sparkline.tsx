@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, LineChart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
@@ -143,7 +143,35 @@ export function InspectionTrendSparkline() {
   const trendLabel =
     delta === 0
       ? "bez zmian"
-      : `${delta > 0 ? "+" : ""}${delta} w.t. tyg.`;
+      : `${delta > 0 ? "+" : ""}${delta} vs poprz. tydz.`;
+
+  if (total === 0) {
+    return (
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
+        <CardHeader className="pb-0 pt-5 px-5 border-b border-graphite-100 pb-4">
+          <CardTitle className="text-[15px] font-bold text-graphite-900">
+            Trend inspekcji
+          </CardTitle>
+          <p className="text-[12px] text-graphite-500 mt-0.5">
+            Ostatnie {WEEKS} tygodni
+          </p>
+        </CardHeader>
+        <CardContent className="p-5">
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="p-3 bg-graphite-50 rounded-2xl mb-3">
+              <LineChart className="h-8 w-8 text-graphite-200" />
+            </div>
+            <p className="text-sm font-semibold text-graphite-800">
+              Brak danych w oknie
+            </p>
+            <p className="text-xs text-graphite-500 mt-1">
+              Trend pojawi się po zarejestrowaniu inspekcji
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="rounded-xl border border-graphite-200 shadow-xs">
