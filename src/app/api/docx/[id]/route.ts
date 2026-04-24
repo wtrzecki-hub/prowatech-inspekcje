@@ -26,6 +26,7 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import fs from 'fs'
 import path from 'path'
+import { HEX, FONT_DXA, TRACKING_DXA } from '@/lib/design/protocol-tokens'
 
 // A4 dimensions in DXA (twentieths of a point)
 const PAGE_WIDTH = 11906
@@ -44,27 +45,30 @@ const noBorder = {
 }
 
 const thinBorder = {
-  top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-  bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-  left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-  right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-}
-
-const headerBorder = {
-  top: { style: BorderStyle.SINGLE, size: 4, color: '2563EB' },
-  bottom: { style: BorderStyle.SINGLE, size: 4, color: '2563EB' },
-  left: { style: BorderStyle.SINGLE, size: 4, color: '2563EB' },
-  right: { style: BorderStyle.SINGLE, size: 4, color: '2563EB' },
+  top: { style: BorderStyle.SINGLE, size: 1, color: HEX.graphite200 },
+  bottom: { style: BorderStyle.SINGLE, size: 1, color: HEX.graphite200 },
+  left: { style: BorderStyle.SINGLE, size: 1, color: HEX.graphite200 },
+  right: { style: BorderStyle.SINGLE, size: 1, color: HEX.graphite200 },
 }
 
 function boldCell(text: string, widthDxa: number, shaded = false): TableCell {
   return new TableCell({
     width: { size: widthDxa, type: WidthType.DXA },
     borders: thinBorder,
-    shading: shaded ? { type: ShadingType.CLEAR, color: 'auto', fill: 'D6E4F7' } : undefined,
+    shading: shaded
+      ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite100 }
+      : undefined,
     children: [
       new Paragraph({
-        children: [new TextRun({ text, bold: true, font: 'Arial', size: 20 })],
+        children: [
+          new TextRun({
+            text,
+            bold: true,
+            font: 'Arial',
+            size: FONT_DXA.body,
+            color: HEX.graphite900,
+          }),
+        ],
       }),
     ],
   })
@@ -76,26 +80,39 @@ function dataCell(text: string, widthDxa: number): TableCell {
     borders: thinBorder,
     children: [
       new Paragraph({
-        children: [new TextRun({ text, font: 'Arial', size: 20 })],
+        children: [
+          new TextRun({
+            text,
+            font: 'Arial',
+            size: FONT_DXA.body,
+            color: HEX.graphite900,
+          }),
+        ],
       }),
     ],
   })
 }
 
+/**
+ * Nagłówek sekcji w stylu „Część I / Część II" — 11pt bold uppercase z delikatnym
+ * trackingiem i pod-podkreśleniem w kolorze graphite-800 (zgodnie z prototypem
+ * HTML § 3 w `design/prowatech-redesign.md`).
+ */
 function sectionHeading(text: string): Paragraph {
   return new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    spacing: { before: 240, after: 120 },
+    spacing: { before: 320, after: 120 },
     border: {
-      bottom: { style: BorderStyle.SINGLE, size: 6, color: '2563EB' },
+      bottom: { style: BorderStyle.SINGLE, size: 6, color: HEX.graphite800 },
     },
     children: [
       new TextRun({
-        text,
+        text: text.toUpperCase(),
         bold: true,
         font: 'Arial',
-        size: 24,
-        color: '1E3A5F',
+        size: FONT_DXA.sectionHeading,
+        color: HEX.graphite900,
+        characterSpacing: TRACKING_DXA,
       }),
     ],
   })
@@ -309,7 +326,7 @@ export async function GET(
                   bold: true,
                   font: 'Arial',
                   size: 32,
-                  color: '2563EB',
+                  color: HEX.brand600,
                 }),
               ],
             }),
@@ -356,10 +373,11 @@ export async function GET(
     })
 
     // ─── SEPARATOR ───────────────────────────────────────────────────────────
+    // Zielony pasek brand-500 (zgodnie z § 3 prototypu — „gruba zielona linia").
     const separator = new Paragraph({
       spacing: { before: 120, after: 120 },
       border: {
-        bottom: { style: BorderStyle.SINGLE, size: 12, color: '2563EB' },
+        bottom: { style: BorderStyle.SINGLE, size: 16, color: HEX.brand500 },
       },
       children: [],
     })
@@ -581,12 +599,12 @@ export async function GET(
       return new TableCell({
         width: { size: widthDxa, type: WidthType.DXA },
         borders: thinBorder,
-        shading: { type: ShadingType.CLEAR, color: 'auto', fill: '2563EB' },
+        shading: { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite800 },
         children: [
           new Paragraph({
             alignment: AlignmentType.CENTER,
             children: [
-              new TextRun({ text, bold: true, font: 'Arial', size: 18, color: 'FFFFFF' }),
+              new TextRun({ text, bold: true, font: 'Arial', size: FONT_DXA.tableHeader, color: HEX.white, characterSpacing: TRACKING_DXA }),
             ],
           }),
         ],
@@ -609,25 +627,25 @@ export async function GET(
             new TableCell({
               width: { size: elColWidths[0], type: WidthType.DXA },
               borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
               children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(idx + 1), font: 'Arial', size: 18 })] })],
             }),
             new TableCell({
               width: { size: elColWidths[1], type: WidthType.DXA },
               borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
               children: [new Paragraph({ children: [new TextRun({ text: el.element_definition?.name_pl || '—', font: 'Arial', size: 18 })] })],
             }),
             new TableCell({
               width: { size: elColWidths[2], type: WidthType.DXA },
               borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
               children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: el.condition_rating ? (ratingLabels[String(el.condition_rating)] || String(el.condition_rating)) : '—', font: 'Arial', size: 18 })] })],
             }),
             new TableCell({
               width: { size: elColWidths[3], type: WidthType.DXA },
               borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
               children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: el.wear_percentage != null ? `${el.wear_percentage}%` : '—', font: 'Arial', size: 18 })] })],
             }),
           ],
@@ -661,7 +679,7 @@ export async function GET(
               bold: true,
               font: 'Arial',
               size: 20,
-              color: '16A34A',
+              color: HEX.brand600,
             }),
           ],
         }),
@@ -671,12 +689,12 @@ export async function GET(
         return new TableCell({
           width: { size: widthDxa, type: WidthType.DXA },
           borders: thinBorder,
-          shading: { type: ShadingType.CLEAR, color: 'auto', fill: '2563EB' },
+          shading: { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite800 },
           children: [
             new Paragraph({
               alignment: AlignmentType.CENTER,
               children: [
-                new TextRun({ text, bold: true, font: 'Arial', size: 18, color: 'FFFFFF' }),
+                new TextRun({ text, bold: true, font: 'Arial', size: FONT_DXA.tableHeader, color: HEX.white, characterSpacing: TRACKING_DXA }),
               ],
             }),
           ],
@@ -700,31 +718,31 @@ export async function GET(
               new TableCell({
                 width: { size: repColWidths[0], type: WidthType.DXA },
                 borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
                 children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(idx + 1), font: 'Arial', size: 18 })] })],
               }),
               new TableCell({
                 width: { size: repColWidths[1], type: WidthType.DXA },
                 borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
                 children: [new Paragraph({ children: [new TextRun({ text: r.scope_description || '—', font: 'Arial', size: 18 })] })],
               }),
               new TableCell({
                 width: { size: repColWidths[2], type: WidthType.DXA },
                 borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
                 children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: r.repair_type || '—', font: 'Arial', size: 18 })] })],
               }),
               new TableCell({
                 width: { size: repColWidths[3], type: WidthType.DXA },
                 borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
                 children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: r.urgency_level || '—', font: 'Arial', size: 18 })] })],
               }),
               new TableCell({
                 width: { size: repColWidths[4], type: WidthType.DXA },
                 borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F0F4FB' } : undefined,
+                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
                 children: [new Paragraph({ children: [new TextRun({ text: r.element_name || '—', font: 'Arial', size: 18 })] })],
               }),
             ],
@@ -846,15 +864,15 @@ export async function GET(
       children: [
         new Paragraph({
           border: {
-            bottom: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: HEX.graphite200 },
           },
           spacing: { after: 60 },
           children: [
             new TextRun({
               text: `PROTOKÓŁ NR ${protocolNumber} z dnia ${inspectionDate} — ${typeLabel}`,
               font: 'Arial',
-              size: 16,
-              color: '555555',
+              size: FONT_DXA.small,
+              color: HEX.graphite500,
             }),
           ],
         }),
@@ -867,11 +885,21 @@ export async function GET(
         new Paragraph({
           alignment: AlignmentType.CENTER,
           border: {
-            top: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+            top: { style: BorderStyle.SINGLE, size: 4, color: HEX.graphite200 },
           },
           children: [
-            new TextRun({ children: [PageNumber.CURRENT], font: 'Arial', size: 16, color: '555555' }),
-            new TextRun({ text: ' | Strona', font: 'Arial', size: 16, color: '555555' }),
+            new TextRun({
+              children: [PageNumber.CURRENT],
+              font: 'Arial',
+              size: FONT_DXA.small,
+              color: HEX.graphite500,
+            }),
+            new TextRun({
+              text: ' | Strona',
+              font: 'Arial',
+              size: FONT_DXA.small,
+              color: HEX.graphite500,
+            }),
           ],
         }),
       ],
@@ -910,7 +938,12 @@ export async function GET(
             name: 'Heading 2',
             basedOn: 'Normal',
             next: 'Normal',
-            run: { bold: true, font: 'Arial', size: 24, color: '1E3A5F' },
+            run: {
+              bold: true,
+              font: 'Arial',
+              size: FONT_DXA.sectionHeading,
+              color: HEX.graphite900,
+            },
           },
         ],
       },
