@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -36,12 +37,9 @@ export function MobileNav({ isOpen, onOpenChange }: MobileNavProps) {
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="p-0 w-72">
-        <SheetHeader className="border-b border-gray-100 px-5 py-4">
+        <SheetHeader className="border-b border-graphite-200 px-5 py-4">
           <SheetTitle className="text-left flex items-center gap-2.5">
-            <div className="p-1.5 bg-blue-600 rounded-lg">
-              <Wind className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-bold text-gray-900">Prowatech</span>
+            <img src="/logo-prowatech.png" alt="ProWaTech" className="h-8 w-auto" />
           </SheetTitle>
         </SheetHeader>
 
@@ -60,19 +58,19 @@ export function MobileNav({ isOpen, onOpenChange }: MobileNavProps) {
                   className={cn(
                     "flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150",
                     isActive
-                      ? "bg-blue-50 text-blue-700 font-semibold"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-medium"
+                      ? "bg-primary-50 text-primary-700 font-semibold"
+                      : "text-graphite-500 hover:bg-graphite-50 hover:text-graphite-900 font-medium"
                   )}
                 >
                   <Icon
                     className={cn(
                       "h-5 w-5 flex-shrink-0",
-                      isActive ? "text-blue-600" : "text-gray-400"
+                      isActive ? "text-primary-600" : "text-graphite-500"
                     )}
                   />
                   <span className="text-sm">{item.label}</span>
                   {isActive && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-600" />
+                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-600" />
                   )}
                 </div>
               </Link>

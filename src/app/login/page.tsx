@@ -33,17 +33,17 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md border-graphite-200 shadow-lg">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
             <img src="/logo-prowatech.png" alt="ProWaTech" className="h-20 w-auto" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-bold text-gray-900">
+            <CardTitle className="text-3xl font-bold text-graphite-900">
               Prowatech Inspekcje
             </CardTitle>
-            <CardDescription className="mt-2 text-gray-600">
+            <CardDescription className="mt-2 text-graphite-500">
               System inspekcji turbin wiatrowych
             </CardDescription>
           </div>
@@ -51,10 +51,10 @@ export default function LoginPage() {
 
         <CardContent className="space-y-4">
           <div className="space-y-2 text-center">
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-graphite-900">
               Zaloguj się
             </h2>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-graphite-500">
               Aby kontynuować, zaloguj się do swojego konta
             </p>
           </div>
@@ -62,7 +62,7 @@ export default function LoginPage() {
           <Button
             onClick={handleGoogleSignIn}
             disabled={isLoading}
-            className="w-full h-11 bg-white border-2 border-gray-300 text-gray-900 hover:bg-gray-50 font-medium"
+            className="w-full h-11 bg-white border-2 border-graphite-200 text-graphite-900 hover:bg-graphite-50 font-medium"
           >
             {isLoading ? (
               <span>Ładowanie...</span>
@@ -92,7 +92,7 @@ export default function LoginPage() {
           </Button>
 
           <div className="pt-4 text-center">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-graphite-500">
               Kontynuując, akceptujesz nasze Warunki użytkowania
             </p>
           </div>

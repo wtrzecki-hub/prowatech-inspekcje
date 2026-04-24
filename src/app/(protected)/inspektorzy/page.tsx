@@ -128,13 +128,15 @@ export default function InspektorzePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inspektorzy</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{inspectors.length} zarejestrowanych inspektorów</p>
+          <h1 className="text-2xl font-bold text-graphite-900">Inspektorzy</h1>
+          <p className="text-sm text-graphite-500 mt-0.5">
+            <span className="font-mono">{inspectors.length}</span> zarejestrowanych inspektorów
+          </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button
-              className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 gap-2 px-5"
+              className="h-12 rounded-xl gap-2 px-5"
               onClick={() => setEditingId(null)}
             >
               <Plus className="h-4 w-4" />
@@ -157,59 +159,53 @@ export default function InspektorzePage() {
 
       {inspectors.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="p-4 bg-gray-50 rounded-2xl mb-4">
-            <Users className="h-10 w-10 text-gray-300" />
+          <div className="p-4 bg-graphite-100 rounded-2xl mb-4">
+            <Users className="h-10 w-10 text-graphite-500" />
           </div>
-          <p className="text-sm font-semibold text-gray-700 mb-1">Brak inspektorów</p>
-          <p className="text-xs text-gray-400">Dodaj pierwszego inspektora, aby zacząć</p>
+          <p className="text-sm font-semibold text-graphite-900 mb-1">Brak inspektorów</p>
+          <p className="text-xs text-graphite-500">Dodaj pierwszego inspektora, aby zacząć</p>
         </div>
       ) : isMobile ? (
         <div className="space-y-3">
           {inspectors.map((inspector) => (
-            <Card key={inspector.id} className="rounded-xl border border-gray-100">
+            <Card key={inspector.id} className="rounded-xl border border-graphite-200 shadow-xs">
               <CardContent className="p-4">
                 <div className="space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-gray-900">
+                      <p className="font-semibold text-graphite-900">
                         {inspector.full_name}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-graphite-500">
                         {inspector.specialty}
                       </p>
                     </div>
-                    <Badge
-                      variant={inspector.is_active ? 'default' : 'secondary'}
-                      className={inspector.is_active
-                        ? 'bg-green-100 text-green-700 hover:bg-green-100'
-                        : 'bg-gray-100 text-gray-500'
-                      }
-                    >
+                    <Badge variant={inspector.is_active ? 'success' : 'neutral'}>
                       {inspector.is_active ? 'Aktywny' : 'Nieaktywny'}
                     </Badge>
                   </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <p><span className="font-medium">Nr uprawnień:</span> {inspector.license_number}</p>
-                    <p><span className="font-medium">Izba:</span> {inspector.chamber_membership}{inspector.chamber_certificate_number ? ` (${inspector.chamber_certificate_number})` : ''}</p>
-                    <p><span className="font-medium">Email:</span> {inspector.email}</p>
-                    <p><span className="font-medium">Telefon:</span> {inspector.phone}</p>
+                  <div className="space-y-1 text-sm text-graphite-500">
+                    <p><span className="font-medium text-graphite-800">Nr uprawnień:</span> <span className="font-mono">{inspector.license_number}</span></p>
+                    <p><span className="font-medium text-graphite-800">Izba:</span> {inspector.chamber_membership}{inspector.chamber_certificate_number ? ` (${inspector.chamber_certificate_number})` : ''}</p>
+                    <p><span className="font-medium text-graphite-800">Email:</span> {inspector.email}</p>
+                    <p><span className="font-medium text-graphite-800">Telefon:</span> <span className="font-mono">{inspector.phone}</span></p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {inspector.gwo_certificate_number && (
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-xs">GWO ✓</Badge>
+                      <Badge variant="info" className="text-xs">GWO ✓</Badge>
                     )}
                     {inspector.udt_certificate_number && (
-                      <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">UDT ✓</Badge>
+                      <Badge variant="warning" className="text-xs">UDT ✓</Badge>
                     )}
                     {inspector.sep_certificate_number && (
-                      <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs">SEP ✓</Badge>
+                      <Badge variant="neutral" className="text-xs">SEP ✓</Badge>
                     )}
                   </div>
                   <div className="flex gap-2 pt-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-10 rounded-xl border-gray-200 gap-1.5"
+                      className="h-10 rounded-xl border-graphite-200 gap-1.5"
                       onClick={() => {
                         setEditingId(inspector.id)
                         setIsDialogOpen(true)
@@ -221,7 +217,7 @@ export default function InspektorzePage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-10 rounded-xl border-gray-200 gap-1.5"
+                      className="h-10 rounded-xl border-graphite-200 gap-1.5"
                       onClick={() =>
                         handleToggleActive(inspector.id, inspector.is_active)
                       }
@@ -236,53 +232,47 @@ export default function InspektorzePage() {
           ))}
         </div>
       ) : (
-        <Card className="rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <Card className="rounded-xl border border-graphite-200 shadow-xs overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50 hover:bg-gray-50 border-b border-gray-100">
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3 px-4">Imię i nazwisko</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Nr uprawnień</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Specjalność</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Izba</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Telefon</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Email</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Uprawnienia</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Status</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-gray-400 py-3">Akcje</TableHead>
+              <TableRow className="bg-graphite-50 hover:bg-graphite-50 border-b border-graphite-200">
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3 px-4">Imię i nazwisko</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Nr uprawnień</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Specjalność</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Izba</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Telefon</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Email</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Uprawnienia</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Status</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-500 py-3">Akcje</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {inspectors.map((inspector) => (
-                <TableRow key={inspector.id} className="border-b border-gray-50 h-16 hover:bg-gray-50/50">
-                  <TableCell className="font-semibold text-gray-900 px-4">
+                <TableRow key={inspector.id} className="border-b border-graphite-100 h-16 hover:bg-graphite-50/50">
+                  <TableCell className="font-semibold text-graphite-900 px-4">
                     {inspector.full_name}
                   </TableCell>
-                  <TableCell className="text-gray-600">{inspector.license_number}</TableCell>
-                  <TableCell className="text-gray-600">{inspector.specialty}</TableCell>
-                  <TableCell className="text-gray-600">{inspector.chamber_membership}{inspector.chamber_certificate_number ? ` (${inspector.chamber_certificate_number})` : ''}</TableCell>
-                  <TableCell className="text-gray-600">{inspector.phone}</TableCell>
-                  <TableCell className="text-gray-600">{inspector.email}</TableCell>
+                  <TableCell className="text-graphite-500 font-mono">{inspector.license_number}</TableCell>
+                  <TableCell className="text-graphite-500">{inspector.specialty}</TableCell>
+                  <TableCell className="text-graphite-500">{inspector.chamber_membership}{inspector.chamber_certificate_number ? ` (${inspector.chamber_certificate_number})` : ''}</TableCell>
+                  <TableCell className="text-graphite-500 font-mono">{inspector.phone}</TableCell>
+                  <TableCell className="text-graphite-500">{inspector.email}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {inspector.gwo_certificate_number && (
-                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-xs">GWO ✓</Badge>
+                        <Badge variant="info" className="text-xs">GWO ✓</Badge>
                       )}
                       {inspector.udt_certificate_number && (
-                        <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">UDT ✓</Badge>
+                        <Badge variant="warning" className="text-xs">UDT ✓</Badge>
                       )}
                       {inspector.sep_certificate_number && (
-                        <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs">SEP ✓</Badge>
+                        <Badge variant="neutral" className="text-xs">SEP ✓</Badge>
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={inspector.is_active ? 'default' : 'secondary'}
-                      className={inspector.is_active
-                        ? 'bg-green-100 text-green-700 hover:bg-green-100'
-                        : 'bg-gray-100 text-gray-500'
-                      }
-                    >
+                    <Badge variant={inspector.is_active ? 'success' : 'neutral'}>
                       {inspector.is_active ? 'Aktywny' : 'Nieaktywny'}
                     </Badge>
                   </TableCell>
@@ -291,7 +281,7 @@ export default function InspektorzePage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-9 rounded-lg px-3 text-gray-600 hover:text-gray-900 gap-1"
+                        className="h-9 rounded-lg px-3 text-graphite-500 hover:text-graphite-900 gap-1"
                         onClick={() => {
                           setEditingId(inspector.id)
                           setIsDialogOpen(true)
@@ -303,7 +293,7 @@ export default function InspektorzePage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-9 rounded-lg px-3 text-gray-600 hover:text-gray-900 gap-1"
+                        className="h-9 rounded-lg px-3 text-graphite-500 hover:text-graphite-900 gap-1"
                         onClick={() =>
                           handleToggleActive(inspector.id, inspector.is_active)
                         }

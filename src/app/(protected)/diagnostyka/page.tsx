@@ -112,12 +112,15 @@ export default function DiagnostykaPage() {
   }
 
   return (
-    <div className="p-8 max-w-4xl">
-      <h1 className="text-2xl font-bold mb-4">Diagnostyka Supabase</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-graphite-900">Diagnostyka Supabase</h1>
+        <p className="text-sm text-graphite-500 mt-0.5">Sprawdzenie połączenia z bazą i dostępnych tabel</p>
+      </div>
       {loading ? (
-        <p>Sprawdzam połączenie z bazą danych...</p>
+        <p className="text-graphite-500">Sprawdzam połączenie z bazą danych...</p>
       ) : (
-        <pre className="bg-gray-900 text-green-400 p-6 rounded-lg overflow-auto text-sm whitespace-pre-wrap">
+        <pre className="bg-graphite-900 text-success p-6 rounded-xl overflow-auto text-sm whitespace-pre-wrap font-mono shadow-xs">
           {JSON.stringify(results, null, 2)}
         </pre>
       )}

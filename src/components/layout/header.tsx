@@ -39,7 +39,7 @@ export function Header({ onMenuClick, user }: HeaderProps) {
     .slice(0, 2);
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white border-b border-gray-100 shadow-sm">
+    <header className="sticky top-0 z-40 w-full bg-white border-b border-graphite-200 shadow-xs">
       <div className="flex h-16 items-center justify-between px-4 gap-3">
         {/* Hamburger + Logo for mobile */}
         <div className="flex items-center gap-3 md:hidden">
@@ -47,7 +47,7 @@ export function Header({ onMenuClick, user }: HeaderProps) {
             variant="ghost"
             size="icon"
             onClick={onMenuClick}
-            className="h-10 w-10 text-gray-500"
+            className="h-10 w-10 text-graphite-500"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -64,7 +64,7 @@ export function Header({ onMenuClick, user }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="flex items-center gap-2 h-10 px-2 rounded-xl hover:bg-gray-50"
+              className="flex items-center gap-2 h-10 px-2 rounded-xl hover:bg-graphite-50"
             >
               <Avatar className="h-8 w-8">
                 <AvatarImage
@@ -75,20 +75,20 @@ export function Header({ onMenuClick, user }: HeaderProps) {
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden sm:block text-sm font-medium text-gray-700 max-w-32 truncate">
+              <span className="hidden sm:block text-sm font-medium text-graphite-800 max-w-32 truncate">
                 {userName}
               </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <div className="px-2 py-2">
-              <p className="text-sm font-semibold text-gray-900">{userName}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{user?.email}</p>
+              <p className="text-sm font-semibold text-graphite-900">{userName}</p>
+              <p className="text-xs text-graphite-500 mt-0.5">{user?.email}</p>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}
-              className="text-red-600 focus:text-red-600 cursor-pointer"
+              className="text-danger-800 focus:text-danger-800 cursor-pointer"
             >
               Wyloguj
             </DropdownMenuItem>

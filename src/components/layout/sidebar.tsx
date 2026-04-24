@@ -58,12 +58,12 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <div
       className={cn(
-        "flex flex-col h-screen bg-white border-r border-gray-100 transition-all duration-300 shadow-sm",
+        "flex flex-col h-screen bg-white border-r border-graphite-200 transition-all duration-300 shadow-xs",
         isCollapsed ? "w-20" : "w-64"
       )}
     >
       {/* Logo Section */}
-      <div className="p-4 flex items-center justify-between h-16 border-b border-gray-100">
+      <div className="p-4 flex items-center justify-between h-16 border-b border-graphite-200">
         {!isCollapsed && (
           <div className="flex items-center gap-2.5">
             <img src="/logo-prowatech.png" alt="ProWaTech" className="h-9 w-auto" />
@@ -132,7 +132,7 @@ export function Sidebar({ user }: SidebarProps) {
       </ScrollArea>
 
       {/* User Section */}
-      <div className="p-3 border-t border-gray-100">
+      <div className="p-3 border-t border-graphite-200">
         <div
           className={cn(
             "flex items-center gap-3 p-2 rounded-xl",
@@ -150,10 +150,10 @@ export function Sidebar({ user }: SidebarProps) {
           </Avatar>
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">
+              <p className="text-sm font-semibold text-graphite-900 truncate">
                 {userName}
               </p>
-              <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+              <p className="text-xs text-graphite-500 truncate">{user?.email}</p>
             </div>
           )}
           {!isCollapsed && (
@@ -161,7 +161,7 @@ export function Sidebar({ user }: SidebarProps) {
               variant="ghost"
               size="sm"
               onClick={handleLogout}
-              className="p-1.5 h-auto text-gray-400 hover:text-red-500 flex-shrink-0"
+              className="p-1.5 h-auto text-graphite-500 hover:text-danger flex-shrink-0"
               title="Wyloguj"
             >
               <LogOut className="h-4 w-4" />
@@ -173,7 +173,7 @@ export function Sidebar({ user }: SidebarProps) {
             variant="ghost"
             size="sm"
             onClick={handleLogout}
-            className="w-full mt-1 p-2 h-auto justify-center text-gray-400 hover:text-red-500"
+            className="w-full mt-1 p-2 h-auto justify-center text-graphite-500 hover:text-danger"
             title="Wyloguj"
           >
             <LogOut className="h-4 w-4" />

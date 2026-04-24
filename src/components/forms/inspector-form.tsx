@@ -168,7 +168,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
     if (!url) return null
     return (
       <a href={url} target="_blank" rel="noopener noreferrer"
-        className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+        className="text-xs text-info-800 hover:underline inline-flex items-center gap-1">
         <ExternalLink className="h-3 w-3" /> {label}
       </a>
     )
@@ -177,7 +177,7 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
       {error && (
-        <div className="p-3 bg-red-50 text-red-700 rounded text-sm">{error}</div>
+        <div className="p-3 bg-danger-50 text-danger-800 rounded text-sm">{error}</div>
       )}
 
       {/* Dane osobowe */}
@@ -207,8 +207,8 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       </div>
 
       {/* Uprawnienia budowlane */}
-      <div className="p-3 border rounded-lg space-y-3 bg-blue-50/50">
-        <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Uprawnienia budowlane</p>
+      <div className="p-3 border border-graphite-200 rounded-lg space-y-3 bg-primary-50/50">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-primary-700">Uprawnienia budowlane</p>
         <div>
           <Label htmlFor="numer_uprawnien">Numer ewidencyjny uprawnień</Label>
           <Input id="numer_uprawnien" name="numer_uprawnien" required className="h-12"
@@ -242,8 +242,8 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       </div>
 
       {/* Izba Inżynierów */}
-      <div className="p-3 border rounded-lg space-y-3 bg-green-50/50">
-        <p className="text-xs font-bold uppercase tracking-wider text-green-700">Izba Inżynierów</p>
+      <div className="p-3 border border-graphite-200 rounded-lg space-y-3 bg-success-50/50">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-success-800">Izba Inżynierów</p>
         <div>
           <Label htmlFor="izba">Nazwa izby</Label>
           <Input id="izba" name="izba" className="h-12"
@@ -272,15 +272,15 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       </div>
 
       {/* GWO */}
-      <div className="p-3 border rounded-lg space-y-3 bg-cyan-50/50">
-        <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">GWO (Global Wind Organisation)</p>
+      <div className="p-3 border border-graphite-200 rounded-lg space-y-3 bg-info-50/50">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-info-800">GWO (Global Wind Organisation)</p>
         <div>
           <Label htmlFor="gwo_number">WINDA ID</Label>
           <Input id="gwo_number" name="gwo_number" className="h-12"
             defaultValue={initialData?.gwo_certificate_number || ''}
             placeholder="np. WT335238PL" />
         </div>
-        <p className="text-xs font-semibold text-gray-600 pt-1">Kursy — daty ważności:</p>
+        <p className="text-xs font-semibold text-graphite-500 pt-1">Kursy — daty ważności:</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="gwo_first_aid" className="text-xs">First Aid Refresher</Label>
@@ -312,8 +312,8 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       </div>
 
       {/* UDT */}
-      <div className="p-3 border rounded-lg space-y-3 bg-orange-50/50">
-        <p className="text-xs font-bold uppercase tracking-wider text-orange-700">UDT</p>
+      <div className="p-3 border border-graphite-200 rounded-lg space-y-3 bg-warning-50/50">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-warning-800">UDT</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="udt_number">Nr certyfikatu</Label>
@@ -336,8 +336,8 @@ export function InspectorForm({ initialData, onSuccess }: InspectorFormProps) {
       </div>
 
       {/* SEP */}
-      <div className="p-3 border rounded-lg space-y-3 bg-purple-50/50">
-        <p className="text-xs font-bold uppercase tracking-wider text-purple-700">SEP</p>
+      <div className="p-3 border border-graphite-200 rounded-lg space-y-3 bg-graphite-100/60">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-graphite-800">SEP</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="sep_number">Nr certyfikatu</Label>
