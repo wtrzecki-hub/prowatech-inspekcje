@@ -52,16 +52,16 @@ interface RepairTableProps {
 }
 
 const urgencyColors: Record<string, { badge: string; bg: string }> = {
-  I: { badge: 'bg-red-100 text-red-800', bg: 'bg-red-50' },
-  II: { badge: 'bg-orange-100 text-orange-800', bg: 'bg-orange-50' },
-  III: { badge: 'bg-yellow-100 text-yellow-800', bg: 'bg-yellow-50' },
-  IV: { badge: 'bg-green-100 text-green-800', bg: 'bg-green-50' },
+  I: { badge: 'bg-danger-100 text-danger-800', bg: 'bg-danger-50' },
+  II: { badge: 'bg-warning-100 text-warning-800', bg: 'bg-warning-50' },
+  III: { badge: 'bg-info-100 text-info-800', bg: 'bg-info-50' },
+  IV: { badge: 'bg-graphite-100 text-graphite-800', bg: 'bg-graphite-50' },
 }
 
 const typeColors: Record<string, string> = {
-  NG: 'bg-red-100 text-red-800',
-  NB: 'bg-orange-100 text-orange-800',
-  K: 'bg-green-100 text-green-800',
+  NG: 'bg-danger-100 text-danger-800',
+  NB: 'bg-warning-100 text-warning-800',
+  K: 'bg-success-100 text-success-800',
 }
 
 const typeLabels: Record<string, string> = {
@@ -260,7 +260,7 @@ export function RepairTable({ inspectionId, elements = [] }: RepairTableProps) {
 
   if (isLoading) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-graphite-500">
         Ładowanie zaleceń napraw...
       </div>
     )
@@ -275,21 +275,21 @@ export function RepairTable({ inspectionId, elements = [] }: RepairTableProps) {
         <CardContent className="space-y-4">
           <Button
             onClick={() => handleOpenDialog()}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            className="w-full"
           >
             <Plus size={18} className="mr-2" />
             Dodaj zalecenie
           </Button>
 
           {repairs.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-graphite-500">
               Brak zaleceń napraw. Kliknij przycisk powyżej, aby dodać nowe.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-100">
+                  <TableRow className="bg-graphite-50 hover:bg-graphite-50 border-b border-graphite-200">
                     <TableHead className="w-12">Lp.</TableHead>
                     <TableHead>Element</TableHead>
                     <TableHead>Zakres robót</TableHead>
@@ -346,7 +346,7 @@ export function RepairTable({ inspectionId, elements = [] }: RepairTableProps) {
                               handleCompletionToggle(repair.id, checked as boolean)
                             }
                           />
-                          <span className="text-xs text-gray-600">
+                          <span className="text-xs text-graphite-500">
                             {repair.is_completed ? 'Zrobione' : 'Oczekuje'}
                           </span>
                         </div>
@@ -357,7 +357,7 @@ export function RepairTable({ inspectionId, elements = [] }: RepairTableProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleOpenDialog(repair)}
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            className="text-graphite-500 hover:text-graphite-900 hover:bg-graphite-50"
                           >
                             <Edit2 size={16} />
                           </Button>
@@ -365,7 +365,7 @@ export function RepairTable({ inspectionId, elements = [] }: RepairTableProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteRepair(repair.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-danger hover:text-danger-800 hover:bg-danger-50"
                           >
                             <Trash2 size={16} />
                           </Button>
@@ -524,7 +524,7 @@ export function RepairTable({ inspectionId, elements = [] }: RepairTableProps) {
               <Button
                 onClick={handleSaveRepair}
                 disabled={!formData.scope_description.trim()}
-                className="bg-blue-600 hover:bg-blue-700"
+                className=""
               >
                 {editingId ? 'Zaktualizuj' : 'Dodaj'} zalecenie
               </Button>

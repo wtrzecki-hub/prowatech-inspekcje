@@ -200,7 +200,7 @@ export function ElectricalMeasurements({
 
   if (isLoading) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-graphite-500">
         Ładowanie pomiarów elektrycznych...
       </div>
     )
@@ -213,7 +213,7 @@ export function ElectricalMeasurements({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Additional Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-graphite-50 rounded-lg border border-graphite-200">
           <div className="space-y-2">
             <Label htmlFor="measurement-date" className="font-medium text-sm">
               Data pomiaru
@@ -261,7 +261,7 @@ export function ElectricalMeasurements({
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-100">
+              <TableRow className="bg-graphite-50 hover:bg-graphite-50 border-b border-graphite-200">
                 <TableHead className="w-32">Punkt pomiarowy</TableHead>
                 <TableHead className="text-center">Rezystancja uziemienia (Ω)</TableHead>
                 <TableHead className="text-center">Wynik</TableHead>
@@ -278,7 +278,7 @@ export function ElectricalMeasurements({
             </TableHeader>
             <TableBody>
               {measurements.map((measurement) => (
-                <TableRow key={measurement.id} className="hover:bg-gray-50">
+                <TableRow key={measurement.id} className="hover:bg-graphite-50/50 border-b border-graphite-100">
                   <TableCell>
                     <Input
                       value={measurement.measurement_point}
@@ -453,7 +453,7 @@ export function ElectricalMeasurements({
                       variant="ghost"
                       size="sm"
                       onClick={() => deleteMeasurement(measurement.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      className="text-danger hover:text-danger-800 hover:bg-danger-50"
                     >
                       <Trash2 size={16} />
                     </Button>
@@ -467,7 +467,7 @@ export function ElectricalMeasurements({
         {/* Add Button */}
         <Button
           onClick={addMeasurement}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+          className="w-full"
         >
           <Plus size={18} className="mr-2" />
           Dodaj punkt pomiarowy

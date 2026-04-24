@@ -196,7 +196,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
 
   if (isLoading) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-graphite-500">
         Ładowanie galerii zdjęć...
       </div>
     )
@@ -212,7 +212,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
           <div className="flex gap-3">
             <Button
               onClick={() => handleOpenDialog()}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className=""
             >
               <Plus size={18} className="mr-2" />
               Dodaj zdjęcie
@@ -236,7 +236,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
           </div>
 
           {filteredPhotos.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-graphite-500">
               <ImageIcon size={48} className="mx-auto mb-3 opacity-50" />
               <p>
                 {filterElement && filterElement !== 'all'
@@ -249,10 +249,10 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
               {filteredPhotos.map((photo) => (
                 <div
                   key={photo.id}
-                  className="border rounded-lg overflow-hidden bg-gray-50 hover:shadow-lg transition"
+                  className="border border-graphite-200 rounded-xl overflow-hidden bg-white hover:shadow-md transition shadow-xs transition"
                 >
                   {/* Photo Thumbnail */}
-                  <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
+                  <div className="aspect-square bg-graphite-100 flex items-center justify-center overflow-hidden">
                     {photo.photo_url ? (
                       <img
                         src={photo.photo_url}
@@ -262,7 +262,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
                     ) : (
                       <ImageIcon
                         size={48}
-                        className="text-gray-400 opacity-50"
+                        className="text-graphite-500 opacity-50"
                       />
                     )}
                   </div>
@@ -274,13 +274,13 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
                     </div>
 
                     {photo.description && (
-                      <p className="text-xs text-gray-700 line-clamp-2">
+                      <p className="text-xs text-graphite-800 line-clamp-2">
                         {photo.description}
                       </p>
                     )}
 
                     {photo.element_name && (
-                      <div className="text-xs bg-blue-50 text-blue-700 rounded px-2 py-1">
+                      <div className="text-xs bg-info-50 text-info-800 rounded px-2 py-1">
                         {photo.element_name}
                       </div>
                     )}
@@ -291,7 +291,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
                         variant="ghost"
                         size="sm"
                         onClick={() => handleOpenDialog(photo)}
-                        className="flex-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        className="flex-1 text-graphite-500 hover:text-graphite-900 hover:bg-graphite-50"
                       >
                         <Edit2 size={14} className="mr-1" />
                         Edytuj
@@ -300,7 +300,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeletePhoto(photo.id)}
-                        className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="flex-1 text-danger hover:text-danger-800 hover:bg-danger-50"
                       >
                         <Trash2 size={14} className="mr-1" />
                         Usuń
@@ -378,7 +378,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
                   setFormData({ ...formData, photo_url: e.target.value })
                 }
               />
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-graphite-500">
                 Wstaw bezpośredni adres URL do zdjęcia (jpg, png, itp.)
               </p>
             </div>
@@ -402,7 +402,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
             {formData.photo_url && (
               <div className="space-y-2">
                 <Label className="font-medium text-sm">Podgląd</Label>
-                <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden border">
+                <div className="aspect-video bg-graphite-100 rounded-lg overflow-hidden border border-graphite-200">
                   <img
                     src={formData.photo_url}
                     alt="Podgląd zdjęcia"
@@ -425,7 +425,7 @@ export function PhotoGallery({ inspectionId, elements = [] }: PhotoGalleryProps)
               <Button
                 onClick={handleSavePhoto}
                 disabled={!formData.photo_url.trim()}
-                className="bg-blue-600 hover:bg-blue-700"
+                className=""
               >
                 {editingId ? 'Zaktualizuj' : 'Dodaj'} zdjęcie
               </Button>

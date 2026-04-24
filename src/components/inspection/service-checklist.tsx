@@ -235,7 +235,7 @@ export function ServiceChecklist({ inspectionId }: ServiceChecklistProps) {
 
   if (isLoading) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-graphite-500">
         Ładowanie informacji serwisu...
       </div>
     )
@@ -381,7 +381,7 @@ export function ServiceChecklist({ inspectionId }: ServiceChecklistProps) {
               {checklistItems.map((item) => (
                 <div
                   key={item.id}
-                  className="border rounded-lg p-4 space-y-3 hover:bg-gray-50 transition"
+                  className="border border-graphite-200 rounded-xl p-4 space-y-3 hover:bg-graphite-50 transition shadow-xs"
                 >
                   <div className="flex items-start gap-3">
                     <Checkbox
@@ -396,7 +396,7 @@ export function ServiceChecklist({ inspectionId }: ServiceChecklistProps) {
                         htmlFor={`item-${item.id}`}
                         className={`font-medium cursor-pointer transition ${
                           item.is_checked
-                            ? 'line-through text-gray-500'
+                            ? 'line-through text-graphite-500'
                             : ''
                         }`}
                       >
@@ -407,7 +407,7 @@ export function ServiceChecklist({ inspectionId }: ServiceChecklistProps) {
                       variant="ghost"
                       size="sm"
                       onClick={() => deleteChecklistItem(item.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      className="text-danger hover:text-danger-800 hover:bg-danger-50"
                     >
                       <Trash2 size={16} />
                     </Button>
@@ -449,7 +449,7 @@ export function ServiceChecklist({ inspectionId }: ServiceChecklistProps) {
                 <Button
                   onClick={addChecklistItem}
                   disabled={!newItemName.trim()}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className=""
                 >
                   <Plus size={18} />
                 </Button>
