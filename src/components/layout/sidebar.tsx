@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -27,9 +28,10 @@ interface SidebarProps {
       avatar_url?: string;
     };
   };
+  userRole?: string | null;
 }
 
-const navItems = [
+const NAV_ITEMS_BASE = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Klienci", href: "/klienci", icon: Building2 },
   { label: "Farmy wiatrowe", href: "/farmy", icon: Wind },
@@ -37,9 +39,17 @@ const navItems = [
   { label: "Inspektorzy", href: "/inspektorzy", icon: Users },
 ];
 
-export function Sidebar({ user }: SidebarProps) {
+const NAV_ITEMS_ADMIN = [
+  { label: "Diagnostyka", href: "/diagnostyka", icon: Activity },
+];
+
+export function Sidebar({ user, userRole }: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const navItems =
+    userRole === "admin"
+      ? [...NAV_ITEMS_BASE, ...NAV_ITEMS_ADMIN]
+      : NAV_ITEMS_BASE;
 
   const handleLogout = async () => {
     const supabase = createClient();

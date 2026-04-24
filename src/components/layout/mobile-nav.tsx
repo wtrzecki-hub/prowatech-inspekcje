@@ -9,6 +9,7 @@ import {
   Wind,
   ClipboardCheck,
   Users,
+  Activity,
 } from "lucide-react";
 import {
   Sheet,
@@ -21,9 +22,10 @@ import { cn } from "@/lib/utils";
 interface MobileNavProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  userRole?: string | null;
 }
 
-const navItems = [
+const NAV_ITEMS_BASE = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Klienci", href: "/klienci", icon: Building2 },
   { label: "Farmy wiatrowe", href: "/farmy", icon: Wind },
@@ -31,8 +33,16 @@ const navItems = [
   { label: "Inspektorzy", href: "/inspektorzy", icon: Users },
 ];
 
-export function MobileNav({ isOpen, onOpenChange }: MobileNavProps) {
+const NAV_ITEMS_ADMIN = [
+  { label: "Diagnostyka", href: "/diagnostyka", icon: Activity },
+];
+
+export function MobileNav({ isOpen, onOpenChange, userRole }: MobileNavProps) {
   const pathname = usePathname();
+  const navItems =
+    userRole === "admin"
+      ? [...NAV_ITEMS_BASE, ...NAV_ITEMS_ADMIN]
+      : NAV_ITEMS_BASE;
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>

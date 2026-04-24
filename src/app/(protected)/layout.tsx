@@ -15,6 +15,7 @@ export default function ProtectedLayout({
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -31,6 +32,15 @@ export default function ProtectedLayout({
       }
 
       setUser(session.user);
+
+      // Pobierz role z profiles dla role-gated nawigacji (np. Diagnostyka tylko dla admin)
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+      setUserRole(profile?.role ?? null);
+
       setIsLoading(false);
     };
 
@@ -64,7 +74,7 @@ export default function ProtectedLayout({
     <div className="flex h-screen bg-graphite-50">
       {/* Desktop Sidebar */}
       <div className="hidden md:flex flex-col">
-        <Sidebar user={user} />
+        <Sidebar user={user} userRole={userRole} />
       </div>
 
       {/* Main Content */}
@@ -78,6 +88,7 @@ export default function ProtectedLayout({
         <MobileNav
           isOpen={isMobileNavOpen}
           onOpenChange={setIsMobileNavOpen}
+          userRole={userRole}
         />
 
         {/* Main Content Area */}
