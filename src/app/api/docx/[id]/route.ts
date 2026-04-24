@@ -26,7 +26,14 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import fs from 'fs'
 import path from 'path'
-import { HEX, FONT_DXA, TRACKING_DXA } from '@/lib/design/protocol-tokens'
+import {
+  HEX,
+  FONT_DXA,
+  TRACKING_DXA,
+  RATING_COLORS_HEX,
+  RATING_LABELS,
+  type RatingKey,
+} from '@/lib/design/protocol-tokens'
 
 // A4 dimensions in DXA (twentieths of a point)
 const PAGE_WIDTH = 11906
@@ -587,14 +594,6 @@ export async function GET(
       USABLE_WIDTH - 600 - Math.floor(USABLE_WIDTH * 0.42) - Math.floor(USABLE_WIDTH * 0.25), // % zużycia
     ]
 
-    const ratingLabels: Record<string, string> = {
-      '1': 'Bardzo dobry',
-      '2': 'Dobry',
-      '3': 'Dostateczny',
-      '4': 'Słaby',
-      '5': 'Niedostateczny',
-    }
-
     function elHeaderCell(text: string, widthDxa: number): TableCell {
       return new TableCell({
         width: { size: widthDxa, type: WidthType.DXA },
@@ -611,6 +610,82 @@ export async function GET(
       })
     }
 
+    /**
+     * Wiersz tabeli elementów z color-codingiem oceny (sev-1..5).
+     * - Tło komórki = RATING_COLORS_HEX[rating].bg
+     * - Kolor tekstu = RATING_COLORS_HEX[rating].text
+     * - Lewy pasek 3-pkt w kolumnie Lp. = RATING_COLORS_HEX[rating].stripe
+     *
+     * Jeśli `condition_rating` jest null — wiersz neutralny (alternating graphite-50).
+     * Zgodnie z § 3 prototypu (design/prowatech-prototype.html).
+     */
+    function elementRow(el: any, idx: number): TableRow {
+      const rating = (el?.condition_rating ?? null) as RatingKey | null
+      const colors = rating ? RATING_COLORS_HEX[rating] : null
+      const label = rating ? RATING_LABELS[rating] : '—'
+
+      const fill = colors?.bg ?? (idx % 2 === 1 ? HEX.graphite50 : null)
+      const textColor = colors?.text ?? HEX.graphite900
+      const stripeColor = colors?.stripe ?? HEX.graphite200
+
+      const shading = fill
+        ? { type: ShadingType.CLEAR, color: 'auto', fill }
+        : undefined
+
+      // Pasek po lewej stronie pierwszej kolumny — 18/8pt ≈ 2.25pt ≈ 3px.
+      const stripeBorders = {
+        ...thinBorder,
+        left: { style: BorderStyle.SINGLE, size: 18, color: stripeColor },
+      }
+
+      const p = (text: string, opts: { bold?: boolean; center?: boolean } = {}) =>
+        new Paragraph({
+          alignment: opts.center ? AlignmentType.CENTER : undefined,
+          children: [
+            new TextRun({
+              text,
+              bold: opts.bold,
+              font: 'Arial',
+              size: FONT_DXA.tableBody,
+              color: textColor,
+            }),
+          ],
+        })
+
+      return new TableRow({
+        children: [
+          new TableCell({
+            width: { size: elColWidths[0], type: WidthType.DXA },
+            borders: stripeBorders,
+            shading,
+            children: [p(String(idx + 1), { center: true })],
+          }),
+          new TableCell({
+            width: { size: elColWidths[1], type: WidthType.DXA },
+            borders: thinBorder,
+            shading,
+            children: [p(el.element_definition?.name_pl || '—')],
+          }),
+          new TableCell({
+            width: { size: elColWidths[2], type: WidthType.DXA },
+            borders: thinBorder,
+            shading,
+            children: [p(label, { bold: true, center: true })],
+          }),
+          new TableCell({
+            width: { size: elColWidths[3], type: WidthType.DXA },
+            borders: thinBorder,
+            shading,
+            children: [
+              p(el.wear_percentage != null ? `${el.wear_percentage}%` : '—', {
+                center: true,
+              }),
+            ],
+          }),
+        ],
+      })
+    }
+
     const elementsTableRows: TableRow[] = [
       new TableRow({
         tableHeader: true,
@@ -621,36 +696,7 @@ export async function GET(
           elHeaderCell('% zużycia', elColWidths[3]),
         ],
       }),
-      ...((elements || []).map((el: any, idx: number) =>
-        new TableRow({
-          children: [
-            new TableCell({
-              width: { size: elColWidths[0], type: WidthType.DXA },
-              borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(idx + 1), font: 'Arial', size: 18 })] })],
-            }),
-            new TableCell({
-              width: { size: elColWidths[1], type: WidthType.DXA },
-              borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-              children: [new Paragraph({ children: [new TextRun({ text: el.element_definition?.name_pl || '—', font: 'Arial', size: 18 })] })],
-            }),
-            new TableCell({
-              width: { size: elColWidths[2], type: WidthType.DXA },
-              borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: el.condition_rating ? (ratingLabels[String(el.condition_rating)] || String(el.condition_rating)) : '—', font: 'Arial', size: 18 })] })],
-            }),
-            new TableCell({
-              width: { size: elColWidths[3], type: WidthType.DXA },
-              borders: thinBorder,
-              shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: el.wear_percentage != null ? `${el.wear_percentage}%` : '—', font: 'Arial', size: 18 })] })],
-            }),
-          ],
-        })
-      )),
+      ...((elements || []).map((el: any, idx: number) => elementRow(el, idx))),
     ]
 
     const elementsTable = new Table({
