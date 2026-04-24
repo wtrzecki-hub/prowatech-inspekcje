@@ -6,7 +6,15 @@ import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import fs from 'fs'
 import path from 'path'
-import { RGB, FONT_PT } from '@/lib/design/protocol-tokens'
+import {
+  RGB,
+  FONT_PT,
+  RATING_COLORS_RGB,
+  RATING_LABELS,
+  URGENCY_COLORS_RGB,
+  type RatingKey,
+  type UrgencyKey,
+} from '@/lib/design/protocol-tokens'
 
 const robotoRegularBase64 = fs.readFileSync(
   path.join(process.cwd(), 'src/fonts/Roboto-Regular.ttf')
@@ -423,24 +431,75 @@ export async function GET(
       addRow('Inspektor', 'Brak danych')
     }
 
-    // Elements assessment
+    // Elements assessment — z color-codingiem ocen (sev-1..5)
+    // Paleta 1:1 z design/prowatech-prototype.html § 3 i z docx A2.
     if (elements && elements.length > 0) {
       addSection('Ocena elementów turbiny')
-      const ratingLabels: { [key: string]: string } = {
-        '1': 'Bdb',
-        '2': 'Db',
-        '3': 'Dostateczna',
-        '4': 'Słaba',
-        '5': 'Niedostateczna',
+
+      // Metadane wierszy — RatingKey per index, wykorzystywane w hookach.
+      const rows = elements.map((el: any) => ({
+        rating: ((el?.condition_rating ?? null) as RatingKey | null),
+        name: el.element_definition?.name_pl || '-',
+        label: el.condition_rating
+          ? (RATING_LABELS[el.condition_rating as RatingKey] || String(el.condition_rating))
+          : '-',
+        notes: el.notes || '-',
+      }))
+
+      if (yPosition > pageHeight - 40) {
+        pdf.addPage()
+        yPosition = margin
       }
 
-      const elementRows = elements.map((el: any) => [
-        el.element_definition?.name_pl || '-',
-        el.condition_rating ? (ratingLabels[String(el.condition_rating)] || String(el.condition_rating)) : '-',
-        el.notes || '-',
-      ])
-
-      addTable(['Element', 'Ocena', 'Uwagi'], elementRows, [80, 30, 50])
+      pdf.autoTable({
+        head: [['Element', 'Ocena', 'Uwagi']],
+        body: rows.map((r) => [r.name, r.label, r.notes]),
+        startY: yPosition,
+        margin: margin,
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 'auto' },
+        },
+        styles: {
+          font: 'Roboto',
+          fontSize: FONT_PT.tableBody,
+          cellPadding: 3.5,
+          overflow: 'linebreak',
+          textColor: [...RGB.graphite900],
+          lineColor: [...RGB.graphite200],
+          lineWidth: 0.1,
+        },
+        headStyles: {
+          font: 'Roboto',
+          fontStyle: 'bold',
+          fillColor: [...RGB.graphite800],
+          textColor: [...RGB.white],
+          cellPadding: 3.5,
+        },
+        // Per-row tło + kolor tekstu wg RATING_COLORS_RGB. Ocena (col 1) bold.
+        didParseCell: (data: any) => {
+          if (data.section !== 'body') return
+          const rating = rows[data.row.index]?.rating
+          if (!rating) return
+          const colors = RATING_COLORS_RGB[rating]
+          data.cell.styles.fillColor = [...colors.bg]
+          data.cell.styles.textColor = [...colors.text]
+          if (data.column.index === 1) {
+            data.cell.styles.fontStyle = 'bold'
+          }
+        },
+        // Pasek 1.5mm z lewej strony pierwszej kolumny w kolorze stripe oceny.
+        didDrawCell: (data: any) => {
+          if (data.section !== 'body' || data.column.index !== 0) return
+          const rating = rows[data.row.index]?.rating
+          if (!rating) return
+          const stripe = RATING_COLORS_RGB[rating].stripe
+          pdf.setFillColor(...stripe)
+          pdf.rect(data.cell.x, data.cell.y, 1.5, data.cell.height, 'F')
+        },
+      })
+      yPosition = (pdf as any).lastAutoTable.finalY + 5
     }
 
     // Electrical measurements (for five-year inspections)
@@ -455,17 +514,63 @@ export async function GET(
       addTable(['Parametr', 'Wartość', 'Jednostka', 'Status'], measurementRows)
     }
 
-    // Repair recommendations
+    // Repair recommendations — z color-codingiem pilności (I-IV)
+    // Paleta z URGENCY_COLORS_RGB (protocol-tokens.ts), 1:1 z docx A3.
     if (repairs && repairs.length > 0) {
       addSection('Zalecenia naprawcze')
-      const repairRows = repairs.map((r: any) => [
-        r.urgency_level || '-',
-        r.scope_description || '-',
-        r.deadline_date
+
+      const repRows = repairs.map((r: any) => ({
+        level: ((r?.urgency_level ?? null) as UrgencyKey | null),
+        scope: r.scope_description || '-',
+        deadline: r.deadline_date
           ? format(new Date(r.deadline_date), 'dd.MM.yyyy', { locale: pl })
           : '-',
-      ])
-      addTable(['Priorytet', 'Opis naprawy', 'Termin'], repairRows)
+      }))
+
+      if (yPosition > pageHeight - 40) {
+        pdf.addPage()
+        yPosition = margin
+      }
+
+      pdf.autoTable({
+        head: [['Priorytet', 'Opis naprawy', 'Termin']],
+        body: repRows.map((r) => [r.level ?? '-', r.scope, r.deadline]),
+        startY: yPosition,
+        margin: margin,
+        styles: {
+          font: 'Roboto',
+          fontSize: FONT_PT.tableBody,
+          cellPadding: 3.5,
+          overflow: 'linebreak',
+          textColor: [...RGB.graphite900],
+          lineColor: [...RGB.graphite200],
+          lineWidth: 0.1,
+        },
+        headStyles: {
+          font: 'Roboto',
+          fontStyle: 'bold',
+          fillColor: [...RGB.graphite800],
+          textColor: [...RGB.white],
+          cellPadding: 3.5,
+        },
+        alternateRowStyles: {
+          fillColor: [...RGB.graphite50],
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 25 },
+        },
+        // Tylko kolumna 0 (Priorytet) koloruje się wg URGENCY_COLORS_RGB.
+        didParseCell: (data: any) => {
+          if (data.section !== 'body' || data.column.index !== 0) return
+          const level = repRows[data.row.index]?.level
+          if (!level) return
+          const colors = URGENCY_COLORS_RGB[level]
+          data.cell.styles.fillColor = [...colors.bg]
+          data.cell.styles.textColor = [...colors.text]
+          data.cell.styles.fontStyle = 'bold'
+        },
+      })
+      yPosition = (pdf as any).lastAutoTable.finalY + 5
     }
 
     // Overall assessment
