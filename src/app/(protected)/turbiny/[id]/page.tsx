@@ -18,7 +18,12 @@ import {
   Camera,
   Loader2,
   Plus,
+  ClipboardCheck,
+  Download,
+  TrendingUp,
+  Clock,
 } from 'lucide-react'
+import Link from 'next/link'
 
 interface Turbine {
   id: string
@@ -56,6 +61,50 @@ interface Turbine {
   }
 }
 
+// ───── Typy i mapowania dla wykresu oceny i kart KPI ─────────────────────────
+
+type RatingKey = 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny'
+
+// Skala Y: im wyżej, tym lepiej (Dobry=5, Awaryjny=1).
+const RATING_Y: Record<RatingKey, number> = {
+  dobry: 5,
+  zadowalajacy: 4,
+  sredni: 3,
+  zly: 2,
+  awaryjny: 1,
+}
+
+const RATING_LABEL: Record<RatingKey, string> = {
+  dobry: 'Dobry',
+  zadowalajacy: 'Zadowalający',
+  sredni: 'Średni',
+  zly: 'Zły',
+  awaryjny: 'Awaryjny',
+}
+
+const RATING_LABEL_SHORT: Record<number, string> = {
+  5: 'Dobry',
+  4: 'Zadow.',
+  3: 'Średni',
+  2: 'Zły',
+  1: 'Awaryj.',
+}
+
+interface InspectionHistoryRow {
+  id: string
+  protocol_number: string | null
+  inspection_date: string | null
+  inspection_type: 'annual' | 'five_year'
+  overall_condition_rating: RatingKey | null
+  next_annual_date: string | null
+  next_five_year_date: string | null
+  next_electrical_date: string | null
+  inspection_inspectors?: {
+    is_lead: boolean | null
+    inspector: { full_name: string | null } | null
+  }[]
+}
+
 export default function TurbineDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -65,11 +114,13 @@ export default function TurbineDetailPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [inspectionsCount, setInspectionsCount] = useState(0)
   const [openRecsCount, setOpenRecsCount] = useState(0)
+  const [inspectionsHistory, setInspectionsHistory] = useState<InspectionHistoryRow[]>([])
 
   useEffect(() => {
     fetchTurbineData()
     fetchUserRole()
     fetchCounters()
+    fetchInspectionsHistory()
   }, [turbineId])
 
   async function fetchUserRole() {
@@ -127,6 +178,36 @@ export default function TurbineDetailPage() {
       setOpenRecsCount(recs || 0)
     } catch (e) {
       console.error('Error fetching counters:', e)
+    }
+  }
+
+  async function fetchInspectionsHistory() {
+    const supabase = createClient()
+    try {
+      const { data, error } = await supabase
+        .from('inspections')
+        .select(`
+          id,
+          protocol_number,
+          inspection_date,
+          inspection_type,
+          overall_condition_rating,
+          next_annual_date,
+          next_five_year_date,
+          next_electrical_date,
+          inspection_inspectors(
+            is_lead,
+            inspector:inspectors(full_name)
+          )
+        `)
+        .eq('turbine_id', turbineId)
+        .not('is_deleted', 'is', true)
+        .order('inspection_date', { ascending: false })
+        .limit(6)
+      if (error) throw error
+      setInspectionsHistory((data || []) as unknown as InspectionHistoryRow[])
+    } catch (e) {
+      console.error('Error fetching inspections history:', e)
     }
   }
 
@@ -227,8 +308,19 @@ export default function TurbineDetailPage() {
           <TabTrigger value="certyfikaty" label="Certyfikaty" />
         </TabsList>
 
-        {/* TAB: Przegląd — obecna zawałość + 3 foto jako wizytówka */}
+        {/* TAB: Przegląd — wykres, KPI + obecna zawartość */}
         <TabsContent value="przeglad" className="space-y-6 mt-0">
+          {/* Wykres oceny w czasie (2/3) + sidebar z 2 kartami KPI (1/3) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="lg:col-span-2">
+              <InspectionTrendChart rows={inspectionsHistory} />
+            </div>
+            <div className="flex flex-col gap-5">
+              <LastInspectionCard row={inspectionsHistory[0] ?? null} />
+              <UpcomingInspectionsCard row={inspectionsHistory[0] ?? null} />
+            </div>
+          </div>
+
           {/* 3 zdjęcia referencyjne turbiny (wizytówka) */}
           <Card className="rounded-xl border border-graphite-200 shadow-xs overflow-hidden">
             <CardContent className="p-5">
@@ -660,6 +752,305 @@ function TabPlaceholder({ title, description }: { title: string; description: st
 }
 
 // ───── Photo slot ─────────────────────────────────────────────────────────────
+
+// ───── Wykres oceny w czasie (SVG line chart, 6 ostatnich inspekcji) ─────────
+
+function InspectionTrendChart({ rows }: { rows: InspectionHistoryRow[] }) {
+  // Chronologicznie od lewej do prawej (najstarsza → najnowsza).
+  // Filtrujemy tylko te z uzupełnioną oceną, bo bez ratingu nie ma Y.
+  const points = rows
+    .filter((r) => r.overall_condition_rating && r.inspection_date)
+    .reverse()
+    .map((r) => ({
+      id: r.id,
+      date: new Date(r.inspection_date as string),
+      rating: r.overall_condition_rating as RatingKey,
+      y: RATING_Y[r.overall_condition_rating as RatingKey],
+    }))
+
+  return (
+    <Card className="rounded-xl border border-graphite-200 shadow-xs">
+      <CardHeader className="border-b border-graphite-100 pb-4">
+        <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary-600" />
+          Ocena techniczna w czasie
+        </CardTitle>
+        <p className="text-[12px] text-graphite-500 mt-0.5">
+          Maksymalnie 6 ostatnich inspekcji
+        </p>
+      </CardHeader>
+      <CardContent className="p-5">
+        {points.length < 2 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="p-3 bg-graphite-50 rounded-2xl mb-3">
+              <TrendingUp className="h-8 w-8 text-graphite-200" />
+            </div>
+            <p className="text-sm font-semibold text-graphite-800">
+              {points.length === 0
+                ? 'Brak danych do wykresu'
+                : 'Za mało danych do wykresu trendu'}
+            </p>
+            <p className="text-xs text-graphite-500 mt-1 max-w-sm">
+              {points.length === 0
+                ? 'Wykres pojawi się po pierwszej zatwierdzonej inspekcji z uzupełnioną oceną ogólną.'
+                : `Pierwsza inspekcja: ${points[0].date.toLocaleDateString('pl-PL')}. Trend pojawi się po drugiej inspekcji.`}
+            </p>
+          </div>
+        ) : (
+          (() => {
+            // SVG geometria
+            const W = 600
+            const H = 200
+            const PAD_L = 54
+            const PAD_R = 24
+            const PAD_T = 20
+            const PAD_B = 36
+            const innerW = W - PAD_L - PAD_R
+            const innerH = H - PAD_T - PAD_B
+
+            const xAt = (i: number) =>
+              PAD_L + (i * innerW) / Math.max(1, points.length - 1)
+            // y=5 (dobry) na górze, y=1 (awaryjny) na dole.
+            const yAt = (v: number) =>
+              PAD_T + ((5 - v) / 4) * innerH
+
+            const pathD = points
+              .map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(p.y).toFixed(1)}`)
+              .join(' ')
+
+            const areaD =
+              `${pathD} L${xAt(points.length - 1).toFixed(1)},${PAD_T + innerH} ` +
+              `L${xAt(0).toFixed(1)},${PAD_T + innerH} Z`
+
+            return (
+              <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Ocena techniczna w czasie">
+                <defs>
+                  <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#2E9F4A" stopOpacity="0.18" />
+                    <stop offset="100%" stopColor="#2E9F4A" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Grid lines horizontal + Y labels */}
+                {[1, 2, 3, 4, 5].map((v) => (
+                  <g key={v}>
+                    <line
+                      x1={PAD_L}
+                      x2={W - PAD_R}
+                      y1={yAt(v)}
+                      y2={yAt(v)}
+                      stroke="#EEF1F5"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={PAD_L - 8}
+                      y={yAt(v)}
+                      dy="0.35em"
+                      textAnchor="end"
+                      className="fill-graphite-400"
+                      style={{ fontSize: '10px', fontFamily: 'var(--font-inter)' }}
+                    >
+                      {RATING_LABEL_SHORT[v]}
+                    </text>
+                  </g>
+                ))}
+
+                {/* Area + line */}
+                <path d={areaD} fill="url(#trendGradient)" />
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke="#259648"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Points + X labels */}
+                {points.map((p, i) => (
+                  <g key={p.id}>
+                    <circle
+                      cx={xAt(i)}
+                      cy={yAt(p.y)}
+                      r={i === points.length - 1 ? 5 : 4}
+                      fill={i === points.length - 1 ? '#F59E0B' : '#259648'}
+                      stroke="white"
+                      strokeWidth={i === points.length - 1 ? 2 : 1.5}
+                    />
+                    <text
+                      x={xAt(i)}
+                      y={H - 8}
+                      textAnchor="middle"
+                      className="fill-graphite-500"
+                      style={{ fontSize: '10px', fontFamily: 'var(--font-jetbrains-mono)' }}
+                    >
+                      {p.date.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            )
+          })()
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ───── Karta KPI: Ostatnia kontrola ─────────────────────────────────────────
+
+function LastInspectionCard({ row }: { row: InspectionHistoryRow | null }) {
+  if (!row) {
+    return (
+      <Card className="rounded-xl border border-graphite-200 shadow-xs">
+        <CardContent className="p-5 flex flex-col items-center text-center gap-2 py-8">
+          <div className="p-2 bg-graphite-50 rounded-xl">
+            <ClipboardCheck className="h-6 w-6 text-graphite-200" />
+          </div>
+          <p className="text-sm font-semibold text-graphite-800">Brak inspekcji</p>
+          <p className="text-xs text-graphite-500">
+            Pierwszy protokół pojawi się tutaj po zatwierdzeniu inspekcji.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const leadInspector = row.inspection_inspectors?.find((ii) => ii.is_lead)?.inspector?.full_name
+    ?? row.inspection_inspectors?.[0]?.inspector?.full_name
+    ?? null
+
+  const typeLabel = row.inspection_type === 'annual' ? 'Kontrola roczna' : 'Kontrola 5-letnia'
+
+  return (
+    <Card className="rounded-xl border border-graphite-200 shadow-xs">
+      <CardHeader className="pb-3 pt-4 px-5 flex flex-row items-center gap-3">
+        <div className="p-2 bg-primary-50 rounded-xl">
+          <ClipboardCheck className="h-5 w-5 text-primary-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <CardTitle className="text-[13px] font-bold text-graphite-900 leading-tight">
+            Ostatnia kontrola
+          </CardTitle>
+          <p className="text-[11px] text-graphite-500 mt-0.5 uppercase tracking-wider">
+            {typeLabel}
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 px-5 pb-4 space-y-2.5">
+        <div>
+          <div className="font-mono text-[15px] font-bold text-graphite-900 leading-tight">
+            {row.protocol_number ?? '—'}
+          </div>
+          <div className="font-mono text-[12px] text-graphite-500 mt-0.5">
+            {row.inspection_date ? new Date(row.inspection_date).toLocaleDateString('pl-PL') : '—'}
+          </div>
+        </div>
+        {leadInspector && (
+          <div className="text-[12px] text-graphite-800">
+            <span className="text-graphite-500">Inspektor: </span>
+            {leadInspector}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-graphite-100">
+          <Link
+            href={`/api/pdf/${row.id}`}
+            target="_blank"
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
+          >
+            <Download className="h-3.5 w-3.5" />
+            PDF
+          </Link>
+          <Link
+            href={`/api/docx/${row.id}`}
+            target="_blank"
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
+          >
+            <Download className="h-3.5 w-3.5" />
+            DOCX
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ───── Karta KPI: Najbliższe przeglądy ──────────────────────────────────────
+
+function UpcomingInspectionsCard({ row }: { row: InspectionHistoryRow | null }) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const items: { label: string; date: Date | null }[] = row
+    ? [
+        { label: 'Kontrola roczna', date: row.next_annual_date ? new Date(row.next_annual_date) : null },
+        { label: 'Kontrola elektryczna', date: row.next_electrical_date ? new Date(row.next_electrical_date) : null },
+        { label: 'Kontrola 5-letnia', date: row.next_five_year_date ? new Date(row.next_five_year_date) : null },
+      ]
+    : []
+
+  const filtered = items
+    .filter((i) => i.date !== null)
+    .sort((a, b) => (a.date!.getTime() - b.date!.getTime()))
+
+  return (
+    <Card className="rounded-xl border border-graphite-200 shadow-xs">
+      <CardHeader className="pb-3 pt-4 px-5 flex flex-row items-center gap-3">
+        <div className="p-2 bg-info-50 rounded-xl">
+          <Calendar className="h-5 w-5 text-info-700" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <CardTitle className="text-[13px] font-bold text-graphite-900 leading-tight">
+            Najbliższe przeglądy
+          </CardTitle>
+          <p className="text-[11px] text-graphite-500 mt-0.5 uppercase tracking-wider">
+            Wg ostatniego protokołu
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 px-5 pb-4">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-graphite-500 py-2">
+            Terminy kolejnych kontroli pojawią się po zatwierdzeniu pierwszej inspekcji.
+          </p>
+        ) : (
+          <ul className="divide-y divide-graphite-100">
+            {filtered.map((item) => {
+              const d = item.date!
+              const days = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+              const overdue = days < 0
+              const soon = days >= 0 && days <= 90
+              return (
+                <li key={item.label} className="py-2.5 flex items-center justify-between gap-3 first:pt-1 last:pb-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold text-graphite-900 leading-tight">
+                      {item.label}
+                    </div>
+                    <div className="font-mono text-[11px] text-graphite-500 mt-0.5">
+                      {d.toLocaleDateString('pl-PL')}
+                    </div>
+                  </div>
+                  <div
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[11px] font-semibold shrink-0 ${
+                      overdue
+                        ? 'bg-danger-50 text-danger-800'
+                        : soon
+                        ? 'bg-warning-50 text-warning-800'
+                        : 'bg-graphite-100 text-graphite-700'
+                    }`}
+                  >
+                    <Clock className="h-3 w-3" />
+                    {overdue ? `${Math.abs(days)} d. po` : `za ${days} d.`}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 function PhotoSlot({
   url,
