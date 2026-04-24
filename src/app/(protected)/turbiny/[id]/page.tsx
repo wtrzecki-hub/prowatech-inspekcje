@@ -151,6 +151,15 @@ interface InspectionPhotoRow {
   } | null
 }
 
+interface HistoricalRow {
+  id: string
+  protocol_number: string | null
+  inspection_date: string | null
+  inspection_type: 'annual' | 'five_year' | null
+  pdf_url: string | null
+  summary_notes: string | null
+}
+
 interface CertInspectorRow {
   id: string
   full_name: string
@@ -179,6 +188,7 @@ export default function TurbineDetailPage() {
   const [showOnlyOpen, setShowOnlyOpen] = useState(true)
   const [photos, setPhotos] = useState<InspectionPhotoRow[]>([])
   const [certInspectors, setCertInspectors] = useState<CertInspectorRow[]>([])
+  const [historical, setHistorical] = useState<HistoricalRow[]>([])
 
   useEffect(() => {
     fetchTurbineData()
@@ -188,6 +198,7 @@ export default function TurbineDetailPage() {
     fetchRepairs()
     fetchPhotos()
     fetchCertInspectors()
+    fetchHistorical()
   }, [turbineId])
 
   async function fetchUserRole() {
@@ -275,6 +286,22 @@ export default function TurbineDetailPage() {
       setInspectionsHistory((data || []) as unknown as InspectionHistoryRow[])
     } catch (e) {
       console.error('Error fetching inspections history:', e)
+    }
+  }
+
+  async function fetchHistorical() {
+    const supabase = createClient()
+    try {
+      const { data, error } = await supabase
+        .from('historical_protocols')
+        .select('id, protocol_number, inspection_date, inspection_type, pdf_url, summary_notes')
+        .eq('turbine_id', turbineId)
+        .not('is_deleted', 'is', true)
+        .order('inspection_date', { ascending: false, nullsFirst: false })
+      if (error) throw error
+      setHistorical((data || []) as HistoricalRow[])
+    } catch (e) {
+      console.error('Error fetching historical protocols:', e)
     }
   }
 
@@ -372,7 +399,7 @@ export default function TurbineDetailPage() {
     }
   }
 
-  const canUpload = userRole === 'admin' || userRole === 'inspektor'
+  const canUpload = userRole === 'admin' || userRole === 'inspector'
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null)
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2 | 3) {
@@ -463,7 +490,7 @@ export default function TurbineDetailPage() {
       <Tabs defaultValue="przeglad" className="space-y-6">
         <TabsList className="h-auto bg-transparent p-0 border-b border-graphite-200 rounded-none w-full justify-start gap-1">
           <TabTrigger value="przeglad" label="Przegląd" />
-          <TabTrigger value="historia" label="Historia inspekcji" count={inspectionsCount} />
+          <TabTrigger value="historia" label="Historia inspekcji" count={inspectionsCount + historical.length} />
           <TabTrigger value="zalecenia" label="Zalecenia" count={openRecsCount} tone={openRecsCount > 0 ? 'warning' : 'muted'} />
           <TabTrigger value="zdjecia" label="Zdjęcia" />
           <TabTrigger value="certyfikaty" label="Certyfikaty" />
@@ -721,7 +748,7 @@ export default function TurbineDetailPage() {
 
         {/* TAB: Historia inspekcji */}
         <TabsContent value="historia" className="mt-0">
-          <InspectionsHistoryTable rows={inspectionsHistory} />
+          <InspectionsHistoryTable rows={inspectionsHistory} historical={historical} />
         </TabsContent>
 
         {/* TAB: Zalecenia */}
@@ -1207,8 +1234,38 @@ function UpcomingInspectionsCard({ row }: { row: InspectionHistoryRow | null }) 
 
 // ───── Tabela historii inspekcji ─────────────────────────────────────────────
 
-function InspectionsHistoryTable({ rows }: { rows: InspectionHistoryRow[] }) {
-  if (rows.length === 0) {
+type HistoryItem =
+  | { source: 'system'; row: InspectionHistoryRow; date: Date | null }
+  | { source: 'historical'; row: HistoricalRow; date: Date | null }
+
+function InspectionsHistoryTable({
+  rows,
+  historical,
+}: {
+  rows: InspectionHistoryRow[]
+  historical: HistoricalRow[]
+}) {
+  // Połączona lista inspekcji z systemu i historycznych protokołów,
+  // sortowanie po `inspection_date` DESC, nulle na końcu.
+  const merged: HistoryItem[] = [
+    ...rows.map((r): HistoryItem => ({
+      source: 'system',
+      row: r,
+      date: r.inspection_date ? new Date(r.inspection_date) : null,
+    })),
+    ...historical.map((h): HistoryItem => ({
+      source: 'historical',
+      row: h,
+      date: h.inspection_date ? new Date(h.inspection_date) : null,
+    })),
+  ].sort((a, b) => {
+    if (a.date && b.date) return b.date.getTime() - a.date.getTime()
+    if (a.date && !b.date) return -1
+    if (!a.date && b.date) return 1
+    return 0
+  })
+
+  if (merged.length === 0) {
     return (
       <Card className="rounded-xl border border-dashed border-graphite-200 shadow-none">
         <CardContent className="p-10 text-center space-y-2">
@@ -1217,7 +1274,8 @@ function InspectionsHistoryTable({ rows }: { rows: InspectionHistoryRow[] }) {
           </div>
           <p className="text-sm font-semibold text-graphite-800">Brak inspekcji w systemie</p>
           <p className="text-xs text-graphite-500 max-w-md mx-auto">
-            Historia pojawi się tutaj po wprowadzeniu pierwszego protokołu przez aplikację.
+            Historia pojawi się tutaj po wprowadzeniu pierwszego protokołu przez aplikację
+            lub dodaniu historycznego protokołu z dysku współdzielonego Google Drive.
           </p>
         </CardContent>
       </Card>
@@ -1238,53 +1296,91 @@ function InspectionsHistoryTable({ rows }: { rows: InspectionHistoryRow[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const typeLabel = row.inspection_type === 'annual' ? 'Roczna' : '5-letnia'
-              const typeClass =
-                row.inspection_type === 'annual'
-                  ? 'bg-info-50 text-info-700'
-                  : 'bg-graphite-100 text-graphite-700'
-              const leadInspector =
-                row.inspection_inspectors?.find((ii) => ii.is_lead)?.inspector?.full_name ??
-                row.inspection_inspectors?.[0]?.inspector?.full_name ??
-                null
+            {merged.map((item) => {
+              const dateStr = item.date ? item.date.toLocaleDateString('pl-PL') : '—'
+              const protocolNumber = item.row.protocol_number ?? '—'
+
+              if (item.source === 'system') {
+                const r = item.row
+                const typeLabel = r.inspection_type === 'annual' ? 'Roczna' : '5-letnia'
+                const typeClass =
+                  r.inspection_type === 'annual'
+                    ? 'bg-info-50 text-info-700'
+                    : 'bg-graphite-100 text-graphite-700'
+                const leadInspector =
+                  r.inspection_inspectors?.find((ii) => ii.is_lead)?.inspector?.full_name ??
+                  r.inspection_inspectors?.[0]?.inspector?.full_name ??
+                  null
+                return (
+                  <tr key={`system-${r.id}`} className="border-b border-graphite-100 h-[52px] hover:bg-graphite-50/50 transition-colors">
+                    <td className="font-mono text-[13px] text-graphite-500 px-5">{dateStr}</td>
+                    <td className="font-mono font-semibold text-[13px] text-graphite-900">{protocolNumber}</td>
+                    <td>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${typeClass}`}>
+                        {typeLabel}
+                      </span>
+                    </td>
+                    <td className="text-[13px] text-graphite-800">
+                      {leadInspector ?? <span className="text-graphite-400">—</span>}
+                    </td>
+                    <td className="pr-5 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Link
+                          href={`/api/pdf/${r.id}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          PDF
+                        </Link>
+                        <Link
+                          href={`/api/docx/${r.id}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          DOCX
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              }
+
+              // source === 'historical'
+              const h = item.row
+              const typeLabel =
+                h.inspection_type === 'annual'
+                  ? 'Roczna · archiw.'
+                  : h.inspection_type === 'five_year'
+                  ? '5-letnia · archiw.'
+                  : 'Archiwalny'
               return (
-                <tr key={row.id} className="border-b border-graphite-100 h-[52px] hover:bg-graphite-50/50 transition-colors">
-                  <td className="font-mono text-[13px] text-graphite-500 px-5">
-                    {row.inspection_date
-                      ? new Date(row.inspection_date).toLocaleDateString('pl-PL')
-                      : '—'}
-                  </td>
-                  <td className="font-mono font-semibold text-[13px] text-graphite-900">
-                    {row.protocol_number ?? '—'}
-                  </td>
+                <tr key={`hist-${h.id}`} className="border-b border-graphite-100 h-[52px] hover:bg-graphite-50/50 transition-colors">
+                  <td className="font-mono text-[13px] text-graphite-500 px-5">{dateStr}</td>
+                  <td className="font-mono font-semibold text-[13px] text-graphite-900">{protocolNumber}</td>
                   <td>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${typeClass}`}>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-graphite-100 text-graphite-700">
                       {typeLabel}
                     </span>
                   </td>
-                  <td className="text-[13px] text-graphite-800">
-                    {leadInspector ?? <span className="text-graphite-400">—</span>}
+                  <td className="text-[13px] text-graphite-400">
+                    <span title={h.summary_notes ?? undefined}>—</span>
                   </td>
                   <td className="pr-5 text-right">
-                    <div className="flex justify-end gap-2">
+                    {h.pdf_url ? (
                       <Link
-                        href={`/api/pdf/${row.id}`}
+                        href={h.pdf_url}
                         target="_blank"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
                       >
-                        <Download className="h-3.5 w-3.5" />
-                        PDF
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        GDrive
                       </Link>
-                      <Link
-                        href={`/api/docx/${row.id}`}
-                        target="_blank"
-                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        DOCX
-                      </Link>
-                    </div>
+                    ) : (
+                      <span className="text-[12px] text-graphite-400">brak pliku</span>
+                    )}
                   </td>
                 </tr>
               )
