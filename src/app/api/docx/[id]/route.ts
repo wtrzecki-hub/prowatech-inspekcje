@@ -32,7 +32,9 @@ import {
   TRACKING_DXA,
   RATING_COLORS_HEX,
   RATING_LABELS,
+  URGENCY_COLORS_HEX,
   type RatingKey,
+  type UrgencyKey,
 } from '@/lib/design/protocol-tokens'
 
 // A4 dimensions in DXA (twentieths of a point)
@@ -747,6 +749,87 @@ export async function GET(
         })
       }
 
+      /**
+       * Wiersz tabeli zaleceń z kolorystycznym kodowaniem pilności (I-IV).
+       * Cała komórka „Pilność" przyjmuje tło + kolor tekstu z URGENCY_COLORS_HEX.
+       * Reszta kolumn pozostaje w neutralnym alternating graphite-50.
+       * Zgodnie z § 3 prototypu (design/prowatech-prototype.html).
+       */
+      function repairRow(r: any, idx: number): TableRow {
+        const level = (r?.urgency_level ?? null) as UrgencyKey | null
+        const urgencyColors = level ? URGENCY_COLORS_HEX[level] : null
+
+        const altShading =
+          idx % 2 === 1
+            ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 }
+            : undefined
+
+        const urgencyShading = urgencyColors
+          ? { type: ShadingType.CLEAR, color: 'auto', fill: urgencyColors.bg }
+          : altShading
+
+        const urgencyTextColor = urgencyColors?.text ?? HEX.graphite900
+
+        const p = (text: string, opts: {
+          bold?: boolean
+          center?: boolean
+          color?: string
+        } = {}) =>
+          new Paragraph({
+            alignment: opts.center ? AlignmentType.CENTER : undefined,
+            children: [
+              new TextRun({
+                text,
+                bold: opts.bold,
+                font: 'Arial',
+                size: FONT_DXA.tableBody,
+                color: opts.color ?? HEX.graphite900,
+              }),
+            ],
+          })
+
+        return new TableRow({
+          children: [
+            new TableCell({
+              width: { size: repColWidths[0], type: WidthType.DXA },
+              borders: thinBorder,
+              shading: altShading,
+              children: [p(String(idx + 1), { center: true })],
+            }),
+            new TableCell({
+              width: { size: repColWidths[1], type: WidthType.DXA },
+              borders: thinBorder,
+              shading: altShading,
+              children: [p(r.scope_description || '—')],
+            }),
+            new TableCell({
+              width: { size: repColWidths[2], type: WidthType.DXA },
+              borders: thinBorder,
+              shading: altShading,
+              children: [p(r.repair_type || '—', { center: true })],
+            }),
+            new TableCell({
+              width: { size: repColWidths[3], type: WidthType.DXA },
+              borders: thinBorder,
+              shading: urgencyShading,
+              children: [
+                p(level ?? '—', {
+                  center: true,
+                  bold: !!level,
+                  color: urgencyTextColor,
+                }),
+              ],
+            }),
+            new TableCell({
+              width: { size: repColWidths[4], type: WidthType.DXA },
+              borders: thinBorder,
+              shading: altShading,
+              children: [p(r.element_name || '—')],
+            }),
+          ],
+        })
+      }
+
       const repairTableRows: TableRow[] = [
         new TableRow({
           tableHeader: true,
@@ -758,42 +841,7 @@ export async function GET(
             repHeaderCell('Element', repColWidths[4]),
           ],
         }),
-        ...repairs.map((r: any, idx: number) =>
-          new TableRow({
-            children: [
-              new TableCell({
-                width: { size: repColWidths[0], type: WidthType.DXA },
-                borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(idx + 1), font: 'Arial', size: 18 })] })],
-              }),
-              new TableCell({
-                width: { size: repColWidths[1], type: WidthType.DXA },
-                borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-                children: [new Paragraph({ children: [new TextRun({ text: r.scope_description || '—', font: 'Arial', size: 18 })] })],
-              }),
-              new TableCell({
-                width: { size: repColWidths[2], type: WidthType.DXA },
-                borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: r.repair_type || '—', font: 'Arial', size: 18 })] })],
-              }),
-              new TableCell({
-                width: { size: repColWidths[3], type: WidthType.DXA },
-                borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: r.urgency_level || '—', font: 'Arial', size: 18 })] })],
-              }),
-              new TableCell({
-                width: { size: repColWidths[4], type: WidthType.DXA },
-                borders: thinBorder,
-                shading: idx % 2 === 1 ? { type: ShadingType.CLEAR, color: 'auto', fill: HEX.graphite50 } : undefined,
-                children: [new Paragraph({ children: [new TextRun({ text: r.element_name || '—', font: 'Arial', size: 18 })] })],
-              }),
-            ],
-          })
-        ),
+        ...repairs.map((r: any, idx: number) => repairRow(r, idx)),
       ]
 
       repairsContent = [
