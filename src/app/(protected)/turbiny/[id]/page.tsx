@@ -25,6 +25,9 @@ import {
   Wrench,
   CheckCircle2,
   Filter,
+  ImageIcon,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -134,6 +137,34 @@ interface RepairRow {
   } | null
 }
 
+interface InspectionPhotoRow {
+  id: string
+  file_url: string | null
+  thumbnail_url: string | null
+  description: string | null
+  photo_number: number | null
+  taken_at: string | null
+  inspection_id: string
+  inspections: {
+    protocol_number: string | null
+    inspection_date: string | null
+  } | null
+}
+
+interface CertInspectorRow {
+  id: string
+  full_name: string
+  gwo_certificate_number: string | null
+  gwo_expiry_date: string | null
+  udt_certificate_number: string | null
+  udt_expiry_date: string | null
+  sep_certificate_number: string | null
+  sep_expiry_date: string | null
+  chamber_certificate_number: string | null
+  chamber_expiry_date: string | null
+  chamber_membership: string | null
+}
+
 export default function TurbineDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -146,6 +177,8 @@ export default function TurbineDetailPage() {
   const [inspectionsHistory, setInspectionsHistory] = useState<InspectionHistoryRow[]>([])
   const [repairs, setRepairs] = useState<RepairRow[]>([])
   const [showOnlyOpen, setShowOnlyOpen] = useState(true)
+  const [photos, setPhotos] = useState<InspectionPhotoRow[]>([])
+  const [certInspectors, setCertInspectors] = useState<CertInspectorRow[]>([])
 
   useEffect(() => {
     fetchTurbineData()
@@ -153,6 +186,8 @@ export default function TurbineDetailPage() {
     fetchCounters()
     fetchInspectionsHistory()
     fetchRepairs()
+    fetchPhotos()
+    fetchCertInspectors()
   }, [turbineId])
 
   async function fetchUserRole() {
@@ -240,6 +275,74 @@ export default function TurbineDetailPage() {
       setInspectionsHistory((data || []) as unknown as InspectionHistoryRow[])
     } catch (e) {
       console.error('Error fetching inspections history:', e)
+    }
+  }
+
+  async function fetchPhotos() {
+    const supabase = createClient()
+    try {
+      const { data, error } = await supabase
+        .from('inspection_photos')
+        .select(`
+          id,
+          file_url,
+          thumbnail_url,
+          description,
+          photo_number,
+          taken_at,
+          inspection_id,
+          inspections!inner(turbine_id, is_deleted, protocol_number, inspection_date)
+        `)
+        .eq('inspections.turbine_id', turbineId)
+        .not('inspections.is_deleted', 'is', true)
+        .order('photo_number', { ascending: true, nullsFirst: false })
+      if (error) throw error
+      setPhotos((data || []) as unknown as InspectionPhotoRow[])
+    } catch (e) {
+      console.error('Error fetching photos:', e)
+    }
+  }
+
+  async function fetchCertInspectors() {
+    // Certyfikaty zespołu ostatniej inspekcji tej turbiny.
+    const supabase = createClient()
+    try {
+      const { data: lastInsp } = await supabase
+        .from('inspections')
+        .select(`
+          id,
+          inspection_inspectors(
+            inspector_id,
+            inspector:inspectors(
+              id,
+              full_name,
+              gwo_certificate_number,
+              gwo_expiry_date,
+              udt_certificate_number,
+              udt_expiry_date,
+              sep_certificate_number,
+              sep_expiry_date,
+              chamber_certificate_number,
+              chamber_expiry_date,
+              chamber_membership
+            )
+          )
+        `)
+        .eq('turbine_id', turbineId)
+        .not('is_deleted', 'is', true)
+        .order('inspection_date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const rels = (lastInsp?.inspection_inspectors ?? []) as unknown as {
+        inspector: CertInspectorRow | null
+      }[]
+      const list = rels
+        .map((r) => r.inspector)
+        .filter((x): x is CertInspectorRow => x !== null)
+      setCertInspectors(list)
+    } catch (e) {
+      console.error('Error fetching cert inspectors:', e)
     }
   }
 
@@ -630,20 +733,14 @@ export default function TurbineDetailPage() {
           />
         </TabsContent>
 
-        {/* TAB: Zdjęcia — placeholder do C4 */}
+        {/* TAB: Zdjęcia */}
         <TabsContent value="zdjecia" className="mt-0">
-          <TabPlaceholder
-            title="Zdjęcia z inspekcji"
-            description="Galeria zdjęć ze wszystkich przeprowadzonych inspekcji. Pojawi się w kolejnym kroku."
-          />
+          <InspectionPhotosGrid photos={photos} />
         </TabsContent>
 
-        {/* TAB: Certyfikaty — placeholder do C4 */}
+        {/* TAB: Certyfikaty */}
         <TabsContent value="certyfikaty" className="mt-0">
-          <TabPlaceholder
-            title="Certyfikaty zespołu"
-            description="Certyfikaty GWO, UDT, SEP inspektorów z datami ważności. Pojawi się w kolejnym kroku."
-          />
+          <CertificatesList inspectors={certInspectors} />
         </TabsContent>
       </Tabs>
     </div>
@@ -1347,6 +1444,211 @@ function RepairCard({ row }: { row: RepairRow }) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+// ───── Tab Zdjęcia: grid ze zdjęć inspekcji ─────────────────────────────────
+
+function InspectionPhotosGrid({ photos }: { photos: InspectionPhotoRow[] }) {
+  if (photos.length === 0) {
+    return (
+      <Card className="rounded-xl border border-dashed border-graphite-200 shadow-none">
+        <CardContent className="p-10 text-center space-y-2">
+          <div className="p-3 bg-graphite-50 rounded-2xl mb-3 inline-block">
+            <ImageIcon className="h-8 w-8 text-graphite-200" />
+          </div>
+          <p className="text-sm font-semibold text-graphite-800">Brak zdjęć</p>
+          <p className="text-xs text-graphite-500 max-w-md mx-auto">
+            Zdjęcia dodane podczas inspekcji przez aplikację pojawią się tutaj.
+            Zdjęcia referencyjne turbiny znajdziesz w zakładce „Przegląd".
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {photos.map((p) => (
+        <a
+          key={p.id}
+          href={p.file_url || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group block"
+        >
+          <div className="aspect-square relative rounded-xl overflow-hidden border border-graphite-200 bg-graphite-50">
+            {p.thumbnail_url || p.file_url ? (
+              <img
+                src={p.thumbnail_url || p.file_url || ''}
+                alt={p.description ?? `Zdjęcie ${p.photo_number ?? ''}`.trim()}
+                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <ImageIcon className="h-8 w-8 text-graphite-300" />
+              </div>
+            )}
+            {p.photo_number !== null && p.photo_number !== undefined && (
+              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded font-mono text-[10px] font-bold bg-black/60 text-white">
+                FOT. {String(p.photo_number).padStart(2, '0')}
+              </div>
+            )}
+          </div>
+          <div className="mt-1.5 space-y-0.5">
+            {p.description && (
+              <p className="text-[12px] text-graphite-800 line-clamp-2 leading-tight">
+                {p.description}
+              </p>
+            )}
+            {p.inspections?.protocol_number && (
+              <p className="text-[11px] text-graphite-400 font-mono">
+                {p.inspections.protocol_number}
+                {p.inspections.inspection_date && (
+                  <span className="ml-2">
+                    {new Date(p.inspections.inspection_date).toLocaleDateString('pl-PL')}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        </a>
+      ))}
+    </div>
+  )
+}
+
+// ───── Tab Certyfikaty: lista inspektorów zespołu + ich uprawnienia ─────────
+
+function CertificatesList({ inspectors }: { inspectors: CertInspectorRow[] }) {
+  if (inspectors.length === 0) {
+    return (
+      <Card className="rounded-xl border border-dashed border-graphite-200 shadow-none">
+        <CardContent className="p-10 text-center space-y-2">
+          <div className="p-3 bg-graphite-50 rounded-2xl mb-3 inline-block">
+            <ShieldCheck className="h-8 w-8 text-graphite-200" />
+          </div>
+          <p className="text-sm font-semibold text-graphite-800">Brak przypisanych inspektorów</p>
+          <p className="text-xs text-graphite-500 max-w-md mx-auto">
+            Certyfikaty zespołu wyświetlą się po powiązaniu inspektorów z ostatnią inspekcją.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {inspectors.map((ins) => (
+        <InspectorCertCard key={ins.id} inspector={ins} />
+      ))}
+    </div>
+  )
+}
+
+function InspectorCertCard({ inspector }: { inspector: CertInspectorRow }) {
+  const certs: { label: string; number: string | null; expiry: string | null }[] = [
+    {
+      label: 'UDT',
+      number: inspector.udt_certificate_number,
+      expiry: inspector.udt_expiry_date,
+    },
+    {
+      label: 'SEP',
+      number: inspector.sep_certificate_number,
+      expiry: inspector.sep_expiry_date,
+    },
+    {
+      label: 'GWO',
+      number: inspector.gwo_certificate_number,
+      expiry: inspector.gwo_expiry_date,
+    },
+    {
+      label: inspector.chamber_membership ?? 'Izba',
+      number: inspector.chamber_certificate_number,
+      expiry: inspector.chamber_expiry_date,
+    },
+  ].filter((c) => c.number || c.expiry)
+
+  return (
+    <Card className="rounded-xl border border-graphite-200 shadow-xs">
+      <CardHeader className="pt-5 px-5 pb-3 border-b border-graphite-100">
+        <CardTitle className="text-[14px] font-bold text-graphite-900">
+          {inspector.full_name}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-5">
+        {certs.length === 0 ? (
+          <p className="text-xs text-graphite-500">
+            Brak uzupełnionych danych uprawnień w profilu inspektora.
+          </p>
+        ) : (
+          <ul className="divide-y divide-graphite-100">
+            {certs.map((c, i) => (
+              <CertRow key={`${c.label}-${i}`} cert={c} />
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function CertRow({
+  cert,
+}: {
+  cert: { label: string; number: string | null; expiry: string | null }
+}) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const expiryDate = cert.expiry ? new Date(cert.expiry) : null
+  const daysToExpiry = expiryDate
+    ? Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    : null
+  const expired = daysToExpiry !== null && daysToExpiry < 0
+  const soon = daysToExpiry !== null && daysToExpiry >= 0 && daysToExpiry <= 90
+
+  const Icon = expired ? ShieldAlert : ShieldCheck
+  const iconColor = expired
+    ? 'text-danger'
+    : soon
+    ? 'text-warning'
+    : expiryDate
+    ? 'text-primary-600'
+    : 'text-graphite-400'
+
+  return (
+    <li className="py-3 flex items-center gap-3 first:pt-1 last:pb-1">
+      <Icon className={`h-5 w-5 shrink-0 ${iconColor}`} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold text-graphite-900 leading-tight">
+          {cert.label}
+        </div>
+        {cert.number && (
+          <div className="font-mono text-[11px] text-graphite-500 mt-0.5">
+            Nr: {cert.number}
+          </div>
+        )}
+      </div>
+      {expiryDate && (
+        <div
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[11px] font-semibold shrink-0 ${
+            expired
+              ? 'bg-danger-50 text-danger-800'
+              : soon
+              ? 'bg-warning-50 text-warning-800'
+              : 'bg-success-50 text-success-800'
+          }`}
+        >
+          {expiryDate.toLocaleDateString('pl-PL')}
+          <span className="text-graphite-400 font-normal">
+            {expired
+              ? `${Math.abs(daysToExpiry!)} d. po`
+              : `za ${daysToExpiry} d.`}
+          </span>
+        </div>
+      )}
+    </li>
   )
 }
 
