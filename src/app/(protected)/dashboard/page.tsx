@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { RecentInspections } from "@/components/dashboard/recent-inspections";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
+import { InspectionTrendSparkline } from "@/components/dashboard/inspection-trend-sparkline";
+import { InspectionCalendar14d } from "@/components/dashboard/inspection-calendar-14d";
+import { RatingDistribution } from "@/components/dashboard/rating-distribution";
 
 export default function DashboardPage() {
   return (
@@ -43,13 +46,24 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* KPI Stats Cards */}
       <StatsCards />
 
-      {/* Main Content Grid */}
+      {/* Analytics row — trend, kalendarz, rozkład ocen */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <InspectionTrendSparkline />
+        <div className="lg:col-span-2">
+          <InspectionCalendar14d />
+        </div>
+      </div>
+
+      {/* Recent + rating + alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <RecentInspections />
-        <AlertsPanel />
+        <div className="flex flex-col gap-6">
+          <RatingDistribution />
+          <AlertsPanel />
+        </div>
       </div>
     </div>
   );

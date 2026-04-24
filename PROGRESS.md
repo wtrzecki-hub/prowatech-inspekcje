@@ -3,7 +3,7 @@
 > **Ten plik jest aktualizowany na koniec każdej sesji pracy nad projektem.**
 > **Jeśli jesteś Claude rozpoczynającym nową sesję pracy nad Prowatech Inspekcje — przeczytaj ten plik w pierwszej kolejności**, zanim zaczniesz eksplorować repo lub pytać użytkownika o kontekst. Zaktualizuj go na końcu sesji (sekcje "Ostatnio zrobione", "W toku / następne kroki" oraz "Historia sesji").
 
-_Ostatnia aktualizacja: 2026-04-23 — Faza 2 zakończona (commit `a43d457`). Wszystkie ekrany wewnętrzne przemalowane na tokeny z Fazy 1._
+_Ostatnia aktualizacja: 2026-04-24 — **Redesign krok 3 — re-layout Dashboard wdrożony.** Sparkline trendu inspekcji (12 tyg.), kalendarz 14-dniowy, bar-chart rozkładu ocen — zero nowych zależności, SVG inline + Tailwind tokeny._
 
 ---
 
@@ -78,9 +78,19 @@ Pogrupowane tematycznie (kolejność chronologiczna w obrębie grupy):
 
 **Redesign — Faza 2 DONE (2026-04-23).** Re-skin wszystkich ekranów wewnętrznych wdrożony w commit `a43d457`. Zero hard-coded `blue-*`/`gray-*`; wszystkie klasy tokeny z Fazy 1.
 
-**Faza 3 — następna:** Re-layout Dashboard (sparkline, kalendarz 14-dniowy, rozkład ocen bar-chart). Patrz `design/prowatech-redesign.md` krok 3.
+**Redesign — krok 3 (re-layout Dashboard) DONE (2026-04-24).** 3 nowe komponenty + nowy grid w `dashboard/page.tsx`:
+- `components/dashboard/inspection-trend-sparkline.tsx` — sparkline SVG liczby inspekcji per tydzień (12 tyg.), KPI + chip trendu (Δ vs poprzedni tydzień), gradient fill pod linią, ostatni punkt wyróżniony primary-700. Zapytanie: `inspections.inspection_date >= 12w ago`, `.not('is_deleted', 'is', true)`.
+- `components/dashboard/inspection-calendar-14d.tsx` — heat-grid 14 dni (dziś-3 → dziś+10), układ 7-kolumnowy z nagłówkami Pn–Nd, wyróżnienie „dziś" (primary-600 border + ring), liczniki wyk./plan. per dzień. Zapytanie: `inspection_date` + `next_annual_date` + `next_five_year_date` + `next_electrical_date` w oknie, przez Supabase `.or('and(...),and(...)')`. Klik w dzień z danymi → `/inspekcje?date=YYYY-MM-DD`.
+- `components/dashboard/rating-distribution.tsx` — bar-chart poziomy rozkładu ocen elementów z `inspection_elements` (5 kategorii: dobry / zadowalający / średni / zły / awaryjny) z kolorami semantic tokens + liczba + procent. Zapytanie z `inspections!inner(is_deleted)` i filtrem `.not('inspections.is_deleted', 'is', true)`, `is_not_applicable=false`, `condition_rating IS NOT NULL`.
 
-**Faza 3 — Portal klienta ZAIMPLEMENTOWANA (2026-04-23), wymaga konfiguracji Vercel:**
+Nowy layout Dashboard:
+- Row 1: `StatsCards` (bez zmian, 4 KPI)
+- Row 2: `InspectionTrendSparkline` (1/3) + `InspectionCalendar14d` (2/3)
+- Row 3: `RecentInspections` (2/3) + `{RatingDistribution + AlertsPanel}` (1/3)
+
+Zero nowych zależności. Wszystkie wykresy inline SVG / Tailwind — zgodnie z zasadą „preferuj recharts jeśli już jest, inaczej zaproponuj" — recharts nie było w `package.json`, więc pojechałem czystym SVG. Zgodnie z konwencją: `createClient()` w `useEffect`, `.not('is_deleted', 'is', true)` wszędzie, Polish-first copy.
+
+**Faza 3 — Portal klienta WDROŻONY NA PRODUKCJĘ (2026-04-24), commit `d301abf`, Vercel deploy `TaVz1pRJ5`:**
 - ✅ Blok 1 — Migracja DB (`client_users`, `profiles.force_password_change`) + `/api/portal/create-account` + UI w `/klienci/[id]`
 - ✅ Blok 2 — `/portal/login` (email+hasło, reset hasła), `/portal/auth/reset`, `/portal/(client)/layout.tsx` (guard roli), `auth/callback` (redirect per rola)
 - ✅ Blok 3 — `/portal/(client)/dashboard` (KPI cards, ostatnie protokoły, nadchodzące inspekcje), `/portal/(client)/farmy` (grid z chipem zdrowia)
@@ -88,10 +98,21 @@ Pogrupowane tematycznie (kolejność chronologiczna w obrębie grupy):
 - ✅ Blok 5 — `/portal/(client)/konto` (zmiana hasła + force_password_change)
 - ✅ Zabezpieczenie `/api/pdf/[id]` i `/api/docx/[id]` — auth check + weryfikacja dostępu dla `client_user`
 
-**⚠️ Wymagane kroki manualne po deploymencie Vercel:**
-1. Dodaj `SUPABASE_SERVICE_ROLE_KEY` do zmiennych środowiskowych na Vercelu (i do `.env.local` lokalnie).
-2. W Supabase → Authentication → URL Configuration → Additional Redirect URLs: dodaj `https://prowatech-inspekcje.vercel.app/portal/auth/reset`
-3. Zweryfikuj z testowym kontem klienta na Vercelu.
+**Konfiguracja produkcyjna (wykonane 2026-04-24):**
+1. ✅ `SUPABASE_SERVICE_ROLE_KEY` (Sensitive) na Vercelu w środowiskach Production + Preview. Development blokowany przez Vercel dla Sensitive vars — obsłużony lokalnym `.env.local`. **Pułapka:** pierwszy klucz wklejony 2026-04-23 okazał się nieprawidłowy ("Invalid API key" w teście) — trzeba było ponownie skopiować service_role JWT z Supabase → Settings → API Keys → zakładka "Legacy anon, service_role API keys" → Reveal → Copy i nadpisać wartość w Vercelu + wymusić Redeploy.
+2. ✅ `.env.local` (w `.gitignore`) z jednym wpisem `SUPABASE_SERVICE_ROLE_KEY=...` — URL i anon key są hardkodowane w `src/lib/supabase/client.ts` i `src/app/api/portal/create-account/route.ts`, więc `NEXT_PUBLIC_*` w `.env.local` są zbędne.
+3. ✅ Supabase → Authentication → URL Configuration → Additional Redirect URLs: `https://prowatech-inspekcje.vercel.app/portal/auth/reset` (już był dodany wcześniej).
+
+**Test przepływu (testowe konto, potem skasowane):**
+- ✅ POST `/api/portal/create-account` → temp password XXXX-XXXX-XXXX
+- ✅ `/portal/login` z temp password → redirect do `/portal/konto` (force_password_change)
+- ✅ Zmiana hasła → redirect do `/portal/dashboard`
+- ✅ Dashboard: "Witamy, Działdowo Sp. z o.o." + KPI (1 Farma / 2 Turbiny / 0 Protokołów) + Nadchodzące inspekcje
+- ✅ `/portal/farmy`: tylko FW Działdowo (1 z 98 farm w bazie) — access check działa
+- ✅ `/portal/turbiny/[własna]`: T027-Kisiny widoczna
+- ✅ `/portal/turbiny/[obca]` (turbina innego klienta): "Brak dostępu do tej turbiny" + przycisk "Wróć do farm"
+- ✅ `/portal/protokoly`: empty state "Brak protokołów" (klient bez zakończonych inspekcji)
+- ⏭️ **Nie testowane:** reset hasła przez email (infra OK, Redirect URL skonfigurowany), pobieranie PDF/DOCX (klient Działdowo bez zakończonych inspekcji — pierwszy klient z protokołem sprawdzi ten scenariusz)
 
 Poza propozycją designu brak innych jawnie udokumentowanych prac w toku w repo, ale na podstawie stanu gałęzi i nietrackowanych plików można przypuszczać następujące otwarte wątki:
 
@@ -129,6 +150,12 @@ Poza propozycją designu brak innych jawnie udokumentowanych prac w toku w repo,
 - **SSR w Supabase** — `createClient()` **nie wolno** wywoływać w body komponentu ani na top-level module. Zawsze w `useEffect` albo przez Server Action / Route Handler. Commity `5d3aff5` i `e328fdb`.
 
 - **Migracja `rated_power_kw` → `rated_power_mw`** — starsze dane lub seedy mogą mieć starą nazwę. Zmiana z commit `2719c85`.
+
+- **Bug formularza `/klienci/[id]`** (wykryty 2026-04-24) — przycisk "Zaktualizuj" w sekcji "Dane klienta" nie zapisuje zmian w DB (m.in. `contact_email` zostaje `NULL` po submit). UI wygląda jakby zapisał (toast?/brak błędu), ale reload ujawnia stary stan. Workaround: direct SQL `UPDATE public.clients SET contact_email=... WHERE id=...`. Do naprawy: sprawdzić `src/app/(protected)/klienci/[id]/page.tsx` — prawdopodobnie brak `await` na mutacji lub problem z kluczami kolumn.
+
+- **Sensitive env var niedostępny w Development na Vercelu** — Vercel blokuje flagę Sensitive dla środowiska Development ("Sensitive environment variables cannot be created in the Development environment"). Dla Production + Preview OK. Lokalne dev używa `.env.local`.
+
+- **Service_role JWT vs nowe sb_secret_...** — Supabase ma teraz dwa tryby API keys: "Publishable and secret keys" (nowy, `sb_secret_...`) oraz "Legacy anon, service_role API keys" (klasyczny JWT). Kod projektu (`route.ts` używa klasycznej zmiennej `SUPABASE_SERVICE_ROLE_KEY`) — używamy **klasycznego service_role JWT z zakładki Legacy** dla zgodności nomenklatury i kompatybilności z `@supabase/supabase-js` w klasycznym trybie.
 
 - **Line endings (CRLF/LF)** — patrz "W toku". Plik się regeneruje jako diff po checkoutcie na Windows bez `.gitattributes`.
 
@@ -326,6 +353,8 @@ Dzięki temu klasy `bg-background`, `border-input`, `ring-ring`, `ring-offset-ba
 
 Brief log kolejnych sesji pracy z Claude nad tym projektem. Każda nowa sesja powinna **dodać jedną linię** na górę tej sekcji.
 
+- **2026-04-24** — **Redesign krok 3 — re-layout Dashboard.** Dodane 3 nowe komponenty w `src/components/dashboard/`: `inspection-trend-sparkline.tsx` (sparkline 12-tyg. liczby inspekcji, SVG inline z gradientem primary + chip trendu Δ), `inspection-calendar-14d.tsx` (grid 14 dni z wyróżnieniem „dziś", liczniki wyk./plan., klik → `/inspekcje?date=…`), `rating-distribution.tsx` (bar-chart poziomy rozkładu 5 ocen elementów). `dashboard/page.tsx` przepisany na 3-wierszowy układ: StatsCards → (sparkline 1/3 + kalendarz 2/3) → (Recent 2/3 + stack [RatingDist + Alerts] 1/3). Zero nowych zależności (recharts nie ma w package.json — użyto inline SVG). Konwencje: `createClient()` w `useEffect`, `.not('is_deleted', 'is', true)`, tokeny graphite/primary/semantic, UI po polsku. Build Next 14.2 — BUILD_ID `q_HDgEwR5eOCMD0eYr7vX`, brak błędów.
+- **2026-04-24** — **Portal klienta (Faza 3) wdrożony na produkcję.** Konfiguracja Vercel: nadpisano `SUPABASE_SERVICE_ROLE_KEY` świeżym service_role JWT z zakładki Legacy Supabase (pierwotny klucz z 2026-04-23 zwracał "Invalid API key" — pewnie został obcięty przy pierwszym wklejaniu). Env var tylko w Production + Preview (Development blokowany przez Vercel dla Sensitive). Utworzono `.env.local` z jedną zmienną `SUPABASE_SERVICE_ROLE_KEY` (Waldek wklejał wartość lokalnie). Supabase → URL Configuration: Redirect URL `portal/auth/reset` już był dodany wcześniej. Wymuszono pełny Redeploy na Vercelu (deploy `TaVz1pRJ5`). **Test przepływu**: utworzono testowe konto `w.trzecki+portaltest@cgedata.com` dla klienta Działdowo, zalogowano, zmieniono hasło (force_password_change OK), sprawdzono dashboard / farmy / turbinę własną / turbinę obcą (Brak dostępu OK) / protokoly. Testowe konto skasowane (auth.users + profiles + client_users + contact_email klienta przywrócony do `NULL`). Nowe wpisy w "Gotchas": bug formularza /klienci/[id] (UPDATE nie zapisuje), Sensitive env var vs Development Vercel, service_role vs nowe sb_secret_ keys.
 - **2026-04-23** — **Faza 3 — Portal klienta** (commit `d301abf`). 14 nowych plików: migracja SQL (`client_users` + `force_password_change`), `/api/portal/create-account` (service role, temp password XXXX-XXXX-XXXX), UI portalu w `/klienci/[id]` (karta "Portal klienta", tworzenie konta, wyświetlanie hasła tymczasowego z kopiowaniem), `/portal/login` (email+hasło, reset hasła), `/portal/auth/reset` (route handler), `/portal/(client)/layout.tsx` (guard `client_user`, sidebar, force_password_change redirect), `auth/callback` (redirect per rola), dashboard, farmy, turbiny/[id], protokoly, konto. Zabezpieczone `/api/pdf` i `/api/docx` (auth check + weryfikacja `client_id` dla `client_user`). Pliki `design/next-steps.md` i `database.types.ts` zaktualizowane.
 - **2026-04-23** — **Faza 2 wdrożona** (commit `a43d457`). Re-skin 15 plików: Dashboard (page+stats+recent+alerts), Inspekcje (lista+detail+StatusBar+ElementCard+RatingBadge), Formularz inspekcji (turbine-inspection-form), Klienci (lista+detail), Farmy (lista+detail), Turbiny (detail+PhotoSlot+InfoItem). Wzorce: font-mono dla dat/kodów/liczb, `text-[11px] uppercase tracking-wider text-graphite-400` dla nagłówków tabel, `h-[52px] hover:bg-graphite-50/50` dla wierszy, `border-graphite-200 shadow-xs rounded-xl` dla kart. Build czysty `✓ Compiled successfully`. Wypchnięto na `main`.
 - **2026-04-23** — **Faza 1 wdrożona** (commit `0c4fd3c`). Tokeny kolorystyczne (#259648 primary), typografia (Inter 400/500/600 + JetBrains Mono 400/500 via next/font), palety graphite/semantic, shadcn base tokens, cienie xs–lg. Komponenty: badge (5 wariantów semantycznych), button (danger), card (shadow-xs), table (graphite), sheet/slider (primary). Layout: sidebar/header avatar+aktywny stan blue→primary, body bg→graphite-50. constants.ts: STATUS_COLORS/CONDITION_COLORS na nowe tokeny. Build przeszedł czysto. Vercel deploy w toku.
