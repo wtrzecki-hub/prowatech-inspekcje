@@ -22,6 +22,9 @@ import {
   Download,
   TrendingUp,
   Clock,
+  Wrench,
+  CheckCircle2,
+  Filter,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -105,6 +108,32 @@ interface InspectionHistoryRow {
   }[]
 }
 
+// ───── Pilność zaleceń (enum urgency_level: I/II/III/IV) ─────────────────────
+
+type UrgencyKey = 'I' | 'II' | 'III' | 'IV'
+
+const URGENCY_UI: Record<UrgencyKey, { bg: string; text: string; label: string }> = {
+  I: { bg: 'bg-danger-50', text: 'text-danger-800', label: 'I · Krytyczna' },
+  II: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'II · Wysoka' },
+  III: { bg: 'bg-info-50', text: 'text-info-700', label: 'III · Średnia' },
+  IV: { bg: 'bg-graphite-100', text: 'text-graphite-700', label: 'IV · Niska' },
+}
+
+interface RepairRow {
+  id: string
+  urgency_level: UrgencyKey | null
+  element_name: string | null
+  scope_description: string | null
+  repair_type: string | null
+  deadline_date: string | null
+  is_completed: boolean
+  inspection_id: string
+  inspections: {
+    inspection_date: string | null
+    protocol_number: string | null
+  } | null
+}
+
 export default function TurbineDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -115,12 +144,15 @@ export default function TurbineDetailPage() {
   const [inspectionsCount, setInspectionsCount] = useState(0)
   const [openRecsCount, setOpenRecsCount] = useState(0)
   const [inspectionsHistory, setInspectionsHistory] = useState<InspectionHistoryRow[]>([])
+  const [repairs, setRepairs] = useState<RepairRow[]>([])
+  const [showOnlyOpen, setShowOnlyOpen] = useState(true)
 
   useEffect(() => {
     fetchTurbineData()
     fetchUserRole()
     fetchCounters()
     fetchInspectionsHistory()
+    fetchRepairs()
   }, [turbineId])
 
   async function fetchUserRole() {
@@ -203,11 +235,37 @@ export default function TurbineDetailPage() {
         .eq('turbine_id', turbineId)
         .not('is_deleted', 'is', true)
         .order('inspection_date', { ascending: false })
-        .limit(6)
+        .limit(50)
       if (error) throw error
       setInspectionsHistory((data || []) as unknown as InspectionHistoryRow[])
     } catch (e) {
       console.error('Error fetching inspections history:', e)
+    }
+  }
+
+  async function fetchRepairs() {
+    const supabase = createClient()
+    try {
+      const { data, error } = await supabase
+        .from('repair_recommendations')
+        .select(`
+          id,
+          urgency_level,
+          element_name,
+          scope_description,
+          repair_type,
+          deadline_date,
+          is_completed,
+          inspection_id,
+          inspections!inner(turbine_id, is_deleted, inspection_date, protocol_number)
+        `)
+        .eq('inspections.turbine_id', turbineId)
+        .not('inspections.is_deleted', 'is', true)
+        .order('deadline_date', { ascending: true, nullsFirst: false })
+      if (error) throw error
+      setRepairs((data || []) as unknown as RepairRow[])
+    } catch (e) {
+      console.error('Error fetching repairs:', e)
     }
   }
 
@@ -313,7 +371,7 @@ export default function TurbineDetailPage() {
           {/* Wykres oceny w czasie (2/3) + sidebar z 2 kartami KPI (1/3) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <div className="lg:col-span-2">
-              <InspectionTrendChart rows={inspectionsHistory} />
+              <InspectionTrendChart rows={inspectionsHistory.slice(0, 6)} />
             </div>
             <div className="flex flex-col gap-5">
               <LastInspectionCard row={inspectionsHistory[0] ?? null} />
@@ -558,19 +616,17 @@ export default function TurbineDetailPage() {
           </div>
         </TabsContent>
 
-        {/* TAB: Historia inspekcji — placeholder do C3 */}
+        {/* TAB: Historia inspekcji */}
         <TabsContent value="historia" className="mt-0">
-          <TabPlaceholder
-            title="Historia inspekcji"
-            description="Tabela z datami i numerami protokołów dla tej turbiny pojawi się w kolejnym kroku."
-          />
+          <InspectionsHistoryTable rows={inspectionsHistory} />
         </TabsContent>
 
-        {/* TAB: Zalecenia — placeholder do C3 */}
+        {/* TAB: Zalecenia */}
         <TabsContent value="zalecenia" className="mt-0">
-          <TabPlaceholder
-            title="Zalecenia naprawcze"
-            description="Lista otwartych i zamkniętych zaleceń z color-codingiem pilności (I-IV). Pojawi się w kolejnym kroku."
+          <RepairsList
+            rows={repairs}
+            showOnlyOpen={showOnlyOpen}
+            onToggleFilter={() => setShowOnlyOpen((v) => !v)}
           />
         </TabsContent>
 
@@ -1011,7 +1067,7 @@ function UpcomingInspectionsCard({ row }: { row: InspectionHistoryRow | null }) 
       <CardContent className="pt-0 px-5 pb-4">
         {filtered.length === 0 ? (
           <p className="text-xs text-graphite-500 py-2">
-            Terminy kolejnych kontroli pojawią się po zatwierdzeniu pierwszej inspekcji.
+            Ostatni protokół nie ma uzupełnionych dat kolejnych kontroli (roczna / elektryczna / 5-letnia).
           </p>
         ) : (
           <ul className="divide-y divide-graphite-100">
@@ -1047,6 +1103,248 @@ function UpcomingInspectionsCard({ row }: { row: InspectionHistoryRow | null }) 
             })}
           </ul>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ───── Tabela historii inspekcji ─────────────────────────────────────────────
+
+function InspectionsHistoryTable({ rows }: { rows: InspectionHistoryRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <Card className="rounded-xl border border-dashed border-graphite-200 shadow-none">
+        <CardContent className="p-10 text-center space-y-2">
+          <div className="p-3 bg-graphite-50 rounded-2xl mb-3 inline-block">
+            <ClipboardCheck className="h-8 w-8 text-graphite-200" />
+          </div>
+          <p className="text-sm font-semibold text-graphite-800">Brak inspekcji w systemie</p>
+          <p className="text-xs text-graphite-500 max-w-md mx-auto">
+            Historia pojawi się tutaj po wprowadzeniu pierwszego protokołu przez aplikację.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="rounded-xl border border-graphite-200 shadow-xs overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead className="bg-graphite-50/50 border-b border-graphite-100">
+            <tr>
+              <th className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 px-5 py-2.5">Data</th>
+              <th className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Nr protokołu</th>
+              <th className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Typ kontroli</th>
+              <th className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Inspektor</th>
+              <th className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 pr-5 text-right">Protokół</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const typeLabel = row.inspection_type === 'annual' ? 'Roczna' : '5-letnia'
+              const typeClass =
+                row.inspection_type === 'annual'
+                  ? 'bg-info-50 text-info-700'
+                  : 'bg-graphite-100 text-graphite-700'
+              const leadInspector =
+                row.inspection_inspectors?.find((ii) => ii.is_lead)?.inspector?.full_name ??
+                row.inspection_inspectors?.[0]?.inspector?.full_name ??
+                null
+              return (
+                <tr key={row.id} className="border-b border-graphite-100 h-[52px] hover:bg-graphite-50/50 transition-colors">
+                  <td className="font-mono text-[13px] text-graphite-500 px-5">
+                    {row.inspection_date
+                      ? new Date(row.inspection_date).toLocaleDateString('pl-PL')
+                      : '—'}
+                  </td>
+                  <td className="font-mono font-semibold text-[13px] text-graphite-900">
+                    {row.protocol_number ?? '—'}
+                  </td>
+                  <td>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${typeClass}`}>
+                      {typeLabel}
+                    </span>
+                  </td>
+                  <td className="text-[13px] text-graphite-800">
+                    {leadInspector ?? <span className="text-graphite-400">—</span>}
+                  </td>
+                  <td className="pr-5 text-right">
+                    <div className="flex justify-end gap-2">
+                      <Link
+                        href={`/api/pdf/${row.id}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        PDF
+                      </Link>
+                      <Link
+                        href={`/api/docx/${row.id}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        DOCX
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
+// ───── Lista zaleceń ─────────────────────────────────────────────────────────
+
+function RepairsList({
+  rows,
+  showOnlyOpen,
+  onToggleFilter,
+}: {
+  rows: RepairRow[]
+  showOnlyOpen: boolean
+  onToggleFilter: () => void
+}) {
+  const filtered = showOnlyOpen ? rows.filter((r) => !r.is_completed) : rows
+  const openCount = rows.filter((r) => !r.is_completed).length
+  const closedCount = rows.length - openCount
+
+  return (
+    <div className="space-y-4">
+      {/* Filter bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 text-[13px]">
+          <Filter className="h-4 w-4 text-graphite-500" />
+          <button
+            onClick={onToggleFilter}
+            className="text-graphite-800 hover:text-primary-700 font-semibold"
+          >
+            {showOnlyOpen ? 'Tylko otwarte' : 'Wszystkie'}
+          </button>
+          <span className="text-graphite-400">·</span>
+          <span className="text-graphite-500 font-mono">
+            <span className="text-graphite-900 font-semibold">{openCount}</span> otwartych,{' '}
+            <span className="text-graphite-900 font-semibold">{closedCount}</span> zamkniętych
+          </span>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card className="rounded-xl border border-dashed border-graphite-200 shadow-none">
+          <CardContent className="p-10 text-center space-y-2">
+            <div className="p-3 bg-success-50 rounded-2xl mb-3 inline-block">
+              <CheckCircle2 className="h-8 w-8 text-success" />
+            </div>
+            <p className="text-sm font-semibold text-graphite-800">
+              {showOnlyOpen ? 'Brak otwartych zaleceń' : 'Brak zaleceń'}
+            </p>
+            <p className="text-xs text-graphite-500 max-w-md mx-auto">
+              {showOnlyOpen
+                ? 'Wszystko w porządku — turbina nie ma aktualnie aktywnych zaleceń naprawczych.'
+                : 'Dla tej turbiny nie zarejestrowano żadnych zaleceń naprawczych.'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((row) => (
+            <RepairCard key={row.id} row={row} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RepairCard({ row }: { row: RepairRow }) {
+  const urgency = row.urgency_level
+  const ui = urgency ? URGENCY_UI[urgency] : null
+  const deadline = row.deadline_date ? new Date(row.deadline_date) : null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const overdue = deadline && deadline < today && !row.is_completed
+  const daysToDeadline = deadline
+    ? Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  return (
+    <Card
+      className={`rounded-xl border shadow-xs ${
+        row.is_completed
+          ? 'border-graphite-200 bg-graphite-50/40'
+          : overdue
+          ? 'border-danger-100 bg-danger-50/30'
+          : 'border-graphite-200'
+      }`}
+    >
+      <CardContent className="p-4 flex gap-4 items-start">
+        <div className="shrink-0">
+          {ui ? (
+            <span
+              className={`inline-flex items-center justify-center min-w-[52px] px-2 py-1 rounded-full text-[11px] font-bold font-mono ${ui.bg} ${ui.text}`}
+              title={ui.label}
+            >
+              {urgency}
+            </span>
+          ) : (
+            <span className="inline-flex items-center justify-center min-w-[52px] px-2 py-1 rounded-full text-[11px] font-bold bg-graphite-100 text-graphite-700">
+              —
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[14px] font-semibold text-graphite-900 leading-tight">
+                {row.element_name || 'Element niewskazany'}
+              </p>
+              {row.scope_description && (
+                <p className="text-[13px] text-graphite-500 mt-1 line-clamp-3">
+                  {row.scope_description}
+                </p>
+              )}
+            </div>
+            {row.is_completed && (
+              <span className="inline-flex items-center gap-1 shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-success-50 text-success-800">
+                <CheckCircle2 className="h-3 w-3" />
+                Zakończone
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-[12px]">
+            {row.repair_type && (
+              <span className="text-graphite-500">
+                <span className="uppercase tracking-wider text-[10px] text-graphite-400 mr-1">Rodzaj:</span>
+                <span className="font-medium text-graphite-800 font-mono">{row.repair_type}</span>
+              </span>
+            )}
+            {deadline && (
+              <span className={`font-mono font-semibold ${overdue ? 'text-danger' : 'text-graphite-800'}`}>
+                Termin: {deadline.toLocaleDateString('pl-PL')}
+                {daysToDeadline !== null && !row.is_completed && (
+                  <span className={`ml-2 ${overdue ? 'text-danger' : 'text-graphite-500'}`}>
+                    {overdue
+                      ? `(${Math.abs(daysToDeadline)} d. po)`
+                      : `(za ${daysToDeadline} d.)`}
+                  </span>
+                )}
+              </span>
+            )}
+            {row.inspections?.protocol_number && (
+              <span className="text-graphite-400">
+                <span className="uppercase tracking-wider text-[10px] mr-1">z protokołu</span>
+                <span className="font-mono text-graphite-700">{row.inspections.protocol_number}</span>
+              </span>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
