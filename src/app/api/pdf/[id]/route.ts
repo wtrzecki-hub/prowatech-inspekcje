@@ -15,7 +15,7 @@ import {
 } from '@/lib/design/protocol-tokens'
 
 // =============================================================================
-// PROTOKÓŁ KONTROLI OKRESOWEJ — PDF (układ PIIB)
+// PROTOKÓŁ KONTROLI OKRESOWEJ - PDF (układ PIIB)
 //
 // Wzór wg Załącznika do uchwały nr PIIB/KR/0051/2024 KR PIIB z 04.12.2024 r.
 // dostosowany do specyfiki turbin wiatrowych. Kolejność sekcji 1:1 z DOCX.
@@ -29,7 +29,7 @@ const robotoBoldBase64 = fs
   .toString('base64')
 
 function formatDate(date: string | null | undefined): string {
-  if (!date) return '—'
+  if (!date) return '-'
   try {
     return format(new Date(date), 'dd.MM.yyyy', { locale: pl })
   } catch {
@@ -38,7 +38,7 @@ function formatDate(date: string | null | undefined): string {
 }
 
 function ratingLabel(r: string | null | undefined): string {
-  if (!r) return '—'
+  if (!r) return '-'
   return RATING_LABELS[r as RatingKey] || r
 }
 
@@ -336,7 +336,7 @@ export async function GET(
       ;(pdf as any).autoTable({
         startY: yPosition,
         margin: margin,
-        body: rows.map((r) => [r.label, r.value || '—']),
+        body: rows.map((r) => [r.label, r.value || '-']),
         styles: {
           font: 'Roboto',
           fontSize: 9,
@@ -479,14 +479,14 @@ export async function GET(
 
     const titleSubLines = isFiveYear
       ? [
-          '• sprawdzenie stanu technicznego i przydatności do użytkowania obiektu (turbiny wiatrowej)',
-          '• sprawdzenie estetyki obiektu budowlanego oraz jego otoczenia',
-          '• badanie instalacji elektrycznej i piorunochronnej',
+          '- sprawdzenie stanu technicznego i przydatności do użytkowania obiektu (turbiny wiatrowej)',
+          '- sprawdzenie estetyki obiektu budowlanego oraz jego otoczenia',
+          '- badanie instalacji elektrycznej i piorunochronnej',
         ]
       : [
-          '• sprawdzenie stanu technicznego elementów obiektu (turbiny wiatrowej)',
-          '• sprawdzenie stanu technicznego instalacji służących ochronie środowiska',
-          '• sprawdzenie zaleceń z poprzednich kontroli oraz wpisów do KOB',
+          '- sprawdzenie stanu technicznego elementów obiektu (turbiny wiatrowej)',
+          '- sprawdzenie stanu technicznego instalacji służących ochronie środowiska',
+          '- sprawdzenie zaleceń z poprzednich kontroli oraz wpisów do KOB',
         ]
 
     pdf.setFontSize(9)
@@ -509,8 +509,8 @@ export async function GET(
     yPosition += 5
     pdf.setTextColor(...RGB.brand700)
     const periodLabel = isFiveYear
-      ? 'KONTROLA OKRESOWA — CO NAJMNIEJ RAZ NA 5 LAT'
-      : 'KONTROLA OKRESOWA — CO NAJMNIEJ RAZ W ROKU'
+      ? 'KONTROLA OKRESOWA - CO NAJMNIEJ RAZ NA 5 LAT'
+      : 'KONTROLA OKRESOWA - CO NAJMNIEJ RAZ W ROKU'
     pdf.setCharSpace(0.4)
     pdf.text(periodLabel, pageWidth / 2, yPosition, { align: 'center' })
     pdf.setCharSpace(0)
@@ -526,7 +526,7 @@ export async function GET(
     yPosition += 4
     pdf.setFont('Roboto', 'normal')
     pdf.setFontSize(8.5)
-    const basis = `art. 62 ust. 1 pkt ${artPoint} ustawy z dnia 7 lipca 1994 r. — Prawo budowlane (t.j. Dz. U. z 2024 r. poz. 725 z późn. zm.)`
+    const basis = `art. 62 ust. 1 pkt ${artPoint} ustawy z dnia 7 lipca 1994 r. - Prawo budowlane (t.j. Dz. U. z 2024 r. poz. 725 z późn. zm.)`
     const basisLines = pdf.splitTextToSize(basis, pageWidth - 2 * margin - 20)
     basisLines.forEach((line: string) => {
       pdf.text(line, pageWidth / 2, yPosition, { align: 'center' })
@@ -569,7 +569,7 @@ export async function GET(
       {
         label: 'Nazwa obiektu / funkcja',
         value:
-          insp.object_name || 'Elektrownia wiatrowa — turbina wiatrowa',
+          insp.object_name || 'Elektrownia wiatrowa - turbina wiatrowa',
       },
       { label: 'Data bieżącej kontroli', value: inspectionDate },
       {
@@ -600,7 +600,7 @@ export async function GET(
     // ─── PODSTAWOWE DANE OBIEKTU ───────────────────────────────────────────
     addSection('Podstawowe dane obiektu budowlanego')
     addBody(
-      'Obiekt budowlany — elektrownia wiatrowa (turbina wiatrowa). Dane techniczne i eksploatacyjne urządzenia:'
+      'Obiekt budowlany - elektrownia wiatrowa (turbina wiatrowa). Dane techniczne i eksploatacyjne urządzenia:'
     )
     addKeyValueTable([
       {
@@ -744,7 +744,7 @@ export async function GET(
       ],
       [
         'Niedostateczny',
-        'konieczne jest podjęcie czynności remontowych i zabezpieczeniowych, a określenie „awaryjny" byłoby nieodpowiednie',
+        'konieczne jest podjęcie czynności remontowych i zabezpieczeniowych, a określenie "awaryjny" byłoby nieodpowiednie',
       ],
       [
         'Awaryjny',
@@ -861,7 +861,7 @@ export async function GET(
       [10, 50, 120]
     )
 
-    // ─── III. USTALENIA — JEDNA TABELA PIIB ─────────────────────────────────
+    // ─── III. USTALENIA - JEDNA TABELA PIIB ─────────────────────────────────
     addSection('III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego')
     addBody('W trakcie kontroli ustalono:')
 
@@ -885,13 +885,13 @@ export async function GET(
           ? el.usage_suitability === 'spelnia'
             ? 'spełnia'
             : 'nie spełnia'
-          : '—'
+          : '-'
         body.push([
           `${def.element_number}. ${def.name_pl}`,
           def.scope_annual || '',
           def.scope_five_year_additional || '',
           `${ratingLabel(el.condition_rating)}\nPrzydatność: ${usability}`,
-          [el.notes, el.recommendations].filter(Boolean).join(' • '),
+          [el.notes, el.recommendations].filter(Boolean).join(' / '),
           el.photo_numbers || '',
           formatDate(el.recommendation_completion_date),
         ])
@@ -970,7 +970,7 @@ export async function GET(
           `${def.element_number}. ${def.name_pl}`,
           [
             (def.scope_annual || '').slice(0, 300),
-            el.notes ? '— ' + el.notes : '',
+            el.notes ? '- ' + el.notes : '',
           ]
             .filter(Boolean)
             .join('\n\n'),
@@ -1058,7 +1058,7 @@ export async function GET(
               ? `${m.rcd_trip_time_ms} ms (RCD)`
               : m.pe_continuity_ohm != null
               ? `${m.pe_continuity_ohm} Ω (PE)`
-              : '—'
+              : '-'
           const result =
             m.grounding_result ||
             m.insulation_result ||
@@ -1130,8 +1130,8 @@ export async function GET(
       pdf.setFont('Roboto', 'normal')
       for (const item of serviceChecklistData as any[]) {
         ensureSpace(10)
-        const text = `${item.is_checked ? '☑' : '☐'} ${item.item_name_pl}${
-          item.notes ? ' — ' + item.notes : ''
+        const text = `${item.is_checked ? '[X]' : '[ ]'} ${item.item_name_pl}${
+          item.notes ? ' - ' + item.notes : ''
         }`
         const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin - 5)
         if (item.is_checked) pdf.setTextColor(...RGB.brand700)
@@ -1194,7 +1194,7 @@ export async function GET(
         : 'VI. Dokumentacja graficzna / fotograficzna'
     )
     addBody(
-      'Numerację fotografii zsynchronizowano z kolumną „Nr fot." w tabeli ustaleń (sekcja III).',
+      'Numerację fotografii zsynchronizowano z kolumną "Nr fot." w tabeli ustaleń (sekcja III).',
       { italic: true }
     )
 
@@ -1304,7 +1304,18 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error generating PDF:', error)
-    return new Response('Blad podczas generowania PDF', { status: 500 })
+    const err = error as Error
+    console.error('Error generating PDF:', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    })
+    // Zwracamy treść błędu w body (tylko gdy NODE_ENV !== production lub debug header).
+    // Vercel Runtime Logs zawsze widzą console.error.
+    const debugBody =
+      process.env.NODE_ENV === 'production'
+        ? `Blad podczas generowania PDF: ${err?.message || 'unknown'}`
+        : `Blad podczas generowania PDF\n\n${err?.stack || err?.message || 'unknown'}`
+    return new Response(debugBody, { status: 500 })
   }
 }

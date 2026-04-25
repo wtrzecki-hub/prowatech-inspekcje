@@ -2025,7 +2025,16 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error('Error generating DOCX:', error)
-    return new Response('Blad podczas generowania DOCX', { status: 500 })
+    const err = error as Error
+    console.error('Error generating DOCX:', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    })
+    const debugBody =
+      process.env.NODE_ENV === 'production'
+        ? `Blad podczas generowania DOCX: ${err?.message || 'unknown'}`
+        : `Blad podczas generowania DOCX\n\n${err?.stack || err?.message || 'unknown'}`
+    return new Response(debugBody, { status: 500 })
   }
 }
