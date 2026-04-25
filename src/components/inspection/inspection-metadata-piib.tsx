@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Upload, X } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -74,7 +76,9 @@ export function InspectionMetadataPiib({
   const [meta, setMeta] = useState<InspectionMetadata>(EMPTY_METADATA)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     void loadMetadata()
@@ -157,6 +161,60 @@ export function InspectionMetadataPiib({
     })
   }
 
+  /**
+   * Upload zdjęcia obiektu do Supabase Storage (bucket: turbine-photos).
+   * Po sukcesie ustawia object_photo_url na public URL.
+   * Wzorzec analogiczny do turbiny/[id]/page.tsx (slot 1/2/3).
+   */
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Walidacja prosta: typ i rozmiar
+    if (!file.type.startsWith('image/')) {
+      alert('Wybierz plik graficzny (JPG, PNG, WebP).')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Plik za duży (max 10 MB).')
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const sb = supabase()
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const fileName = `inspection-${inspectionId}-photo-${Date.now()}.${ext}`
+
+      const { error: uploadError } = await sb.storage
+        .from('turbine-photos')
+        .upload(fileName, file, { upsert: true, contentType: file.type })
+
+      if (uploadError) throw uploadError
+
+      const { data: publicUrlData } = sb.storage
+        .from('turbine-photos')
+        .getPublicUrl(fileName)
+
+      const url = publicUrlData.publicUrl
+      // Save to DB and update local state via queueSave
+      queueSave({ object_photo_url: url })
+
+      // Reset input żeby ponowny wybór tego samego pliku zadziałał
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } catch (err) {
+      console.error('Błąd uploadu fotografii obiektu:', err)
+      alert('Nie udało się wgrać zdjęcia. Spróbuj ponownie.')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handlePhotoRemove = () => {
+    if (!confirm('Usunąć fotografię obiektu z metryczki?')) return
+    queueSave({ object_photo_url: null })
+  }
+
   if (isLoading) {
     return (
       <Card className="rounded-xl border-graphite-200">
@@ -216,19 +274,52 @@ export function InspectionMetadataPiib({
               />
             </div>
 
-            <div className="md:col-span-2 space-y-1">
+            <div className="md:col-span-2 space-y-2">
               <Label htmlFor="object_photo_url" className="font-medium">
-                URL fotografii ogólnej turbiny
+                Fotografia ogólna turbiny
               </Label>
-              <Input
-                id="object_photo_url"
-                type="url"
-                value={meta.object_photo_url || ''}
-                onChange={(e) =>
-                  handleField('object_photo_url', e.target.value || null)
-                }
-                placeholder="https://…"
-              />
+              <p className="text-xs text-graphite-500">
+                Wgraj plik z dysku albo wklej publiczny URL fotografii.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <Input
+                  id="object_photo_url"
+                  type="url"
+                  value={meta.object_photo_url || ''}
+                  onChange={(e) =>
+                    handleField('object_photo_url', e.target.value || null)
+                  }
+                  placeholder="https://… (lub użyj przycisku obok)"
+                  className="flex-1 min-w-[200px]"
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                >
+                  <Upload size={16} className="mr-1" />
+                  {isUploading ? 'Wgrywanie…' : 'Wybierz z dysku'}
+                </Button>
+                {meta.object_photo_url && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handlePhotoRemove}
+                    className="text-danger hover:bg-danger-50 hover:text-danger-800"
+                    title="Usuń fotografię z metryczki"
+                  >
+                    <X size={16} />
+                  </Button>
+                )}
+              </div>
               {meta.object_photo_url && (
                 <div className="mt-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
