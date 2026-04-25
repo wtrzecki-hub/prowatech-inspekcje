@@ -28,6 +28,14 @@ import { ElectricalMeasurements } from '@/components/inspection/electrical-measu
 import { RepairTable } from '@/components/inspection/repair-table'
 import { PhotoGallery } from '@/components/inspection/photo-gallery'
 
+// PIIB components (Faza 10):
+import { InspectionMetadataPiib } from '@/components/inspection/inspection-metadata-piib'
+import { PreviousRecommendationsTable } from '@/components/inspection/previous-recommendations-table'
+import { EmergencyStateTable } from '@/components/inspection/emergency-state-table'
+import { RepairScopeTable } from '@/components/inspection/repair-scope-table'
+import { BasicRequirementsArt5 } from '@/components/inspection/basic-requirements-art5'
+import { AttachmentsList } from '@/components/inspection/attachments-list'
+
 import {
   INSPECTION_STATUSES,
   INSPECTION_TYPES,
@@ -508,7 +516,8 @@ export default function InspectionDetailPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="elementy" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 lg:w-auto overflow-x-auto">
+        <TabsList className="flex w-full lg:w-auto overflow-x-auto">
+          <TabsTrigger value="metryczka">Metryczka</TabsTrigger>
           <TabsTrigger value="elementy">Elementy</TabsTrigger>
           <TabsTrigger value="serwis">Serwis</TabsTrigger>
           {inspection.inspection_type === 'five_year' && (
@@ -516,8 +525,26 @@ export default function InspectionDetailPage() {
           )}
           <TabsTrigger value="zalecenia">Zalecenia</TabsTrigger>
           <TabsTrigger value="zdjecia">Zdjęcia</TabsTrigger>
+          {inspection.inspection_type === 'five_year' && (
+            <TabsTrigger value="wymagania">Wymagania</TabsTrigger>
+          )}
           <TabsTrigger value="wnioski">Wnioski</TabsTrigger>
         </TabsList>
+
+        {/* Tab: Metryczka PIIB (NEW) */}
+        <TabsContent value="metryczka" className="space-y-4">
+          <h2 className="text-[15px] font-bold text-graphite-900">
+            Metryczka obiektu (PIIB)
+          </h2>
+          <p className="text-sm text-graphite-500">
+            Dane wprowadzane do nagłówka protokołu PIIB: adres obiektu,
+            właściciel, zarządca, wykonawca kontroli, dokumenty do wglądu.
+          </p>
+          <InspectionMetadataPiib
+            inspectionId={inspection.id}
+            inspectionType={inspection.inspection_type}
+          />
+        </TabsContent>
 
         {/* Tab: Elements */}
         <TabsContent value="elementy" className="space-y-4">
@@ -568,10 +595,42 @@ export default function InspectionDetailPage() {
           </TabsContent>
         )}
 
-        {/* Tab: Repairs */}
-        <TabsContent value="zalecenia" className="space-y-4">
-          <h2 className="text-[15px] font-bold text-graphite-900">Zalecenia naprawcze</h2>
-          <RepairTable inspectionId={inspection.id} elements={elementIds} />
+        {/* Tab: Repairs (PIIB sekcja II + IV/VI) */}
+        <TabsContent value="zalecenia" className="space-y-6">
+          <h2 className="text-[15px] font-bold text-graphite-900">
+            Zalecenia i ocena realizacji
+          </h2>
+
+          {/* PIIB sekcja II — Sprawdzenie wykonania zaleceń z poprzednich kontroli */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-graphite-700 uppercase tracking-wide">
+              II. Sprawdzenie wykonania zaleceń z poprzednich kontroli
+            </h3>
+            <PreviousRecommendationsTable
+              inspectionId={inspection.id}
+              turbineId={inspection.turbine?.id}
+            />
+            <EmergencyStateTable inspectionId={inspection.id} />
+          </div>
+
+          {/* PIIB sekcja IV/VI — Zakres robót remontowych */}
+          <div className="space-y-4 border-t border-graphite-200 pt-6">
+            <h3 className="text-sm font-semibold text-graphite-700 uppercase tracking-wide">
+              {inspection.inspection_type === 'five_year' ? 'VI' : 'IV'}.
+              Zalecenia (zakres robót remontowych)
+            </h3>
+            <RepairScopeTable inspectionId={inspection.id} />
+          </div>
+
+          {/* Legacy: stary RepairTable (NG/NB/K + I-IV) — collapsible dla dawnych inspekcji */}
+          <details className="border-t border-graphite-200 pt-6">
+            <summary className="cursor-pointer text-sm text-graphite-500 hover:text-graphite-700">
+              Pokaż legacy zalecenia (NG/NB/K + pilność I-IV) — dla starych inspekcji
+            </summary>
+            <div className="mt-4">
+              <RepairTable inspectionId={inspection.id} elements={elementIds} />
+            </div>
+          </details>
         </TabsContent>
 
         {/* Tab: Photos */}
@@ -579,6 +638,21 @@ export default function InspectionDetailPage() {
           <h2 className="text-[15px] font-bold text-graphite-900">Zdjęcia</h2>
           <PhotoGallery inspectionId={inspection.id} elements={elementIds} />
         </TabsContent>
+
+        {/* Tab: Wymagania art. 5 PB (PIIB sekcja VI, tylko 5-letni) */}
+        {inspection.inspection_type === 'five_year' && (
+          <TabsContent value="wymagania" className="space-y-4">
+            <h2 className="text-[15px] font-bold text-graphite-900">
+              Wymagania podstawowe (art. 5 Prawa Budowlanego)
+            </h2>
+            <p className="text-sm text-graphite-500">
+              Sekcja obowiązkowa dla kontroli 5-letniej. 7 wymagań z art. 5 PB
+              jest auto-utworzonych przy pierwszym otwarciu — wystarczy
+              zaznaczyć ocenę dla każdego wymagania.
+            </p>
+            <BasicRequirementsArt5 inspectionId={inspection.id} />
+          </TabsContent>
+        )}
 
         {/* Tab: Assessment & Conclusions */}
         <TabsContent value="wnioski" className="space-y-6">
@@ -724,6 +798,18 @@ export default function InspectionDetailPage() {
                   handleInspectionChange('owner_representative_name', e.target.value)
                 }
               />
+            </div>
+
+            {/* PIIB sekcja VII/VIII — Załączniki do protokołu */}
+            <div className="border-t border-graphite-100 pt-6 space-y-2">
+              <h3 className="font-semibold text-graphite-900">
+                Załączniki do protokołu (PIIB sekcja VII/VIII)
+              </h3>
+              <p className="text-sm text-graphite-500">
+                Lista załączników wymienianych na końcu protokołu (np.
+                protokoły pomiarowe, dokumentacja zdjęciowa, certyfikaty).
+              </p>
+              <AttachmentsList inspectionId={inspection.id} />
             </div>
 
             {/* Save indicator */}
