@@ -338,8 +338,10 @@ export type Database = {
           is_not_applicable: boolean
           notes: string | null
           photo_numbers: string | null
+          recommendation_completion_date: string | null
           recommendations: string | null
           updated_at: string
+          usage_suitability: string | null
           wear_percentage: number | null
         }
         Insert: {
@@ -352,8 +354,10 @@ export type Database = {
           is_not_applicable?: boolean
           notes?: string | null
           photo_numbers?: string | null
+          recommendation_completion_date?: string | null
           recommendations?: string | null
           updated_at?: string
+          usage_suitability?: string | null
           wear_percentage?: number | null
         }
         Update: {
@@ -366,8 +370,10 @@ export type Database = {
           is_not_applicable?: boolean
           notes?: string | null
           photo_numbers?: string | null
+          recommendation_completion_date?: string | null
           recommendations?: string | null
           updated_at?: string
+          usage_suitability?: string | null
           wear_percentage?: number | null
         }
         Relationships: [
@@ -516,9 +522,13 @@ export type Database = {
       }
       inspections: {
         Row: {
+          additional_participants: string | null
           committee_members: string | null
+          contractor_info: string | null
           created_at: string
           created_by: string | null
+          documents_reviewed: Json | null
+          general_findings_intro: string | null
           generated_pdf_url: string | null
           google_drive_folder_url: string | null
           hazard_information: string | null
@@ -528,13 +538,20 @@ export type Database = {
           inspector_signature_date: string | null
           inspector_signature_location: string | null
           is_deleted: boolean
+          kob_entries_summary: string | null
           legal_basis: string | null
+          manager_name: string | null
           next_annual_date: string | null
           next_electrical_date: string | null
           next_five_year_date: string | null
           notes: string | null
+          object_address: string | null
+          object_name: string | null
+          object_photo_url: string | null
+          object_registry_number: string | null
           overall_assessment: string | null
           overall_condition_rating: Database["public"]["Enums"]["condition_rating"] | null
+          owner_name: string | null
           owner_representative_name: string | null
           owner_signature_date: string | null
           owner_signature_location: string | null
@@ -550,9 +567,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          additional_participants?: string | null
           committee_members?: string | null
+          contractor_info?: string | null
           created_at?: string
           created_by?: string | null
+          documents_reviewed?: Json | null
+          general_findings_intro?: string | null
           generated_pdf_url?: string | null
           google_drive_folder_url?: string | null
           hazard_information?: string | null
@@ -562,13 +583,20 @@ export type Database = {
           inspector_signature_date?: string | null
           inspector_signature_location?: string | null
           is_deleted?: boolean
+          kob_entries_summary?: string | null
           legal_basis?: string | null
+          manager_name?: string | null
           next_annual_date?: string | null
           next_electrical_date?: string | null
           next_five_year_date?: string | null
           notes?: string | null
+          object_address?: string | null
+          object_name?: string | null
+          object_photo_url?: string | null
+          object_registry_number?: string | null
           overall_assessment?: string | null
           overall_condition_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          owner_name?: string | null
           owner_representative_name?: string | null
           owner_signature_date?: string | null
           owner_signature_location?: string | null
@@ -584,9 +612,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          additional_participants?: string | null
           committee_members?: string | null
+          contractor_info?: string | null
           created_at?: string
           created_by?: string | null
+          documents_reviewed?: Json | null
+          general_findings_intro?: string | null
           generated_pdf_url?: string | null
           google_drive_folder_url?: string | null
           hazard_information?: string | null
@@ -596,13 +628,20 @@ export type Database = {
           inspector_signature_date?: string | null
           inspector_signature_location?: string | null
           is_deleted?: boolean
+          kob_entries_summary?: string | null
           legal_basis?: string | null
+          manager_name?: string | null
           next_annual_date?: string | null
           next_electrical_date?: string | null
           next_five_year_date?: string | null
           notes?: string | null
+          object_address?: string | null
+          object_name?: string | null
+          object_photo_url?: string | null
+          object_registry_number?: string | null
           overall_assessment?: string | null
           overall_condition_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          owner_name?: string | null
           owner_representative_name?: string | null
           owner_signature_date?: string | null
           owner_signature_location?: string | null
@@ -961,6 +1000,252 @@ export type Database = {
           },
         ]
       }
+      previous_recommendations: {
+        Row: {
+          completion_status: string | null
+          created_at: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+          recommendation_text: string | null
+          remarks: string | null
+        }
+        Insert: {
+          completion_status?: string | null
+          created_at?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+          recommendation_text?: string | null
+          remarks?: string | null
+        }
+        Update: {
+          completion_status?: string | null
+          created_at?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+          recommendation_text?: string | null
+          remarks?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "previous_recommendations_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      emergency_state_items: {
+        Row: {
+          created_at: string | null
+          element_name: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+          urgent_repair_scope: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          element_name?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+          urgent_repair_scope?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          element_name?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+          urgent_repair_scope?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emergency_state_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_scope_items: {
+        Row: {
+          completion_date: string | null
+          completion_notes: string | null
+          created_at: string | null
+          deadline_date: string | null
+          deadline_text: string | null
+          id: string
+          inspection_id: string
+          is_completed: boolean | null
+          item_number: number
+          scope_description: string
+          updated_at: string | null
+        }
+        Insert: {
+          completion_date?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          deadline_date?: string | null
+          deadline_text?: string | null
+          id?: string
+          inspection_id: string
+          is_completed?: boolean | null
+          item_number: number
+          scope_description: string
+          updated_at?: string | null
+        }
+        Update: {
+          completion_date?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          deadline_date?: string | null
+          deadline_text?: string | null
+          id?: string
+          inspection_id?: string
+          is_completed?: boolean | null
+          item_number?: number
+          scope_description?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_scope_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      basic_requirements_art5: {
+        Row: {
+          created_at: string | null
+          id: string
+          inspection_id: string
+          is_met: string | null
+          remarks: string | null
+          requirement_code: string
+          requirement_label: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          inspection_id: string
+          is_met?: string | null
+          remarks?: string | null
+          requirement_code: string
+          requirement_label: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          inspection_id?: string
+          is_met?: string | null
+          remarks?: string | null
+          requirement_code?: string
+          requirement_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "basic_requirements_art5_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_attachments: {
+        Row: {
+          created_at: string | null
+          description: string
+          file_url: string | null
+          google_drive_file_id: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          file_url?: string | null
+          google_drive_file_id?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          file_url?: string | null
+          google_drive_file_id?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_attachments_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      electrical_measurement_protocols: {
+        Row: {
+          attached_to_kob: boolean | null
+          created_at: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+          measured_by: string | null
+          measurement_date: string | null
+          notes: string | null
+          protocol_name: string
+          protocol_number: string | null
+        }
+        Insert: {
+          attached_to_kob?: boolean | null
+          created_at?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+          measured_by?: string | null
+          measurement_date?: string | null
+          notes?: string | null
+          protocol_name: string
+          protocol_number?: string | null
+        }
+        Update: {
+          attached_to_kob?: boolean | null
+          created_at?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+          measured_by?: string | null
+          measurement_date?: string | null
+          notes?: string | null
+          protocol_name?: string
+          protocol_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "electrical_measurement_protocols_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       turbines: {
         Row: {
           access_road_length_m: number | null
@@ -1272,7 +1557,7 @@ export type Database = {
       }
     }
     Enums: {
-      condition_rating: "dobry" | "zadowalajacy" | "sredni" | "zly" | "awaryjny"
+      condition_rating: "dobry" | "zadowalajacy" | "sredni" | "zly" | "awaryjny" | "dostateczny" | "niedostateczny"
       inspection_status: "draft" | "in_progress" | "review" | "completed" | "signed"
       inspection_type: "annual" | "five_year"
       inspector_specialty: "konstrukcyjna" | "elektryczna" | "sanitarna" | "inna"
@@ -1406,7 +1691,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      condition_rating: ["dobry", "zadowalajacy", "sredni", "zly", "awaryjny"],
+      condition_rating: ["dobry", "zadowalajacy", "sredni", "zly", "awaryjny", "dostateczny", "niedostateczny"],
       inspection_status: ["draft", "in_progress", "review", "completed", "signed"],
       inspection_type: ["annual", "five_year"],
       inspector_specialty: ["konstrukcyjna", "elektryczna", "sanitarna", "inna"],
