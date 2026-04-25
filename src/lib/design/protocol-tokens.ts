@@ -55,7 +55,9 @@ export const RGB = {
   graphite50: [247, 249, 251] as const,
   graphite100: [238, 241, 245] as const,
   graphite200: [221, 227, 234] as const,
+  graphite400: [141, 151, 164] as const,
   graphite500: [95, 107, 122] as const,
+  graphite700: [44, 52, 64] as const,
   graphite800: [27, 34, 48] as const,
   graphite900: [15, 21, 32] as const,
 
