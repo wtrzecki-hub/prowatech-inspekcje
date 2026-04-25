@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Slider } from '@/components/ui/slider'
 import {
   Select,
   SelectContent,
@@ -35,7 +34,20 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────
 
-type ConditionRating = 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny' | null
+/**
+ * Wartości oceny stanu technicznego (PIIB Załącznik nr PIIB/KR/0051/2024).
+ * Aktywne (PIIB): dobry / dostateczny / niedostateczny / awaryjny
+ * Legacy (sprzed migracji 2026-04-25, dla starych draftów): zadowalajacy / sredni / zly
+ */
+type ConditionRating =
+  | 'dobry'
+  | 'dostateczny'
+  | 'niedostateczny'
+  | 'awaryjny'
+  | 'zadowalajacy'
+  | 'sredni'
+  | 'zly'
+  | null
 type RepairType = 'NG' | 'NB' | 'K'
 type UrgencyLevel = 'I' | 'II' | 'III' | 'IV'
 
@@ -136,13 +148,23 @@ export interface ElementDefinition {
 
 // ── Constants ──────────────────────────────────────────────────────
 
+/**
+ * 4 aktywne wartości oceny PIIB do przycisków toggle w UI.
+ * Spójne z `protocol-tokens.ts` (kolory) i `constants.ts` (CONDITION_RATINGS_ACTIVE).
+ */
 const RATINGS: { value: NonNullable<ConditionRating>; label: string; color: string; activeColor: string }[] = [
-  { value: 'dobry',       label: 'DOBRY',     color: 'border-success-100 text-success-800 hover:bg-success-50',   activeColor: 'bg-success text-white border-success' },
-  { value: 'zadowalajacy',label: 'ZADOW.',    color: 'border-info-100 text-info-800 hover:bg-info-50',             activeColor: 'bg-info text-white border-info' },
-  { value: 'sredni',      label: 'ŚREDNI',    color: 'border-warning-100 text-warning-800 hover:bg-warning-50',   activeColor: 'bg-warning text-white border-warning' },
-  { value: 'zly',         label: 'ZŁY',       color: 'border-orange-300 text-orange-700 hover:bg-orange-50',      activeColor: 'bg-orange-600 text-white border-orange-600' },
-  { value: 'awaryjny',    label: 'AWARYJNY',  color: 'border-danger-100 text-danger-800 hover:bg-danger-50',      activeColor: 'bg-danger text-white border-danger' },
+  { value: 'dobry',          label: 'DOBRY',          color: 'border-success-100 text-success-800 hover:bg-success-50',   activeColor: 'bg-success text-white border-success' },
+  { value: 'dostateczny',    label: 'DOSTATECZNY',    color: 'border-info-100 text-info-800 hover:bg-info-50',             activeColor: 'bg-info text-white border-info' },
+  { value: 'niedostateczny', label: 'NIEDOSTATECZNY', color: 'border-warning-100 text-warning-800 hover:bg-warning-50',   activeColor: 'bg-warning text-white border-warning' },
+  { value: 'awaryjny',       label: 'AWARYJNY',       color: 'border-danger-100 text-danger-800 hover:bg-danger-50',      activeColor: 'bg-danger text-white border-danger' },
 ]
+
+/** Ocena "problematyczna" — wymaga zaleceń / uwagi inspektora. */
+function isProblematicRating(r: ConditionRating | undefined): boolean {
+  if (!r) return false
+  // PIIB: dostateczny+ wymaga uwagi. Legacy: sredni+ wymaga uwagi.
+  return r !== 'dobry' && r !== 'zadowalajacy'
+}
 
 const SECTION_NAMES: Record<string, string> = {
   A: 'A — Konstrukcja',
@@ -364,7 +386,7 @@ export function TurbineInspectionForm({
   const selectedTurbine = turbines.find((t) => t.id === selectedTurbineId)
   const completedCount  = elements.filter((e) => e.rating !== null).length
   const issueCount      = elements.filter(
-    (e) => e.rating && !['dobry', 'zadowalajacy'].includes(e.rating)
+    (e) => isProblematicRating(e.rating ?? undefined)
   ).length
 
   // ── Updaters ──────────────────────────────────────────────────────
@@ -534,7 +556,17 @@ export function TurbineInspectionForm({
 
       // Calculate worst rating
       const rated = elements.filter((e) => e.rating !== null)
-      const ratingOrder: ConditionRating[] = ['awaryjny', 'zly', 'sredni', 'zadowalajacy', 'dobry']
+      // Kolejność od najgorszej do najlepszej; legacy wartości na końcu (najpierw PIIB).
+      const ratingOrder: ConditionRating[] = [
+        'awaryjny',
+        'niedostateczny',
+        'dostateczny',
+        'dobry',
+        // Legacy fallback (gdyby stary draft):
+        'zly',
+        'sredni',
+        'zadowalajacy',
+      ]
       const worstRating = rated.length > 0
         ? (ratingOrder.find((r) => rated.some((e) => e.rating === r)) ?? null)
         : null
@@ -1231,11 +1263,10 @@ export function TurbineInspectionForm({
                   const SectionIcon = SECTION_ICONS[el.sectionCode] ?? Building2
 
                   const cardBorder =
-                    el.rating === 'awaryjny' ? 'border-danger-100 bg-danger-50/50' :
-                    el.rating === 'zly'      ? 'border-orange-300 bg-orange-50/50' :
-                    el.rating === 'sredni'   ? 'border-warning-100 bg-warning-50/50' :
-                    (el.rating === 'dobry' || el.rating === 'zadowalajacy')
-                      ? 'border-success-100 bg-success-50/30' : ''
+                    el.rating === 'awaryjny'                                       ? 'border-danger-100 bg-danger-50/50'  :
+                    (el.rating === 'niedostateczny' || el.rating === 'zly')        ? 'border-warning-100 bg-warning-50/50' :
+                    (el.rating === 'dostateczny'    || el.rating === 'sredni')     ? 'border-info-100 bg-info-50/50'       :
+                    (el.rating === 'dobry'          || el.rating === 'zadowalajacy') ? 'border-success-100 bg-success-50/30' : ''
 
                   return (
                     <div key={el.definitionId}>
@@ -1274,28 +1305,12 @@ export function TurbineInspectionForm({
                             ))}
                           </div>
 
-                          {/* % zużycia (tylko 5-letnie) + nr zdjęcia */}
+                          {/* Nr zdjęcia (PIIB: kolumna NR FOT. w tabeli ustaleń III).
+                              Slider % zużycia usunięty 2026-04-25 (legacy, nieużywane w PIIB). */}
                           {el.rating !== null && (
-                            <div className={`grid gap-3 ${inspectionType === 'five_year' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                              {inspectionType === 'five_year' && (
-                              <div className="space-y-2">
-                                <Label className="text-sm">
-                                  % zużycia: <strong>{el.wearPercentage ?? 0}%</strong>
-                                </Label>
-                                <Slider
-                                  min={0}
-                                  max={100}
-                                  step={5}
-                                  value={[el.wearPercentage ?? 0]}
-                                  onValueChange={([v]) =>
-                                    updateElement(el.definitionId, { wearPercentage: v })
-                                  }
-                                  className="mt-2"
-                                />
-                              </div>
-                              )}
+                            <div className="grid gap-3 grid-cols-1">
                               <div className="space-y-1">
-                                <Label className="text-sm">Nr zdjęcia</Label>
+                                <Label className="text-sm">Nr zdjęcia (NR FOT.)</Label>
                                 <Input
                                   value={el.photoNumbers}
                                   onChange={(e) =>
@@ -1368,7 +1383,7 @@ export function TurbineInspectionForm({
                           )}
 
                           {/* Notes / Recommendations — for non-good ratings */}
-                          {el.rating && !['dobry', 'zadowalajacy'].includes(el.rating) && (
+                          {isProblematicRating(el.rating ?? undefined) && (
                             <div className="space-y-2">
                               <div className="space-y-1">
                                 {defectLibrary.length > 0 && (
