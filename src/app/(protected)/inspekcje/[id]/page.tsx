@@ -82,6 +82,9 @@ interface InspectionElement {
   photo_numbers: string | null
   detailed_description: string | null
   not_applicable: boolean
+  // PIIB (od 2026-04-25):
+  usage_suitability: 'spelnia' | 'nie_spelnia' | null
+  recommendation_completion_date: string | null
 }
 
 interface ElementDefinition {
@@ -89,6 +92,8 @@ interface ElementDefinition {
   name_pl: string
   scope_annual: string | null
   scope_five_year_additional: string | null
+  // PIIB (od 2026-04-25):
+  applicable_standards: string | null
 }
 
 type InspectionElementWithDef = InspectionElement & { definition: ElementDefinition }
@@ -192,12 +197,15 @@ export default function InspectionDetailPage() {
           photo_numbers,
           detailed_description,
           is_not_applicable,
+          usage_suitability,
+          recommendation_completion_date,
           definition:element_definition_id (
             id,
             element_number,
             name_pl,
             scope_annual,
-            scope_five_year_additional
+            scope_five_year_additional,
+            applicable_standards
           )
         `
         )
@@ -221,11 +229,14 @@ export default function InspectionDetailPage() {
             photo_numbers: el.photo_numbers ?? null,
             detailed_description: el.detailed_description ?? null,
             not_applicable: el.is_not_applicable ?? false,
+            usage_suitability: el.usage_suitability ?? null,
+            recommendation_completion_date: el.recommendation_completion_date ?? null,
             definition: {
               id: el.definition?.id ?? '',
               name_pl: el.definition?.name_pl ?? '',
               scope_annual: el.definition?.scope_annual ?? null,
               scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
+              applicable_standards: el.definition?.applicable_standards ?? null,
             },
           }))
         )
@@ -273,12 +284,15 @@ export default function InspectionDetailPage() {
         photo_numbers,
         detailed_description,
         is_not_applicable,
+        usage_suitability,
+        recommendation_completion_date,
         definition:element_definition_id (
           id,
           element_number,
           name_pl,
           scope_annual,
-          scope_five_year_additional
+          scope_five_year_additional,
+          applicable_standards
         )
       `
       )
@@ -296,11 +310,14 @@ export default function InspectionDetailPage() {
           photo_numbers: el.photo_numbers ?? null,
           detailed_description: el.detailed_description ?? null,
           not_applicable: el.is_not_applicable ?? false,
+          usage_suitability: el.usage_suitability ?? null,
+          recommendation_completion_date: el.recommendation_completion_date ?? null,
           definition: {
             id: el.definition?.id ?? '',
             name_pl: el.definition?.name_pl ?? '',
             scope_annual: el.definition?.scope_annual ?? null,
             scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
+            applicable_standards: el.definition?.applicable_standards ?? null,
           },
         }))
       )
@@ -309,9 +326,25 @@ export default function InspectionDetailPage() {
 
   const createElementsFromDefinitions = async (inspectionId: string) => {
     const supabase = createClient()
-    const { data: definitions } = await supabase
+
+    // Pobierz typ inspekcji żeby wybrać właściwe definicje (annual / five_year)
+    const { data: inspMeta } = await supabase
+      .from('inspections')
+      .select('inspection_type')
+      .eq('id', inspectionId)
+      .single()
+
+    const isFiveYear = inspMeta?.inspection_type === 'five_year'
+
+    // Filtr: aktywne (PIIB) definicje pasujące do typu inspekcji
+    let query = supabase
       .from('inspection_element_definitions')
       .select('id')
+      .eq('is_active', true)
+
+    query = isFiveYear ? query.eq('applies_to_five_year', true) : query.eq('applies_to_annual', true)
+
+    const { data: definitions } = await query
 
     if (definitions) {
       const elementsToCreate = definitions.map((def) => ({
@@ -506,6 +539,7 @@ export default function InspectionDetailPage() {
               <ElementCard
                 key={element.id}
                 element={element}
+                inspectionType={inspection.inspection_type}
                 onUpdate={(data) => handleElementUpdate(element.id, data)}
               />
             ))}

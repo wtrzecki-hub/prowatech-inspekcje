@@ -3,7 +3,7 @@
 > **Ten plik jest aktualizowany na koniec każdej sesji pracy nad projektem.**
 > **Jeśli jesteś Claude rozpoczynającym nową sesję pracy nad Prowatech Inspekcje — przeczytaj ten plik w pierwszej kolejności**, zanim zaczniesz eksplorować repo lub pytać użytkownika o kontekst. Zaktualizuj go na końcu sesji (sekcje "Ostatnio zrobione", "W toku / następne kroki" oraz "Historia sesji").
 
-_Ostatnia aktualizacja: 2026-04-25 — **PIIB Faza 8 (migracja DB) wdrożona na produkcję, Faza 9 (UI) rozpoczęta.** Komplet protokołów kontroli okresowej dostosowany do układu Załącznika do uchwały nr PIIB/KR/0051/2024 KR PIIB z 04.12.2024 r. Plan w `MIGRATION_PLAN_PIIB.md`. SQL w `migrations/`. Skala ocen 5→4 stopnie z mapowaniem (zadowalajacy→dobry, sredni→dostateczny, zly→niedostateczny). 6 nowych tabel PIIB, 13 nowych kolumn metryczki, 16 elementów PIIB aktywnych (15 rocznych + 1 dodatkowy 5-letni "Estetyka"), 17 starych zdezaktywowanych. `src/lib/database.types.ts` zaktualizowany ręcznie (do regeneracji przez Supabase CLI w przyszłej sesji). `protocol-tokens.ts` zaktualizowany: `RatingKey` rozszerzony o `dostateczny`/`niedostateczny`, `RATING_KEYS_ACTIVE` (4 stopnie) jako lista wybierana w UI, kolory legacy zachowane. Faza 9 do dokończenia: `constants.ts`, `RatingBadge`, `ElementCard`._
+_Ostatnia aktualizacja: 2026-04-25 — **PIIB Faza 9 (UI komponenty oceny) DONE.** `constants.ts`, `RatingBadge`, `ElementCard` przerobione na 4 stopnie PIIB (dobry/dostateczny/niedostateczny/awaryjny) z legacy fallbackiem dla starych rekordów. ElementCard: nowa sekcja "Zakres kontroli i przepisy" w 3 częściach (roczny / 5-letni dodatkowy / przepisy normy), dropdown przydatności do użytkowania widoczny tylko dla 5-letnich, slider wear% ukryty domyślnie (legacy view-only gdy >0). `[id]/page.tsx` rozszerzony o nowe pola PIIB (usage_suitability, recommendation_completion_date, applicable_standards), `createElementsFromDefinitions` filtruje is_active=TRUE + applies_to_annual/five_year zgodnie z typem inspekcji — nowa inspekcja roczna dostanie 15 elementów, 5-letnia 16 (z Estetyką). Plus nowe stałe pomocnicze: USAGE_SUITABILITY, COMPLETION_STATUSES, BASIC_REQUIREMENTS_ART5 (7 wymagań art. 5 PB), REQUIREMENT_MET_OPTIONS — gotowe do użycia w Fazie 10 (nowe komponenty PIIB)._
 
 ---
 
@@ -27,6 +27,30 @@ Od 2026-04-24 (po kroku 6) na gałęzi `main` jest `.gitattributes` (`* text=aut
 ## Ostatnio zrobione
 
 Pogrupowane tematycznie (kolejność chronologiczna w obrębie grupy):
+
+**Migracja PIIB — Faza 9 dokończona (2026-04-25, sesja 2)**
+
+Komponenty oceny stanu technicznego przerobione pod 4 stopnie PIIB. Poprzednia sesja zostawiła `protocol-tokens.ts`, ta dokończyła pozostałe trzy artefakty + integrację z widokiem detalu inspekcji.
+
+- **`src/lib/constants.ts`** — `CONDITION_RATINGS` rozszerzone do 7 wartości (4 PIIB + 3 legacy z polskimi etykietami), `CONDITION_COLORS` analogicznie z aktywnymi → `success/info/warning/danger`, legacy zachowują oryginalne tony. Nowe eksporty: `CONDITION_RATINGS_ACTIVE` (lista 4 wybieralnych z opisami z PIIB sekcji 3 raportu zmian), `LEGACY_TO_PIIB_RATING` (mapowanie zadowalajacy→dobry, sredni→dostateczny, zly→niedostateczny — zgodnie z faktyczną migracją DB), helper `isActiveRating(value)`. Plus 4 nowe stałe pomocnicze pod kolejne fazy: `USAGE_SUITABILITY`, `COMPLETION_STATUSES`, `BASIC_REQUIREMENTS_ART5` (7 wymagań art. 5 PB jako preset rows), `REQUIREMENT_MET_OPTIONS`.
+- **`src/components/inspection/rating-badge.tsx`** — typ `RatingValue` z 4 PIIB + 3 legacy, fallback gdy klucz nieznany (graphite-100 placeholder), label czytany z `CONDITION_RATINGS` mapy.
+- **`src/components/inspection/element-card.tsx`** — pełny rewrite struktury sekcji (zachowana nazwa propsa `not_applicable` w lokalnym typie, mapping `is_not_applicable` ↔ `not_applicable` jest w `[id]/page.tsx`):
+  - Nowy prop `inspectionType?: 'annual' | 'five_year'` (domyślnie `'annual'` dla kompatybilności).
+  - Sekcja "Zakres kontroli i przepisy" rozdzielona na 3 części: `Zakres roczny (oględziny)` zawsze, `Zakres dodatkowy 5-letni` tylko dla `five_year`, `Przepisy / normy / wytyczne` zawsze (jeśli `applicable_standards` niepuste). Wszystkie z `whitespace-pre-line` żeby zachować łamania z PIIB seedów.
+  - Select oceny zawiera tylko 4 aktywne wartości z `CONDITION_RATINGS_ACTIVE`. Jeśli rekord ma ocenę legacy, dodatkowy `SelectItem` z suffixem "(legacy)" + warning poniżej z proponowanym mapowaniem.
+  - Dropdown `usage_suitability` (Spełnia / Nie spełnia) widoczny TYLKO dla `five_year` — odpowiada kolumnie "Przydatność" w PIIB sekcji III protokołu 5-letniego.
+  - Slider `wear_percentage` ukryty domyślnie. Pokazuje się READ-ONLY gdy `wear_percentage > 0` (legacy data) z banerem "Pole z poprzedniego wzoru. W nowych protokołach PIIB nie jest używane."
+  - Nowy `Input type="date"` dla `recommendation_completion_date` w 2-kolumnowym gridzie obok `Nr fot.`.
+- **`src/app/(protected)/inspekcje/[id]/page.tsx`** — interface `InspectionElement` rozszerzony o `usage_suitability` + `recommendation_completion_date`, `ElementDefinition` o `applicable_standards`. Oba SELECT-y (initial fetch + refetch) pobierają nowe pola z DB. Mapowanie wzbogacone analogicznie. `createElementsFromDefinitions(inspectionId)` przeczytany pod nową logikę: pobiera `inspection_type` z `inspections`, filtruje definicje przez `is_active=TRUE` i `applies_to_annual=TRUE` lub `applies_to_five_year=TRUE` zależnie od typu — nowa inspekcja roczna dostanie 15 elementów PIIB (bez Estetyki), 5-letnia 16. Renderowanie `ElementCard` przekazuje `inspectionType={inspection.inspection_type}`.
+
+Decyzje projektowe potwierdzone w sesji:
+- **Lokalna nazwa `not_applicable` w komponencie zostaje** mimo że DB ma `is_not_applicable`. Mapping już jest w `[id]/page.tsx` od poprzednich faz (commity `cff318d` i wcześniejsze). Zmiana nazwy w komponencie wymagałaby też zmiany w innych miejscach renderujących ElementCard — przez compatibility shim zostawiamy.
+- **Slider wear% jako legacy view-only zamiast usunięcia** — pozwala obejrzeć historyczne dane bez utraty kontekstu, ale nowe inspekcje go nie pokażą (bo `wear_percentage` zostanie 0/null po zmianach z poprzedniej sesji).
+- **Legacy ratings w `Select` jako extra `SelectItem` (a nie podmiana)** — jeśli inspektor otworzy starą inspekcję, nie chcemy stracić informacji "była zła w starej skali", ale chcemy go zachęcić do zmiany. Stąd warning + sugerowana mapping value w copy.
+
+Pułapki:
+- **Dwa SELECT-y w `[id]/page.tsx` z duplikowanym body** (initial fetch + refetch po update). Trzeba edytować oba — łatwo zapomnieć. Następnym razem rozważyć ekstrakcję do funkcji.
+- **`applicable_standards` to nowa kolumna z migracji 8** — jeśli na produkcji zapomnielibyśmy zaktualizować seed elementów (Faza 8 robiła to), wartości byłyby NULL i w UI sekcja "Przepisy" by się nie pokazała (wewnątrz `whitespace-pre-line` z `if applicable_standards` warunkiem). Verifikacja: 16 elementów PIIB ma niepuste `applicable_standards` w SQL seed.
 
 **Migracja PIIB — Faza 8 DB + częściowo Faza 9 UI (2026-04-25)**
 

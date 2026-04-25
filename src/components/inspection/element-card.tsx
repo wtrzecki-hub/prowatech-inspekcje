@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,19 +16,41 @@ import {
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Textarea } from '@/components/ui/textarea'
-import { CONDITION_COLORS, CONDITION_RATINGS } from '@/lib/constants'
+import {
+  CONDITION_RATINGS,
+  CONDITION_RATINGS_ACTIVE,
+  USAGE_SUITABILITY,
+  isActiveRating,
+} from '@/lib/constants'
 import { RatingBadge } from './rating-badge'
+
+/**
+ * Wartości oceny stanu technicznego.
+ * Aktywne (PIIB): dobry / dostateczny / niedostateczny / awaryjny
+ * Legacy (sprzed 2026-04-25): zadowalajacy / sredni / zly
+ */
+type ConditionRating =
+  | 'dobry'
+  | 'dostateczny'
+  | 'niedostateczny'
+  | 'awaryjny'
+  | 'zadowalajacy'
+  | 'sredni'
+  | 'zly'
 
 interface InspectionElement {
   id: string
   element_number: number
-  condition_rating: 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny' | null
+  condition_rating: ConditionRating | null
   wear_percentage: number
   notes: string | null
   recommendations: string | null
   photo_numbers: string | null
   detailed_description: string | null
   not_applicable: boolean
+  // PIIB (od 2026-04-25):
+  usage_suitability?: 'spelnia' | 'nie_spelnia' | null
+  recommendation_completion_date?: string | null
 }
 
 interface ElementDefinition {
@@ -36,20 +58,28 @@ interface ElementDefinition {
   name_pl: string
   scope_annual: string | null
   scope_five_year_additional: string | null
+  // PIIB (od 2026-04-25):
+  applicable_standards?: string | null
 }
 
 interface ElementCardProps {
   element: InspectionElement & { definition: ElementDefinition }
+  /**
+   * Typ inspekcji — wpływa na widoczność pól tylko-5-letnich
+   * (zakres dodatkowy, przydatność do użytkowania).
+   * Domyślnie 'annual' dla kompatybilności wstecz.
+   */
+  inspectionType?: 'annual' | 'five_year'
   onUpdate: (data: Partial<InspectionElement>) => void
 }
 
-export function ElementCard({ element, onUpdate }: ElementCardProps) {
+export function ElementCard({ element, inspectionType = 'annual', onUpdate }: ElementCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isScopeExpanded, setIsScopeExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleFieldChange = (field: keyof InspectionElement, value: any) => {
+  const handleFieldChange = (field: keyof InspectionElement, value: unknown) => {
     setIsLoading(true)
 
     if (debounceTimerRef.current) {
@@ -57,7 +87,7 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
     }
 
     debounceTimerRef.current = setTimeout(() => {
-      onUpdate({ [field]: value })
+      onUpdate({ [field]: value } as Partial<InspectionElement>)
       setIsLoading(false)
     }, 800)
   }
@@ -66,7 +96,19 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
     handleFieldChange('not_applicable', checked)
   }
 
-  const hasScope = element.definition.scope_annual || element.definition.scope_five_year_additional
+  const isFiveYear = inspectionType === 'five_year'
+  const hasScope =
+    element.definition.scope_annual ||
+    element.definition.scope_five_year_additional ||
+    element.definition.applicable_standards
+
+  // Wear% z legacy danych — ukryty dla 0/null (nowe inspekcje), pokazany jako
+  // read-only gdy stara inspekcja ma > 0 (informacja historyczna).
+  const hasLegacyWear =
+    typeof element.wear_percentage === 'number' && element.wear_percentage > 0
+
+  // Czy bieżąca ocena jest legacy — wtedy w selekcie pokażemy ostrzeżenie.
+  const ratingIsLegacy = element.condition_rating !== null && !isActiveRating(element.condition_rating)
 
   return (
     <Card
@@ -100,7 +142,7 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
       {isExpanded && (
         <CardContent className="space-y-5">
           {/* Nie dotyczy Checkbox */}
-          <div className="flex items-center gap-3 pb-4 border-b">
+          <div className="flex items-center gap-3 pb-4 border-b border-graphite-200">
             <Checkbox
               id={`not-applicable-${element.id}`}
               checked={element.not_applicable}
@@ -121,31 +163,40 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
             </div>
           ) : (
             <>
-              {/* Scope Section */}
+              {/* Zakres kontroli wg PIIB */}
               {hasScope && (
                 <div className="border border-primary-100 rounded-xl p-3 bg-primary-50">
                   <button
+                    type="button"
                     onClick={() => setIsScopeExpanded(!isScopeExpanded)}
                     className="flex items-center gap-2 w-full font-medium text-sm text-primary-900 hover:text-primary-700 transition"
                   >
                     {isScopeExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    Zakres kontroli
+                    Zakres kontroli i przepisy
                   </button>
                   {isScopeExpanded && (
-                    <div className="mt-3 space-y-2 text-sm text-primary-800">
+                    <div className="mt-3 space-y-3 text-sm text-primary-800">
                       {element.definition.scope_annual && (
                         <div>
-                          <p className="font-medium mb-1">Co roku:</p>
-                          <p className="text-primary-700">
+                          <p className="font-medium mb-1">Zakres roczny (oględziny):</p>
+                          <p className="text-primary-700 whitespace-pre-line">
                             {element.definition.scope_annual}
                           </p>
                         </div>
                       )}
-                      {element.definition.scope_five_year_additional && (
+                      {isFiveYear && element.definition.scope_five_year_additional && (
                         <div>
-                          <p className="font-medium mb-1">Co 5 lat (dodatkowe):</p>
-                          <p className="text-primary-700">
+                          <p className="font-medium mb-1">Zakres dodatkowy 5-letni:</p>
+                          <p className="text-primary-700 whitespace-pre-line">
                             {element.definition.scope_five_year_additional}
+                          </p>
+                        </div>
+                      )}
+                      {element.definition.applicable_standards && (
+                        <div>
+                          <p className="font-medium mb-1">Przepisy / normy / wytyczne:</p>
+                          <p className="text-primary-700 whitespace-pre-line text-xs">
+                            {element.definition.applicable_standards}
                           </p>
                         </div>
                       )}
@@ -154,17 +205,17 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                 </div>
               )}
 
-              {/* Condition Rating */}
+              {/* Ocena stanu technicznego (4 stopnie PIIB) */}
               <div className="space-y-2">
                 <Label htmlFor={`condition-${element.id}`} className="font-medium">
-                  Ocena stanu
+                  Ocena stanu technicznego
                 </Label>
                 <Select
                   value={element.condition_rating || 'none'}
                   onValueChange={(val) =>
                     handleFieldChange(
                       'condition_rating',
-                      val === 'none' ? null : (val as InspectionElement['condition_rating'])
+                      val === 'none' ? null : (val as ConditionRating)
                     )
                   }
                   disabled={isLoading}
@@ -174,47 +225,93 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— brak oceny —</SelectItem>
-                    {Object.entries(CONDITION_RATINGS).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>
-                        {label}
+                    {CONDITION_RATINGS_ACTIVE.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
                       </SelectItem>
                     ))}
+                    {/* Pokaż obecną wartość legacy jako wybraną żeby Select nie pokazał pustego */}
+                    {ratingIsLegacy && element.condition_rating && (
+                      <SelectItem value={element.condition_rating}>
+                        {CONDITION_RATINGS[element.condition_rating]} (legacy)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
+                {ratingIsLegacy && (
+                  <p className="text-xs text-warning-700">
+                    Ocena z poprzedniego wzoru protokołu. Zalecana zmiana na PIIB
+                    ({element.condition_rating === 'zadowalajacy' && 'Dobry'}
+                    {element.condition_rating === 'sredni' && 'Dostateczny'}
+                    {element.condition_rating === 'zly' && 'Niedostateczny'}).
+                  </p>
+                )}
               </div>
 
-              {/* Wear Percentage */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={`wear-${element.id}`} className="font-medium">
-                    Zużycie (%)
+              {/* Przydatność do użytkowania — tylko 5-letni (PIIB sekcja III) */}
+              {isFiveYear && (
+                <div className="space-y-2">
+                  <Label htmlFor={`usage-${element.id}`} className="font-medium">
+                    Przydatność do użytkowania
                   </Label>
-                  <span className="font-mono text-sm font-semibold text-graphite-800">
-                    {element.wear_percentage}%
-                  </span>
+                  <Select
+                    value={element.usage_suitability || 'none'}
+                    onValueChange={(val) =>
+                      handleFieldChange(
+                        'usage_suitability',
+                        val === 'none' ? null : (val as 'spelnia' | 'nie_spelnia')
+                      )
+                    }
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger id={`usage-${element.id}`}>
+                      <SelectValue placeholder="Wybierz przydatność" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— nie określono —</SelectItem>
+                      {USAGE_SUITABILITY.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Slider
-                  id={`wear-${element.id}`}
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={[element.wear_percentage]}
-                  onValueChange={(val) =>
-                    handleFieldChange('wear_percentage', val[0])
-                  }
-                  disabled={isLoading}
-                  className="w-full"
-                />
-              </div>
+              )}
 
-              {/* Notes */}
+              {/* Wear% — legacy, tylko view-only dla starych rekordów */}
+              {hasLegacyWear && (
+                <div className="space-y-2 rounded-xl border border-graphite-200 bg-graphite-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-medium text-graphite-700">
+                      Zużycie (legacy)
+                    </Label>
+                    <span className="font-mono text-sm font-semibold text-graphite-800">
+                      {element.wear_percentage}%
+                    </span>
+                  </div>
+                  <Slider
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={[element.wear_percentage]}
+                    disabled
+                    className="w-full"
+                  />
+                  <p className="text-xs text-graphite-500">
+                    Pole z poprzedniego wzoru. W nowych protokołach PIIB nie jest używane.
+                  </p>
+                </div>
+              )}
+
+              {/* Notatki / opis stanu technicznego */}
               <div className="space-y-2">
                 <Label htmlFor={`notes-${element.id}`} className="font-medium">
-                  Uwagi
+                  Opis stanu technicznego
                 </Label>
                 <Textarea
                   id={`notes-${element.id}`}
-                  placeholder="Dodaj uwagi dotyczące tego elementu..."
+                  placeholder="Opis stanu technicznego, wyniki oględzin, stwierdzone uszkodzenia..."
                   value={element.notes || ''}
                   onChange={(e) => handleFieldChange('notes', e.target.value)}
                   disabled={isLoading}
@@ -222,10 +319,10 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                 />
               </div>
 
-              {/* Recommendations */}
+              {/* Zalecenia */}
               <div className="space-y-2">
                 <Label htmlFor={`recommendations-${element.id}`} className="font-medium">
-                  Zalecenia
+                  Zalecenia / uwagi
                 </Label>
                 <Textarea
                   id={`recommendations-${element.id}`}
@@ -239,30 +336,49 @@ export function ElementCard({ element, onUpdate }: ElementCardProps) {
                 />
               </div>
 
-              {/* Photo Numbers */}
-              <div className="space-y-2">
-                <Label htmlFor={`photos-${element.id}`} className="font-medium">
-                  Numery zdjęć
-                </Label>
-                <Input
-                  id={`photos-${element.id}`}
-                  placeholder="np. 5, 6, 7"
-                  value={element.photo_numbers || ''}
-                  onChange={(e) =>
-                    handleFieldChange('photo_numbers', e.target.value)
-                  }
-                  disabled={isLoading}
-                />
+              {/* Numery zdjęć + data wykonania zaleceń (PIIB) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor={`photos-${element.id}`} className="font-medium">
+                    Nr fot.
+                  </Label>
+                  <Input
+                    id={`photos-${element.id}`}
+                    placeholder="np. 5, 6, 7"
+                    value={element.photo_numbers || ''}
+                    onChange={(e) =>
+                      handleFieldChange('photo_numbers', e.target.value)
+                    }
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`completion-${element.id}`} className="font-medium">
+                    Data wykonania zaleceń
+                  </Label>
+                  <Input
+                    id={`completion-${element.id}`}
+                    type="date"
+                    value={element.recommendation_completion_date || ''}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        'recommendation_completion_date',
+                        e.target.value || null
+                      )
+                    }
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
 
-              {/* Detailed Description */}
+              {/* Opis szczegółowy */}
               <div className="space-y-2">
                 <Label htmlFor={`description-${element.id}`} className="font-medium">
-                  Opis szczegółowy
+                  Opis szczegółowy (dodatkowy)
                 </Label>
                 <Textarea
                   id={`description-${element.id}`}
-                  placeholder="Szczegółowy opis stanu elementu..."
+                  placeholder="Szczegółowy opis stanu elementu, fotografie, wyniki pomiarów..."
                   value={element.detailed_description || ''}
                   onChange={(e) =>
                     handleFieldChange('detailed_description', e.target.value)
