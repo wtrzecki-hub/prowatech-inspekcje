@@ -42,6 +42,35 @@ function ratingLabel(r: string | null | undefined): string {
   return RATING_LABELS[r as RatingKey] || r
 }
 
+/**
+ * Pobierz obraz z URL (np. Supabase Storage public URL) i zwróć
+ * { base64, format } gotowe do `pdf.addImage()`.
+ *
+ * Zwraca null jeśli nie udało się pobrać (404, network error, niewspierany format).
+ * Generator PDF nie powinien się wywalić gdy zdjęcie jest niedostępne.
+ */
+async function fetchImageAsBase64(
+  url: string | null | undefined
+): Promise<{ base64: string; format: 'PNG' | 'JPEG' | 'WEBP' } | null> {
+  if (!url) return null
+  try {
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') || ''
+    let format: 'PNG' | 'JPEG' | 'WEBP' = 'JPEG'
+    if (contentType.includes('png')) format = 'PNG'
+    else if (contentType.includes('webp')) format = 'WEBP'
+    else if (contentType.includes('jpeg') || contentType.includes('jpg'))
+      format = 'JPEG'
+    const buffer = Buffer.from(await res.arrayBuffer())
+    const base64 = buffer.toString('base64')
+    return { base64, format }
+  } catch (err) {
+    console.error('Nie udało się pobrać obrazu:', url, err)
+    return null
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
@@ -560,6 +589,40 @@ export async function GET(
 
     // ─── METRYCZKA OBIEKTU ─────────────────────────────────────────────────
     addSection('Metryczka obiektu')
+
+    // Embed fotografii obiektu (jeśli object_photo_url ustawione i obraz pobierany)
+    const objectPhoto = await fetchImageAsBase64(insp.object_photo_url)
+    if (objectPhoto) {
+      ensureSpace(60)
+      try {
+        // Box ~60×60 mm, wycentrowany. Trzymamy proporcje przez addImage z auto-fit.
+        const imgW = 60
+        const imgH = 45
+        const imgX = (pageWidth - imgW) / 2
+        pdf.addImage(
+          `data:image/${objectPhoto.format.toLowerCase()};base64,${objectPhoto.base64}`,
+          objectPhoto.format,
+          imgX,
+          yPosition,
+          imgW,
+          imgH,
+          undefined,
+          'FAST'
+        )
+        yPosition += imgH + 4
+        pdf.setFontSize(8)
+        pdf.setTextColor(...RGB.graphite500)
+        pdf.text('Fotografia obiektu', pageWidth / 2, yPosition, {
+          align: 'center',
+        })
+        pdf.setTextColor(0)
+        yPosition += 6
+      } catch (err) {
+        console.error('Nie udało się osadzić obrazu w PDF:', err)
+        // Cicho ignorujemy — PDF dalej generuje się bez obrazu
+      }
+    }
+
     addKeyValueTable([
       { label: 'Adres obiektu budowlanego', value: insp.object_address || '' },
       {
@@ -1299,7 +1362,7 @@ export async function GET(
     return new Response(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="protokol-PIIB-${insp.protocol_number || inspectionId}.pdf"`,
+        'Content-Disposition': `attachment; filename="protokol-PIIB-${(insp.protocol_number || inspectionId).replace(/[\/\\:*?"<>|]/g, '_')}.pdf"`,
         'Content-Length': pdfBuffer.length.toString(),
       },
     })

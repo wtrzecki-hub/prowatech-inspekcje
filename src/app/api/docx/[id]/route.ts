@@ -231,6 +231,32 @@ function ratingLabel(r: string | null | undefined): string {
   return RATING_LABELS[r as RatingKey] || r
 }
 
+/**
+ * Pobierz obraz z URL (np. Supabase Storage public URL) i zwróć
+ * { buffer, format } gotowe do `ImageRun`.
+ *
+ * Zwraca null jeśli nie udało się pobrać. Generator DOCX nie powinien się
+ * wywalić gdy zdjęcie jest niedostępne.
+ */
+async function fetchImageAsBuffer(
+  url: string | null | undefined
+): Promise<{ buffer: Buffer; format: 'png' | 'jpg' | 'webp' } | null> {
+  if (!url) return null
+  try {
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') || ''
+    let format: 'png' | 'jpg' | 'webp' = 'jpg'
+    if (contentType.includes('png')) format = 'png'
+    else if (contentType.includes('webp')) format = 'webp'
+    const buffer = Buffer.from(await res.arrayBuffer())
+    return { buffer, format }
+  } catch (err) {
+    console.error('Nie udało się pobrać obrazu (DOCX):', url, err)
+    return null
+  }
+}
+
 // =============================================================================
 // MAIN HANDLER
 // =============================================================================
@@ -776,6 +802,51 @@ export async function GET(
       return new TableRow({
         children: [boldCell(label, col1, true), dataCell(value, col2)],
       })
+    }
+
+    // Embed fotografii obiektu — paragraf przed metaTable (jeśli URL ustawiony i obraz pobrany)
+    const objectPhoto = await fetchImageAsBuffer(insp.object_photo_url)
+    const objectPhotoParagraphs: Paragraph[] = []
+    if (objectPhoto) {
+      try {
+        objectPhotoParagraphs.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 120, after: 60 },
+            children: [
+              new ImageRun({
+                type: objectPhoto.format,
+                data: objectPhoto.buffer,
+                // ~ 60×45 mm w EMU? docx używa pikseli przy 96 DPI;
+                // 60mm ≈ 227px, 45mm ≈ 170px (ale 'Pixels' to nie EMU).
+                transformation: { width: 240, height: 180 },
+                altText: {
+                  title: 'Fotografia obiektu',
+                  description: 'Fotografia ogólna turbiny wiatrowej',
+                  name: 'object-photo',
+                },
+              }),
+            ],
+          })
+        )
+        objectPhotoParagraphs.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 0, after: 120 },
+            children: [
+              new TextRun({
+                text: 'Fotografia obiektu',
+                italics: true,
+                font: 'Arial',
+                size: FONT_DXA.small,
+                color: HEX.graphite500,
+              }),
+            ],
+          })
+        )
+      } catch (err) {
+        console.error('Nie udało się osadzić obrazu w DOCX:', err)
+      }
     }
 
     const metaTable = new Table({
@@ -1833,6 +1904,7 @@ export async function GET(
 
       // Metryczka obiektu
       sectionHeading('Metryczka obiektu'),
+      ...objectPhotoParagraphs,
       metaTable,
 
       // Podstawowe dane techniczne
@@ -2020,7 +2092,7 @@ export async function GET(
       headers: {
         'Content-Type':
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="protokol-PIIB-${insp.protocol_number || inspectionId}.docx"`,
+        'Content-Disposition': `attachment; filename="protokol-PIIB-${(insp.protocol_number || inspectionId).replace(/[\/\\:*?"<>|]/g, '_')}.docx"`,
         'Content-Length': nodeBuffer.length.toString(),
       },
     })
