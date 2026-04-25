@@ -3,7 +3,7 @@
 > **Ten plik jest aktualizowany na koniec każdej sesji pracy nad projektem.**
 > **Jeśli jesteś Claude rozpoczynającym nową sesję pracy nad Prowatech Inspekcje — przeczytaj ten plik w pierwszej kolejności**, zanim zaczniesz eksplorować repo lub pytać użytkownika o kontekst. Zaktualizuj go na końcu sesji (sekcje "Ostatnio zrobione", "W toku / następne kroki" oraz "Historia sesji").
 
-_Ostatnia aktualizacja: 2026-04-25 — **PIIB Faza 9 (UI komponenty oceny) DONE.** `constants.ts`, `RatingBadge`, `ElementCard` przerobione na 4 stopnie PIIB (dobry/dostateczny/niedostateczny/awaryjny) z legacy fallbackiem dla starych rekordów. ElementCard: nowa sekcja "Zakres kontroli i przepisy" w 3 częściach (roczny / 5-letni dodatkowy / przepisy normy), dropdown przydatności do użytkowania widoczny tylko dla 5-letnich, slider wear% ukryty domyślnie (legacy view-only gdy >0). `[id]/page.tsx` rozszerzony o nowe pola PIIB (usage_suitability, recommendation_completion_date, applicable_standards), `createElementsFromDefinitions` filtruje is_active=TRUE + applies_to_annual/five_year zgodnie z typem inspekcji — nowa inspekcja roczna dostanie 15 elementów, 5-letnia 16 (z Estetyką). Plus nowe stałe pomocnicze: USAGE_SUITABILITY, COMPLETION_STATUSES, BASIC_REQUIREMENTS_ART5 (7 wymagań art. 5 PB), REQUIREMENT_MET_OPTIONS — gotowe do użycia w Fazie 10 (nowe komponenty PIIB)._
+_Ostatnia aktualizacja: 2026-04-25 — **PIIB Faza 10 (6 nowych komponentów PIIB) DONE.** Sześć samodzielnych komponentów CRUD pod nowe tabele PIIB: AttachmentsList (sekcja VII/VIII), EmergencyStateTable (II — stan awaryjny z banerem o PINB), PreviousRecommendationsTable (II — z auto-fill z poprzedniej zakończonej inspekcji turbiny), RepairScopeTable (IV/VI — Zakres czynności / Termin, zastępuje legacy NG/NB/K + I-IV), BasicRequirementsArt5 (VI — 7 wymagań art. 5 PB, auto-create preset rows tylko 5-letni), InspectionMetadataPiib (kompozyt 4 sekcji: metryczka obiektu / strony protokołu / dokumenty do wglądu / wprowadzenie do II + KOB). Wszystkie self-contained, ładują własny stan, auto-save 800ms na blur, hardkodowane Supabase creds wg konwencji projektu. Każdy komponent gotowy do wstawienia w `[id]/page.tsx` jako nowe taby lub sekcje — integracja w Fazie 12._
 
 ---
 
@@ -27,6 +27,38 @@ Od 2026-04-24 (po kroku 6) na gałęzi `main` jest `.gitattributes` (`* text=aut
 ## Ostatnio zrobione
 
 Pogrupowane tematycznie (kolejność chronologiczna w obrębie grupy):
+
+**Migracja PIIB — Faza 10 (nowe komponenty UI) DONE (2026-04-25, sesja 3)**
+
+Sześć samodzielnych komponentów CRUD pod nowe tabele PIIB. Każdy `'use client'`, każdy ładuje swój stan z Supabase w `useEffect`, każdy ma debounced auto-save 800ms na blur. Konwencja hardkodowanych creds zachowana (PROGRESS.md gotcha o env inliningu).
+
+- **`src/components/inspection/attachments-list.tsx`** (~250 lin) — PIIB sekcja VII/VIII. Lista załączników z 3 kolumnami: Lp / Opis (Input) / URL pliku (opcjonalny + ikona ExternalLink → otwiera w nowej karcie). Inline form z Input × 2 + Button na dole. Enter w opisie → submit. Tabela: `inspection_attachments`.
+- **`src/components/inspection/emergency-state-table.tsx`** (~210 lin) — PIIB sekcja II "Stan awaryjny". Tabela 3-kolumnowa: Lp / Element obiektu / Zakres pilnego remontu (Textarea). Cały komponent zmienia kolor na danger (czerwone obramowanie + tło `danger-50/40`) gdy są wpisy. Dodatkowy baner z **art. 70 ust. 1 PB** o niezwłocznym powiadomieniu PINB widoczny gdy `items.length > 0`. Tabela: `emergency_state_items`.
+- **`src/components/inspection/previous-recommendations-table.tsx`** (~370 lin) — PIIB sekcja II "Ocena realizacji zaleceń". 4 kolumny: Lp / Zalecenie (Textarea) / Stopień wykonania (Select tak/nie/w_trakcie z kolorowym Badge) / Uwagi. **Funkcja Import z poprzedniej inspekcji**: gdy `turbineId` przekazane jako prop, przycisk "Importuj z poprzedniej inspekcji" pobiera ostatnią zakończoną inspekcję tej turbiny i pre-populuje wiersze. Próbuje 2 źródła — najpierw `repair_scope_items` (PIIB), potem fallback do legacy `repair_recommendations.scope_description`. Tabela: `previous_recommendations`.
+- **`src/components/inspection/repair-scope-table.tsx`** (~310 lin) — PIIB sekcja IV/VI "Zakres robót remontowych". **Zastępuje stary RepairTable z NG/NB/K + I-IV**. 4 kolumny: Lp / Zakres czynności (Textarea, line-through gdy wykonane) / Termin (Input tekstowy + Input type="date" do sortowania/alertów) / Status (Checkbox is_completed + auto-set completion_date przy zaznaczeniu). Header pokazuje licznik "X / Y wykonanych". Wiersze wykonane = zielona ramka + tło `success-50/40`. Tabela: `repair_scope_items`.
+- **`src/components/inspection/basic-requirements-art5.tsx`** (~220 lin) — PIIB sekcja VI **TYLKO 5-letni**. 7 preset rows (z `BASIC_REQUIREMENTS_ART5` w constants.ts) **auto-create przy pierwszym otwarciu** jeśli baza pusta. Każdy wiersz: nazwa wymagania + kod (font-mono) / Select Spełnia/Nie spełnia/Nie dotyczy z kolorowym Badge / Input uwagi. Tabela: `basic_requirements_art5`. Sortowanie po kolejności w `BASIC_REQUIREMENTS_ART5`.
+- **`src/components/inspection/inspection-metadata-piib.tsx`** (~330 lin) — kompozyt 4 sekcji metryczki PIIB:
+  1. Metryczka obiektu (object_address, object_registry_number, object_name, object_photo_url z preview img)
+  2. Strony protokołu (owner_name, manager_name, contractor_info, additional_participants)
+  3. Dokumenty do wglądu (5 sub-pól w `documents_reviewed` JSONB: previous_annual, previous_5y, electrical_measurements, service, other)
+  4. Wprowadzenie do II + KOB (general_findings_intro Textarea + kob_entries_summary z dynamicznym labelem "12 miesięcy" / "5 lat" zależnie od `inspectionType`)
+
+  Edytuje `inspections` bezpośrednio przez `update().eq('id', inspectionId)`. Wszystkie pola nullable.
+
+Decyzje projektowe:
+- **Każdy komponent self-contained** zamiast jednego mega-komponentu wszystkich sekcji PIIB. Łatwiejsze do wstawienia w istniejącą strukturę zakładek (Elementy / Serwis / Zalecenia / Zdjęcia / Wnioski) — w Fazie 12 dodamy nowe taby lub rozbudujemy istniejące.
+- **AttachmentsList nie używa storage'a** — tylko URL string. Upload plików wymaga osobnego flowa (Supabase Storage), zostawiam na późniejszy iteracje. Pole `google_drive_file_id` w tabeli istnieje ale w UI nieużywane — kompatybilne z istniejącym wzorcem `inspection_photos.google_drive_file_id`.
+- **PreviousRecommendationsTable importuje z legacy `repair_recommendations`** jako fallback — nie ignoruje historycznych danych przed migracją PIIB. Jeśli klient miał stare zalecenia NG/NB/K w starym schemacie, można je zaimportować jako "zalecenia z poprzedniej kontroli" i zaznaczyć status realizacji.
+- **BasicRequirementsArt5 auto-create** zamiast manualnego "dodaj wymaganie" — 7 wymagań art. 5 PB jest stałe i obowiązkowe dla każdej kontroli 5-letniej, nie ma sensu wymuszać manualnego klikania "Dodaj 7 wymagań".
+- **InspectionMetadataPiib jako pojedynczy widget z 4 sub-cards** zamiast 4 osobnych komponentów — wszystkie pola edytują tę samą tabelę `inspections`, łatwiej trzymać razem ze względu na auto-save (jedna debounceRef dla całego widgeta, nie 4 osobne).
+
+Pułapki:
+- **Wszystkie 6 komponentów hardkoduje SUPABASE_URL + ANON_KEY** zamiast importować z `@/lib/supabase/client`. To jest świadoma kontynuacja istniejącej konwencji projektu (inne komponenty inspection robią tak samo, env inlining nie działa z `NEXT_PUBLIC_*` w Vercel produkcyjnym — patrz wcześniejsze gotchas). Przy rotacji klucza Supabase trzeba zmienić w 6 nowych miejscach + ~5 starych. Da się to zrobić jednym sed-em.
+- **Nie testowane lokalnie** — komponenty są standalone, wymagają osadzenia w `[id]/page.tsx` żeby były widoczne. Faza 12 to integracja + smoke test.
+
+Pozostałe fazy:
+- **Faza 11**: pełen rewrite generatorów DOCX (`/api/docx/[id]`) i PDF (`/api/pdf/[id]`) wg układu PIIB. Obecne generatory nadal renderują stare układy z 5-stopniową skalą — TS się skompiluje, bo enum ma 7 wartości, ale wizualnie protokół jest niezgodny z PIIB.
+- **Faza 12**: integracja 6 nowych komponentów w `[id]/page.tsx` jako nowe taby lub sekcje (Metryczka / Sprawdzenie zaleceń / Stan awaryjny / Zalecenia PIIB / Wymagania art. 5 / Załączniki). Dodać `turbineId` jako prop do `PreviousRecommendationsTable`. Aktualizacja `turbine-inspection-form.tsx` 3-krokowego kreatora pod te same komponenty.
 
 **Migracja PIIB — Faza 9 dokończona (2026-04-25, sesja 2)**
 
