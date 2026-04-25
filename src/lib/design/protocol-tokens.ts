@@ -64,11 +64,26 @@ export const RGB = {
 }
 
 // ---------------------------------------------------------------------------
-// Oceny elementów — color coding sev-1..5
-// 1:1 z `design/prowatech-prototype.html` sev-1..sev-5 (§ 3, strona 2).
+// Oceny elementów — color coding wg PIIB (4 stopnie)
+//
+// Po migracji 2026-04-25 (Załącznik do uchwały nr PIIB/KR/0051/2024) skala
+// zredukowana z 5 do 4 stopni: dobry / dostateczny / niedostateczny / awaryjny.
+// Stare 3 wartości (zadowalajacy / sredni / zly) zachowane w typie i w DB
+// jako legacy — w danych zmapowane do nowych (zadowalajacy→dobry, sredni→
+// dostateczny, zly→niedostateczny). W eksporcie protokołu UI nigdy nie powi-
+// nien już ich wybierać; jeśli pojawią się w starych rekordach, kolory pozo-
+// stają by zachować ciągłość wizualną.
 // ---------------------------------------------------------------------------
 
-export type RatingKey = 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny'
+/** Aktywne wartości oceny (4-stopniowa skala PIIB) — wybierane w UI. */
+export type RatingKeyActive = 'dobry' | 'dostateczny' | 'niedostateczny' | 'awaryjny'
+
+/** Pełen typ z wartościami legacy (dla obsługi starych danych). */
+export type RatingKey =
+  | RatingKeyActive
+  | 'zadowalajacy' // legacy → mapuje się do dobry
+  | 'sredni'       // legacy → mapuje się do dostateczny
+  | 'zly'          // legacy → mapuje się do niedostateczny
 
 export interface RatingColorHex {
   bg: string
@@ -77,11 +92,14 @@ export interface RatingColorHex {
 }
 
 export const RATING_COLORS_HEX: Record<RatingKey, RatingColorHex> = {
-  dobry: { bg: 'F0F9F1', text: '0A321A', stripe: '2E9F4A' }, // zielony
-  zadowalajacy: { bg: 'EFF6FF', text: '0B3A74', stripe: '3B82F6' }, // niebieski
-  sredni: { bg: 'FFFBEB', text: '7C2D12', stripe: 'F59E0B' }, // bursztynowy
-  zly: { bg: 'FFF4ED', text: '7B341E', stripe: 'EA580C' }, // pomarańczowy
-  awaryjny: { bg: 'FEF2F2', text: '7F1D1D', stripe: 'DC2626' }, // czerwony
+  dobry: { bg: 'F0F9F1', text: '0A321A', stripe: '2E9F4A' }, // zielony — success
+  dostateczny: { bg: 'EFF6FF', text: '0B3A74', stripe: '3B82F6' }, // niebieski — info
+  niedostateczny: { bg: 'FFFBEB', text: '7C2D12', stripe: 'F59E0B' }, // bursztynowy — warning
+  awaryjny: { bg: 'FEF2F2', text: '7F1D1D', stripe: 'DC2626' }, // czerwony — danger
+  // Legacy (zachowane dla starych rekordów; semantycznie odpowiadają nowym):
+  zadowalajacy: { bg: 'EFF6FF', text: '0B3A74', stripe: '3B82F6' },
+  sredni: { bg: 'FFFBEB', text: '7C2D12', stripe: 'F59E0B' },
+  zly: { bg: 'FFF4ED', text: '7B341E', stripe: 'EA580C' },
 }
 
 export interface RatingColorRgb {
@@ -92,11 +110,22 @@ export interface RatingColorRgb {
 
 export const RATING_COLORS_RGB: Record<RatingKey, RatingColorRgb> = {
   dobry: { bg: [240, 249, 241], text: [10, 50, 26], stripe: [46, 159, 74] },
+  dostateczny: { bg: [239, 246, 255], text: [11, 58, 116], stripe: [59, 130, 246] },
+  niedostateczny: { bg: [255, 251, 235], text: [124, 45, 18], stripe: [245, 158, 11] },
+  awaryjny: { bg: [254, 242, 242], text: [127, 29, 29], stripe: [220, 38, 38] },
+  // Legacy:
   zadowalajacy: { bg: [239, 246, 255], text: [11, 58, 116], stripe: [59, 130, 246] },
   sredni: { bg: [255, 251, 235], text: [124, 45, 18], stripe: [245, 158, 11] },
   zly: { bg: [255, 244, 237], text: [123, 52, 30], stripe: [234, 88, 12] },
-  awaryjny: { bg: [254, 242, 242], text: [127, 29, 29], stripe: [220, 38, 38] },
 }
+
+/** Lista aktywnych wartości oceny w kolejności od najlepszej do najgorszej. */
+export const RATING_KEYS_ACTIVE: readonly RatingKeyActive[] = [
+  'dobry',
+  'dostateczny',
+  'niedostateczny',
+  'awaryjny',
+] as const
 
 // ---------------------------------------------------------------------------
 // Pilność zaleceń — pill badges
@@ -172,9 +201,13 @@ export const TRACKING_DXA = 22
 // ---------------------------------------------------------------------------
 
 export const RATING_LABELS: Record<RatingKey, string> = {
+  // Aktywne (PIIB):
   dobry: 'Dobry',
+  dostateczny: 'Dostateczny',
+  niedostateczny: 'Niedostateczny',
+  awaryjny: 'Awaryjny',
+  // Legacy (jeśli pojawi się w starym rekordzie — pokaż oryginalny label):
   zadowalajacy: 'Zadowalający',
   sredni: 'Średni',
   zly: 'Zły',
-  awaryjny: 'Awaryjny',
 }

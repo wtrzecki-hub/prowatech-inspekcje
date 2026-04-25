@@ -3,7 +3,7 @@
 > **Ten plik jest aktualizowany na koniec każdej sesji pracy nad projektem.**
 > **Jeśli jesteś Claude rozpoczynającym nową sesję pracy nad Prowatech Inspekcje — przeczytaj ten plik w pierwszej kolejności**, zanim zaczniesz eksplorować repo lub pytać użytkownika o kontekst. Zaktualizuj go na końcu sesji (sekcje "Ostatnio zrobione", "W toku / następne kroki" oraz "Historia sesji").
 
-_Ostatnia aktualizacja: 2026-04-24 — **Redesign krok 7 (wariant A — re-skin + dead code cleanup) wdrożony.** Cztery komponenty z `src/components/inspection/` (photo-gallery, repair-table, electrical-measurements, service-checklist) zmigrowane z 29 hits blue/gray/red/orange/yellow/green → 0. Kluczowa zmiana: **`urgencyColors` w `repair-table.tsx`** (I-IV `red/orange/yellow/green` → `danger/warning/info/graphite`) zunifikowane z protokołem DOCX A3 / PDF B3 z kroku 4 — **single source of truth dla urgency** w całej aplikacji (UI + protokoły). `typeColors` NG/NB/K → `danger/warning/success`. Usunięty martwy kod `components/forms/new-inspection-wizard.tsx` (823 linii, nie importowany nigdzie). Strona `/inspekcje/[id]/page.tsx` — 0 hits, była już zmigrowana w Fazie 2._
+_Ostatnia aktualizacja: 2026-04-25 — **PIIB Faza 8 (migracja DB) wdrożona na produkcję, Faza 9 (UI) rozpoczęta.** Komplet protokołów kontroli okresowej dostosowany do układu Załącznika do uchwały nr PIIB/KR/0051/2024 KR PIIB z 04.12.2024 r. Plan w `MIGRATION_PLAN_PIIB.md`. SQL w `migrations/`. Skala ocen 5→4 stopnie z mapowaniem (zadowalajacy→dobry, sredni→dostateczny, zly→niedostateczny). 6 nowych tabel PIIB, 13 nowych kolumn metryczki, 16 elementów PIIB aktywnych (15 rocznych + 1 dodatkowy 5-letni "Estetyka"), 17 starych zdezaktywowanych. `src/lib/database.types.ts` zaktualizowany ręcznie (do regeneracji przez Supabase CLI w przyszłej sesji). `protocol-tokens.ts` zaktualizowany: `RatingKey` rozszerzony o `dostateczny`/`niedostateczny`, `RATING_KEYS_ACTIVE` (4 stopnie) jako lista wybierana w UI, kolory legacy zachowane. Faza 9 do dokończenia: `constants.ts`, `RatingBadge`, `ElementCard`._
 
 ---
 
@@ -27,6 +27,43 @@ Od 2026-04-24 (po kroku 6) na gałęzi `main` jest `.gitattributes` (`* text=aut
 ## Ostatnio zrobione
 
 Pogrupowane tematycznie (kolejność chronologiczna w obrębie grupy):
+
+**Migracja PIIB — Faza 8 DB + częściowo Faza 9 UI (2026-04-25)**
+
+Wzory protokołów kontroli okresowej (roczna i 5-letnia) dostosowane do układu **Załącznika do uchwały nr PIIB/KR/0051/2024 Krajowej Rady Polskiej Izby Inżynierów Budownictwa z 04.12.2024 r.** Cel biznesowy: protokoły rozpoznawane i akceptowane przez powiatowe inspektoraty nadzoru budowlanego, spójne z dokumentami sporządzanymi dla pozostałych obiektów budowlanych w portfelu zarządcy.
+
+Pliki wejściowe od Waldka (uploady 2026-04-25): `Protokol_Kontroli_Rocznej_EW_PIIB.docx`, `Protokol_Kontroli_5-letniej_EW_PIIB.docx`, `Raport_zmian_wzory_PIIB.docx`.
+
+Decyzje strategiczne (zatwierdzone z Waldkiem na starcie sesji):
+- Mapowanie ocen wg raportu PIIB sekcja 3: `zadowalajacy → dobry`, `sredni → dostateczny`, `zly → niedostateczny`. Po migracji aktywne 4 stopnie: `dobry / dostateczny / niedostateczny / awaryjny`.
+- Pola legacy (`wear_percentage`, `repair_recommendations.repair_type` NG/NB/K, `repair_recommendations.urgency_level` I-IV) zachowane w schemacie, ukryte w UI dla nowych protokołów. Stare inspekcje w eksportach mogą je nadal pokazywać dla dokumentacji historycznej.
+- Jeden generator DOCX/PDF z warunkiem na `inspection_type` (sekcje 5-letnie warunkowe — Skład komisji, kolumna "Zakres dodatkowy 5-letni", pomiary elektryczne, wymagania art. 5 PB, element "Estetyka").
+- Plan w fazach (8-13), nie all-in-one. Każda faza = osobny commit.
+
+**Faza 8 — migracja DB (DONE 2026-04-25), commit `9f51b24`:**
+- Pełen plan w `MIGRATION_PLAN_PIIB.md` (root repo) — analiza wpływu, fazy, ryzyka, rollback plan.
+- `migrations/2026-04-25_piib_protocol.sql` (~480 linii): dodanie wartości `dostateczny` + `niedostateczny` do enuma `condition_rating`, mapowanie istniejących wartości (3 UPDATE-y na `inspection_elements.condition_rating`, `inspections.overall_condition_rating`, `defect_library.typical_rating`), 11 nowych kolumn metryczki PIIB w `inspections` (object_address, object_registry_number, object_name, object_photo_url, owner_name, manager_name, contractor_info, additional_participants, documents_reviewed JSONB, general_findings_intro, kob_entries_summary), 2 nowe kolumny w `inspection_elements` (usage_suitability text CHECK 'spelnia'/'nie_spelnia', recommendation_completion_date date), 6 nowych tabel z RLS: `previous_recommendations` (II — ocena realizacji zaleceń), `emergency_state_items` (II — stan awaryjny), `repair_scope_items` (IV/VI — Zakres czynności / Termin), `basic_requirements_art5` (VI — tylko 5-letni), `inspection_attachments` (VII/VIII — załączniki), `electrical_measurement_protocols` (IV.C — wykaz protokołów do KOB).
+- `migrations/2026-04-25_piib_element_definitions_v2.sql`: re-seed `inspection_element_definitions`. **V1 zawiodła z 23505** (`could not create unique index ... section_code='A' is duplicated`) — istniejący seed używał kodów A/B/C/D/E jako grup (nie unique). V2: dezaktywacja wszystkich 17 starych wierszy (is_active=FALSE — zachowuje referencje z `inspection_elements`), częściowy `UNIQUE INDEX ... WHERE is_active = TRUE` zamiast pełnego constraint, INSERT 16 nowych elementów PIIB (15 rocznych + 1 dodatkowy 5-letni "Estetyka") z polami `scope_annual` + `scope_five_year_additional` + `applicable_standards` (cytaty PIIB).
+- Każdy nowy SQL ma sekcję WERYFIKACJA z dokładnymi oczekiwanymi wynikami. Waldek wykonał obie migracje ręcznie w Supabase SQL Editor 2026-04-25 ~11:20-11:30 — wszystkie weryfikacje OK (15 dla rocznej / 16 dla 5-letniej / 17 legacy dezaktywowanych).
+- `migrations/README.md` z instrukcją krok-po-kroku (backup → SQL #1 → SQL #2 → regeneracja types → smoke test → commit).
+- `src/lib/database.types.ts` zaktualizowany ręcznie: enum `condition_rating` rozszerzony do 7 wartości (4 PIIB + 3 legacy), nowe kolumny w `inspections` i `inspection_elements`, definicje 6 nowych tabel z Relationships do `inspections`.
+
+**Faza 9 (rozpoczęta 2026-04-25) — UI komponentów oceny:**
+- `src/lib/design/protocol-tokens.ts` (single source of truth dla DOCX/PDF): rozszerzone `RatingKey` o `dostateczny` + `niedostateczny`, dodany `RatingKeyActive` (tylko 4 PIIB), nowe kolory w `RATING_COLORS_HEX/RGB` 1:1 z prototypem (dobry=zielony success, dostateczny=niebieski info, niedostateczny=amber warning, awaryjny=czerwony danger), legacy wartości (`zadowalajacy/sredni/zly`) zachowane z oryginalnymi kolorami dla bezpiecznego renderingu starych rekordów. Dodana stała `RATING_KEYS_ACTIVE` jako lista wybieralnych w UI w kolejności od najlepszej do najgorszej. `RATING_LABELS` zaktualizowany — aktywne 4 + legacy 3 (na wszelki wypadek).
+
+**Pułapki napotkane podczas sesji (na przyszłość):**
+- **Mount Cowork sandbox bash desynchronizuje się** od pliku po `Edit` przez okno tooli. `Read` widzi prawdziwą zawartość, `bash wc -l` widzi cache sprzed 10+ edytów. To jest INNE od phantom `.git/index.lock` z poprzednich sesji — ten bug dotyczy plików `src/`, nie `.git/`. Workaround: zaufanie `Read tool` jako single source of truth podczas edycji, walidacja TypeScript przez `npm run dev` lub Vercel build (nie przez `npx tsc --noEmit` w bash sandbox).
+- **Edit bez końcowego newline w `new_string` skleja się z następną linią pliku.** Podczas dopisywania końcówki `database.types.ts` (od ostatniej obciętej linii `commissioning_dat`) zakończyłem `new_string` na `} as const` (bez `\n`), w pliku po nim była dalej kontynuacja `e?: string | null` od oryginału. Wynik: `} as conste?: string | null` — 287 zduplikowanych linii. Naprawa jednym dużym Edit-em z `old_string` na 235 linii. **Zasada**: każdy `new_string` w `Edit` kończ jawnym `\n` jeśli to nie ostatnia linia pliku.
+- **Markdown w chacie obcinał `ON DELETE CASCADE,` z bloków SQL** — gdy SQL został wklejony do Supabase Editor, fragmenty inline obcinały się. Workaround: zawsze udostępniać pliki przez `computer://` link, nigdy nie kazać użytkownikowi kopiować długich SQL z chatu.
+
+**TODO przyszła sesja (Faza 9 dokończenie + 10-13):**
+- `src/lib/constants.ts` — `CONDITION_RATINGS` na 4 stopnie + `LEGACY_RATING_LABELS` jako fallback dla starych wartości.
+- `src/components/inspection/rating-badge.tsx` — toggle 4 wartości aktywne, legacy fallback.
+- `src/components/inspection/element-card.tsx` — ukrycie slidera `wear_percentage` (legacy view-only dla starych inspekcji), dodanie dropdown `usage_suitability` dla `inspection_type === 'five_year'`, scope split na "Zakres roczny" + "Zakres dodatkowy 5-letni" + "Przepisy / normy".
+- 5 nowych komponentów PIIB: `previous-recommendations-table`, `emergency-state-table`, `repair-scope-table`, `basic-requirements-art5`, `attachments-list`, `inspection-metadata-piib`.
+- Generatory DOCX i PDF — pełen rewrite pod układ PIIB (jeden generator z warunkiem `inspection_type`).
+- `turbine-inspection-form.tsx` — aktualizacja 3-krokowego kreatora (4 oceny, ukrycie wear%, sekcje metryczki PIIB).
+- **Regeneracja `database.types.ts` przez Supabase CLI** dla pełnej spójności z views i ewentualnymi ukrytymi indeksami (Waldek wykona w przyszłej sesji: `npx supabase gen types typescript --project-id lhxhsprqoecepojrxepf > src/lib/database.types.ts`, wymaga `npx supabase login` jednorazowo).
 
 **Generowanie dokumentów (2026-04-10 → 04-13)**
 - PDF: poprawione nazwy kolumn i JOIN-y, obsługa polskich znaków przez osadzony font Roboto.
