@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { Upload, X } from 'lucide-react'
+import { ExternalLink, ImageIcon, Upload, X } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,11 +70,62 @@ const EMPTY_METADATA: InspectionMetadata = {
   documents_reviewed: null,
 }
 
+interface TurbinePhotos {
+  turbineId: string | null
+  photo_url: string | null
+  photo_url_2: string | null
+  photo_url_3: string | null
+}
+
+/**
+ * Read-only podgląd zdjęcia turbiny w metryczce inspekcji.
+ * Zdjęcia uzupełnia się w karcie turbiny — tu tylko render.
+ */
+function PhotoPreview({
+  url,
+  label,
+  aspectClass,
+}: {
+  url: string | null
+  label: string
+  aspectClass: string
+}) {
+  return (
+    <div className="space-y-1">
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={label}
+          className={`${aspectClass} w-full object-cover rounded-md border border-graphite-200 bg-graphite-50`}
+        />
+      ) : (
+        <div
+          className={`${aspectClass} w-full rounded-md border border-dashed border-graphite-300 bg-graphite-50 flex flex-col items-center justify-center text-graphite-400`}
+        >
+          <ImageIcon size={24} />
+          <span className="text-[10px] mt-1 text-center px-1">brak zdjęcia</span>
+        </div>
+      )}
+      <p className="text-[11px] text-graphite-500 text-center">{label}</p>
+    </div>
+  )
+}
+
+const EMPTY_TURBINE_PHOTOS: TurbinePhotos = {
+  turbineId: null,
+  photo_url: null,
+  photo_url_2: null,
+  photo_url_3: null,
+}
+
 export function InspectionMetadataPiib({
   inspectionId,
   inspectionType = 'annual',
 }: InspectionMetadataPiibProps) {
   const [meta, setMeta] = useState<InspectionMetadata>(EMPTY_METADATA)
+  const [turbinePhotos, setTurbinePhotos] =
+    useState<TurbinePhotos>(EMPTY_TURBINE_PHOTOS)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -92,12 +144,14 @@ export function InspectionMetadataPiib({
 
   const loadMetadata = async () => {
     try {
-      const { data, error } = await supabase()
+      const sb = supabase()
+      const { data, error } = await sb
         .from('inspections')
         .select(
           `object_address, object_registry_number, object_name, object_photo_url,
            owner_name, manager_name, contractor_info, additional_participants,
-           general_findings_intro, kob_entries_summary, documents_reviewed`
+           general_findings_intro, kob_entries_summary, documents_reviewed,
+           turbine_id`
         )
         .eq('id', inspectionId)
         .single()
@@ -110,6 +164,24 @@ export function InspectionMetadataPiib({
           documents_reviewed:
             (data.documents_reviewed as DocumentsReviewed) || null,
         })
+
+        // Auto-pull 3 zdjęć z karty turbiny
+        const tId = (data as { turbine_id?: string | null }).turbine_id ?? null
+        if (tId) {
+          const { data: turbineData, error: tErr } = await sb
+            .from('turbines')
+            .select('id, photo_url, photo_url_2, photo_url_3')
+            .eq('id', tId)
+            .single()
+          if (!tErr && turbineData) {
+            setTurbinePhotos({
+              turbineId: turbineData.id,
+              photo_url: turbineData.photo_url,
+              photo_url_2: turbineData.photo_url_2,
+              photo_url_3: turbineData.photo_url_3,
+            })
+          }
+        }
       }
     } catch (err) {
       console.error('Błąd ładowania metryczki PIIB:', err)
@@ -275,60 +347,109 @@ export function InspectionMetadataPiib({
             </div>
 
             <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="object_photo_url" className="font-medium">
-                Fotografia ogólna turbiny
-              </Label>
-              <p className="text-xs text-graphite-500">
-                Wgraj plik z dysku albo wklej publiczny URL fotografii.
-              </p>
-              <div className="flex gap-2 flex-wrap">
-                <Input
-                  id="object_photo_url"
-                  type="url"
-                  value={meta.object_photo_url || ''}
-                  onChange={(e) =>
-                    handleField('object_photo_url', e.target.value || null)
-                  }
-                  placeholder="https://… (lub użyj przycisku obok)"
-                  className="flex-1 min-w-[200px]"
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                >
-                  <Upload size={16} className="mr-1" />
-                  {isUploading ? 'Wgrywanie…' : 'Wybierz z dysku'}
-                </Button>
-                {meta.object_photo_url && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={handlePhotoRemove}
-                    className="text-danger hover:bg-danger-50 hover:text-danger-800"
-                    title="Usuń fotografię z metryczki"
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="font-medium">
+                  Zdjęcia turbiny (z karty turbiny)
+                </Label>
+                {turbinePhotos.turbineId && (
+                  <Link
+                    href={`/turbiny/${turbinePhotos.turbineId}`}
+                    className="inline-flex items-center gap-1 text-xs text-primary-700 hover:text-primary-800 hover:underline"
+                    target="_blank"
                   >
-                    <X size={16} />
-                  </Button>
+                    <ExternalLink size={12} />
+                    Edytuj zdjęcia w karcie turbiny
+                  </Link>
                 )}
               </div>
+              <p className="text-xs text-graphite-500">
+                Trzy zdjęcia referencyjne pobierane są z karty turbiny — te same trafiają do protokołu PDF/DOCX.
+                Aby je dodać lub zmienić, otwórz kartę turbiny.
+              </p>
+
+              <div className="grid grid-cols-3 gap-3 mt-2">
+                {/* Slot 1 — portret */}
+                <PhotoPreview
+                  url={turbinePhotos.photo_url}
+                  label="Zdjęcie 1 (portret)"
+                  aspectClass="aspect-[2/3]"
+                />
+                {/* Slot 2 — pejzaż */}
+                <PhotoPreview
+                  url={turbinePhotos.photo_url_2}
+                  label="Zdjęcie 2 (pejzaż)"
+                  aspectClass="aspect-[3/2]"
+                />
+                {/* Slot 3 — pejzaż */}
+                <PhotoPreview
+                  url={turbinePhotos.photo_url_3}
+                  label="Zdjęcie 3 (pejzaż)"
+                  aspectClass="aspect-[3/2]"
+                />
+              </div>
+
+              {/* Legacy: pojedyncza fotografia object_photo_url — ukryte gdy są zdjęcia z turbiny */}
               {meta.object_photo_url && (
-                <div className="mt-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={meta.object_photo_url}
-                    alt="Fotografia obiektu"
-                    className="rounded-md border border-graphite-200 max-h-48 object-cover"
-                  />
-                </div>
+                <details className="mt-3 border border-graphite-200 rounded-md">
+                  <summary className="cursor-pointer text-xs text-graphite-600 px-3 py-2 hover:bg-graphite-50">
+                    Pole legacy: pojedyncze zdjęcie inspekcji (object_photo_url) —
+                    kliknij, aby zobaczyć / usunąć
+                  </summary>
+                  <div className="p-3 space-y-2 border-t border-graphite-200">
+                    <p className="text-xs text-graphite-500">
+                      Wcześniejsze inspekcje używały jednego zdjęcia per inspekcja.
+                      Teraz protokół korzysta z 3 zdjęć z karty turbiny — to pole
+                      jest używane tylko jako fallback.
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <Input
+                        id="object_photo_url"
+                        type="url"
+                        value={meta.object_photo_url || ''}
+                        onChange={(e) =>
+                          handleField('object_photo_url', e.target.value || null)
+                        }
+                        placeholder="https://…"
+                        className="flex-1 min-w-[200px]"
+                      />
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handlePhotoUpload}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                      >
+                        <Upload size={14} className="mr-1" />
+                        {isUploading ? 'Wgrywanie…' : 'Wybierz z dysku'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handlePhotoRemove}
+                        className="text-danger hover:bg-danger-50 hover:text-danger-800"
+                        title="Usuń fotografię legacy"
+                      >
+                        <X size={14} />
+                      </Button>
+                    </div>
+                    {meta.object_photo_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={meta.object_photo_url}
+                        alt="Fotografia legacy"
+                        className="rounded-md border border-graphite-200 max-h-32 object-cover"
+                      />
+                    )}
+                  </div>
+                </details>
               )}
             </div>
           </div>

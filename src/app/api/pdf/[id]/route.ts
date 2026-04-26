@@ -154,6 +154,7 @@ export async function GET(
           location_address, tower_height_m, hub_height_m, rotor_diameter_m,
           building_permit_number, building_permit_date, commissioning_year,
           tower_construction_type,
+          photo_url, photo_url_2, photo_url_3,
           wind_farms (
             id, name, location_address,
             clients ( id, name, nip, address )
@@ -590,18 +591,115 @@ export async function GET(
     // ─── METRYCZKA OBIEKTU ─────────────────────────────────────────────────
     addSection('Metryczka obiektu')
 
-    // Embed fotografii obiektu (jeśli object_photo_url ustawione i obraz pobierany)
-    const objectPhoto = await fetchImageAsBase64(insp.object_photo_url)
-    if (objectPhoto) {
+    // Embed 3 zdjęć referencyjnych turbiny — pobranych z turbines.photo_url/_2/_3
+    // (zdjęcia uzupełniane w karcie turbiny → tożsame z poprzednimi protokołami).
+    // Layout 1+2: portret 60×90 mm po lewej, 2 pejzaże 60×40 mm w pionie po prawej
+    // (ten sam wzorzec co karta turbiny i poprzednie wersje protokołu).
+    // Fallback: jeśli brak zdjęć z turbiny, próbujemy legacy `inspections.object_photo_url`.
+    const [turbinePhoto1, turbinePhoto2, turbinePhoto3] = await Promise.all([
+      fetchImageAsBase64(turbine?.photo_url),
+      fetchImageAsBase64(turbine?.photo_url_2),
+      fetchImageAsBase64(turbine?.photo_url_3),
+    ])
+    const hasAnyTurbinePhoto = !!(turbinePhoto1 || turbinePhoto2 || turbinePhoto3)
+    const legacyPhoto = !hasAnyTurbinePhoto
+      ? await fetchImageAsBase64(insp.object_photo_url)
+      : null
+
+    if (hasAnyTurbinePhoto) {
+      // 60×90 mm portret + 2× (60×40 mm pejzaż) = ~92 mm wysokości + label
+      ensureSpace(98)
+      try {
+        const portraitW = 60
+        const portraitH = 90
+        const landscapeW = 60
+        const landscapeH = 43
+        const gap = 4
+        const totalW = portraitW + gap + landscapeW
+        const startX = (pageWidth - totalW) / 2
+
+        // Slot 1 — portret po lewej
+        if (turbinePhoto1) {
+          pdf.addImage(
+            `data:image/${turbinePhoto1.format.toLowerCase()};base64,${turbinePhoto1.base64}`,
+            turbinePhoto1.format,
+            startX,
+            yPosition,
+            portraitW,
+            portraitH,
+            undefined,
+            'FAST'
+          )
+        } else {
+          // pusty placeholder ramka
+          pdf.setDrawColor(...RGB.graphite500)
+          pdf.setLineWidth(0.2)
+          pdf.rect(startX, yPosition, portraitW, portraitH)
+          pdf.setDrawColor(0)
+        }
+
+        // Slot 2 — pejzaż górny po prawej
+        const rightX = startX + portraitW + gap
+        if (turbinePhoto2) {
+          pdf.addImage(
+            `data:image/${turbinePhoto2.format.toLowerCase()};base64,${turbinePhoto2.base64}`,
+            turbinePhoto2.format,
+            rightX,
+            yPosition,
+            landscapeW,
+            landscapeH,
+            undefined,
+            'FAST'
+          )
+        } else {
+          pdf.setDrawColor(...RGB.graphite500)
+          pdf.setLineWidth(0.2)
+          pdf.rect(rightX, yPosition, landscapeW, landscapeH)
+          pdf.setDrawColor(0)
+        }
+
+        // Slot 3 — pejzaż dolny po prawej
+        const bottomY = yPosition + landscapeH + gap
+        if (turbinePhoto3) {
+          pdf.addImage(
+            `data:image/${turbinePhoto3.format.toLowerCase()};base64,${turbinePhoto3.base64}`,
+            turbinePhoto3.format,
+            rightX,
+            bottomY,
+            landscapeW,
+            landscapeH,
+            undefined,
+            'FAST'
+          )
+        } else {
+          pdf.setDrawColor(...RGB.graphite500)
+          pdf.setLineWidth(0.2)
+          pdf.rect(rightX, bottomY, landscapeW, landscapeH)
+          pdf.setDrawColor(0)
+        }
+
+        yPosition += portraitH + 4
+        pdf.setFontSize(8)
+        pdf.setTextColor(...RGB.graphite500)
+        pdf.text('Fotografie obiektu', pageWidth / 2, yPosition, {
+          align: 'center',
+        })
+        pdf.setTextColor(0)
+        yPosition += 6
+      } catch (err) {
+        console.error('Nie udało się osadzić zdjęć turbiny w PDF:', err)
+        // Cicho ignorujemy — PDF dalej generuje się bez zdjęć
+      }
+    } else if (legacyPhoto) {
+      // Fallback dla starych inspekcji z wgranym pojedynczym object_photo_url
       ensureSpace(60)
       try {
-        // Box ~60×60 mm, wycentrowany. Trzymamy proporcje przez addImage z auto-fit.
         const imgW = 60
         const imgH = 45
         const imgX = (pageWidth - imgW) / 2
         pdf.addImage(
-          `data:image/${objectPhoto.format.toLowerCase()};base64,${objectPhoto.base64}`,
-          objectPhoto.format,
+          `data:image/${legacyPhoto.format.toLowerCase()};base64,${legacyPhoto.base64}`,
+          legacyPhoto.format,
           imgX,
           yPosition,
           imgW,
@@ -618,8 +716,7 @@ export async function GET(
         pdf.setTextColor(0)
         yPosition += 6
       } catch (err) {
-        console.error('Nie udało się osadzić obrazu w PDF:', err)
-        // Cicho ignorujemy — PDF dalej generuje się bez obrazu
+        console.error('Nie udało się osadzić obrazu legacy w PDF:', err)
       }
     }
 

@@ -381,6 +381,9 @@ export async function GET(
           building_permit_date,
           commissioning_year,
           tower_construction_type,
+          photo_url,
+          photo_url_2,
+          photo_url_3,
           wind_farms (
             id,
             name,
@@ -804,21 +807,141 @@ export async function GET(
       })
     }
 
-    // Embed fotografii obiektu — paragraf przed metaTable (jeśli URL ustawiony i obraz pobrany)
-    const objectPhoto = await fetchImageAsBuffer(insp.object_photo_url)
-    const objectPhotoParagraphs: Paragraph[] = []
-    if (objectPhoto) {
+    // Embed 3 zdjęć referencyjnych turbiny — pobranych z turbines.photo_url/_2/_3
+    // (zdjęcia uzupełniane w karcie turbiny → tożsame z poprzednimi protokołami).
+    // Layout 1+2: portret 227×340 px po lewej, 2 pejzaże 227×162 px w pionie po prawej.
+    // Fallback: jeśli brak zdjęć z turbiny, próbujemy legacy `inspections.object_photo_url`.
+    const [turbinePhoto1, turbinePhoto2, turbinePhoto3] = await Promise.all([
+      fetchImageAsBuffer(turbine?.photo_url),
+      fetchImageAsBuffer(turbine?.photo_url_2),
+      fetchImageAsBuffer(turbine?.photo_url_3),
+    ])
+    const hasAnyTurbinePhoto = !!(turbinePhoto1 || turbinePhoto2 || turbinePhoto3)
+    const legacyPhoto = !hasAnyTurbinePhoto
+      ? await fetchImageAsBuffer(insp.object_photo_url)
+      : null
+
+    const objectPhotoBlocks: (Paragraph | Table)[] = []
+
+    // Helper: pojedynczy paragraf z obrazkiem (lub pusty jeśli brak)
+    const photoParagraph = (
+      photo: { buffer: Buffer; format: 'png' | 'jpg' | 'webp' } | null,
+      width: number,
+      height: number,
+      altName: string
+    ): Paragraph => {
+      if (!photo) {
+        return new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new TextRun({
+              text: '—',
+              color: HEX.graphite500,
+              font: 'Arial',
+              size: FONT_DXA.small,
+            }),
+          ],
+        })
+      }
+      // docx ImageRun akceptuje 'jpg' | 'png' | 'gif' | 'bmp' | 'svg' — webp
+      // mapujemy na 'jpg' dla typu (buffer i tak idzie raw, biblioteka radzi sobie
+      // z większością formatów rastrowych). Ten sam pattern jest w fallbacku poniżej.
+      const imageType: 'jpg' | 'png' = photo.format === 'png' ? 'png' : 'jpg'
+      return new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new ImageRun({
+            type: imageType,
+            data: photo.buffer,
+            transformation: { width, height },
+            altText: {
+              title: altName,
+              description: altName,
+              name: altName,
+            },
+          }),
+        ],
+      })
+    }
+
+    if (hasAnyTurbinePhoto) {
       try {
-        objectPhotoParagraphs.push(
+        const noBorder = {
+          top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+          bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+          left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+          right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        }
+        // Tabela 1×2: portret w col 1, 2 pejzaże stack w col 2
+        const photoTable = new Table({
+          width: { size: USABLE_WIDTH, type: WidthType.DXA },
+          borders: {
+            top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+          },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: Math.floor(USABLE_WIDTH / 2), type: WidthType.DXA },
+                  borders: noBorder,
+                  children: [
+                    photoParagraph(turbinePhoto1, 227, 340, 'turbine-photo-1'),
+                  ],
+                }),
+                new TableCell({
+                  width: { size: Math.floor(USABLE_WIDTH / 2), type: WidthType.DXA },
+                  borders: noBorder,
+                  children: [
+                    photoParagraph(turbinePhoto2, 227, 162, 'turbine-photo-2'),
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      spacing: { before: 80, after: 0 },
+                      children: [new TextRun({ text: '' })],
+                    }),
+                    photoParagraph(turbinePhoto3, 227, 162, 'turbine-photo-3'),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        })
+        objectPhotoBlocks.push(photoTable)
+        objectPhotoBlocks.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 80, after: 120 },
+            children: [
+              new TextRun({
+                text: 'Fotografie obiektu',
+                italics: true,
+                font: 'Arial',
+                size: FONT_DXA.small,
+                color: HEX.graphite500,
+              }),
+            ],
+          })
+        )
+      } catch (err) {
+        console.error('Nie udało się osadzić zdjęć turbiny w DOCX:', err)
+      }
+    } else if (legacyPhoto) {
+      // Fallback dla starych inspekcji z wgranym pojedynczym object_photo_url
+      try {
+        const legacyImageType: 'jpg' | 'png' =
+          legacyPhoto.format === 'png' ? 'png' : 'jpg'
+        objectPhotoBlocks.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { before: 120, after: 60 },
             children: [
               new ImageRun({
-                type: objectPhoto.format,
-                data: objectPhoto.buffer,
-                // ~ 60×45 mm w EMU? docx używa pikseli przy 96 DPI;
-                // 60mm ≈ 227px, 45mm ≈ 170px (ale 'Pixels' to nie EMU).
+                type: legacyImageType,
+                data: legacyPhoto.buffer,
                 transformation: { width: 240, height: 180 },
                 altText: {
                   title: 'Fotografia obiektu',
@@ -829,7 +952,7 @@ export async function GET(
             ],
           })
         )
-        objectPhotoParagraphs.push(
+        objectPhotoBlocks.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { before: 0, after: 120 },
@@ -845,7 +968,7 @@ export async function GET(
           })
         )
       } catch (err) {
-        console.error('Nie udało się osadzić obrazu w DOCX:', err)
+        console.error('Nie udało się osadzić obrazu legacy w DOCX:', err)
       }
     }
 
@@ -1904,7 +2027,7 @@ export async function GET(
 
       // Metryczka obiektu
       sectionHeading('Metryczka obiektu'),
-      ...objectPhotoParagraphs,
+      ...objectPhotoBlocks,
       metaTable,
 
       // Podstawowe dane techniczne
@@ -2098,6 +2221,19 @@ export async function GET(
     })
   } catch (error) {
     const err = error as Error
+    console.error('Error generating DOCX:', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    })
+    const debugBody =
+      process.env.NODE_ENV === 'production'
+        ? `Blad podczas generowania DOCX: ${err?.message || 'unknown'}`
+        : `Blad podczas generowania DOCX\n\n${err?.stack || err?.message || 'unknown'}`
+    return new Response(debugBody, { status: 500 })
+  }
+}
+ error as Error
     console.error('Error generating DOCX:', {
       message: err?.message,
       name: err?.name,
