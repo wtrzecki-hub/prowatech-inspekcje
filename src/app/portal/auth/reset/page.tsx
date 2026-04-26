@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, KeyRound } from "lucide-react";
 import Link from "next/link";
@@ -24,8 +24,23 @@ import {
  *   po stronie klienta, w useEffect. Skaner Gmaila wykonuje tylko GET, nie odpala JS,
  *   więc token nie jest konsumowany przed kliknięciem przez użytkownika.
  * - Po success → redirect do /portal/konto?reset=1 (formularz "Ustaw nowe hasło").
+ *
+ * `useSearchParams` wymaga w Next.js 14 Suspense boundary (inaczej `next build`
+ * rzuca "useSearchParams() should be wrapped in a suspense boundary"). Logikę
+ * weryfikacji wynosimy do `<ResetVerifier>` i otaczamy `<Suspense>`.
  */
-export default function PortalResetPage() {
+function LoadingSpinner({ label }: { label: string }) {
+  return (
+    <div className="min-h-screen bg-graphite-50 flex items-center justify-center p-4">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-3" />
+        <p className="text-graphite-500 text-sm">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function ResetVerifier() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -60,16 +75,7 @@ export default function PortalResetPage() {
   }, [searchParams, router]);
 
   if (status === "verifying") {
-    return (
-      <div className="min-h-screen bg-graphite-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-3" />
-          <p className="text-graphite-500 text-sm">
-            Weryfikacja linku resetującego…
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner label="Weryfikacja linku resetującego…" />;
   }
 
   return (
@@ -99,5 +105,13 @@ export default function PortalResetPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function PortalResetPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner label="Ładowanie…" />}>
+      <ResetVerifier />
+    </Suspense>
   );
 }
