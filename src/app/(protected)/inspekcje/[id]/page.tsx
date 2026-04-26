@@ -61,6 +61,7 @@ interface Inspection {
   inspector_signature_location: string | null
   inspector_signature_date: string | null
   owner_representative_name: string | null
+  owner_signature_date: string | null
   turbine: {
     id: string
     turbine_code: string
@@ -156,6 +157,7 @@ export default function InspectionDetailPage() {
           inspector_signature_location,
           inspector_signature_date,
           owner_representative_name,
+          owner_signature_date,
           turbine:turbine_id (
             id,
             turbine_code,
@@ -787,17 +789,49 @@ export default function InspectionDetailPage() {
               </div>
             </div>
 
-            {/* Owner Representative */}
-            <div className="border-t border-graphite-100 pt-4 space-y-2">
-              <Label htmlFor="owner-rep">Imię i nazwisko reprezentanta właściciela</Label>
-              <Input
-                id="owner-rep"
-                placeholder="Imię i nazwisko"
-                value={inspection.owner_representative_name || ''}
-                onChange={(e) =>
-                  handleInspectionChange('owner_representative_name', e.target.value)
-                }
-              />
+            {/* Owner Representative + signature date */}
+            <div className="border-t border-graphite-100 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="owner-rep">
+                    Imię i nazwisko reprezentanta właściciela
+                  </Label>
+                  <Input
+                    id="owner-rep"
+                    placeholder="Imię i nazwisko"
+                    value={inspection.owner_representative_name || ''}
+                    onChange={(e) =>
+                      handleInspectionChange(
+                        'owner_representative_name',
+                        e.target.value
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="owner-sig-date">Data podpisu właściciela</Label>
+                  <Input
+                    id="owner-sig-date"
+                    type="date"
+                    value={
+                      inspection.owner_signature_date?.split('T')[0] || ''
+                    }
+                    onChange={(e) =>
+                      handleInspectionChange(
+                        'owner_signature_date',
+                        e.target.value
+                      )
+                    }
+                  />
+                  <p className="text-xs text-graphite-500">
+                    Po wypełnieniu obu dat podpisu (inspektora i właściciela)
+                    protokół automatycznie przejdzie na status{' '}
+                    <span className="font-semibold">Podpisana</span> i stanie
+                    się widoczny w portalu klienta.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* PIIB sekcja VII/VIII — Załączniki do protokołu */}
