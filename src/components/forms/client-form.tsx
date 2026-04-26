@@ -22,41 +22,78 @@ interface ClientFormProps {
 export function ClientForm({ initialData, onSuccess }: ClientFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     const supabase = createClient()
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(false)
 
     const formData = new FormData(e.currentTarget)
+    // Wszystkie pola jako string — FormData.get() zwraca FormDataEntryValue | null,
+    // ale dla <Input> zawsze otrzymujemy string. Trim + null-ify pustych stringów
+    // żeby kolumny nullable dostały NULL zamiast "".
+    const stringOrNull = (v: FormDataEntryValue | null) => {
+      const s = typeof v === 'string' ? v.trim() : ''
+      return s.length > 0 ? s : null
+    }
     const data = {
-      name: formData.get('name'),
-      short_name: formData.get('short_name'),
-      contact_person: formData.get('contact_person'),
-      contact_email: formData.get('contact_email'),
-      contact_phone: formData.get('contact_phone'),
-      nip: formData.get('nip'),
+      name: stringOrNull(formData.get('name')) ?? '',
+      short_name: stringOrNull(formData.get('short_name')) ?? '',
+      contact_person: stringOrNull(formData.get('contact_person')),
+      contact_email: stringOrNull(formData.get('contact_email')),
+      contact_phone: stringOrNull(formData.get('contact_phone')),
+      nip: stringOrNull(formData.get('nip')),
     }
 
     try {
       if (initialData) {
-        const { error: updateError } = await supabase
+        // Diagnostyka silent RLS fail: .select() po .update() zwraca array
+        // zaktualizowanych wierszy. Pusty array = nic się nie zmieniło, mimo
+        // że error: null (klasyczny RLS silent fail w Supabase).
+        // eslint-disable-next-line no-console
+        console.log('[ClientForm] UPDATE clients', { id: initialData.id, data })
+        const { data: updated, error: updateError } = await supabase
           .from('clients')
           .update(data)
           .eq('id', initialData.id)
+          .select()
 
         if (updateError) throw updateError
+        // eslint-disable-next-line no-console
+        console.log('[ClientForm] UPDATE result', { rows: updated?.length, updated })
+        if (!updated || updated.length === 0) {
+          throw new Error(
+            'Aktualizacja nie zmieniła żadnego wiersza. Możliwe przyczyny: brak ' +
+              'uprawnień (RLS), niewłaściwy ID klienta, lub klient został usunięty. ' +
+              'Sprawdź konsolę przeglądarki (F12) i wklej Claude.'
+          )
+        }
       } else {
-        const { error: insertError } = await supabase
+        const { data: inserted, error: insertError } = await supabase
           .from('clients')
           .insert([data])
+          .select()
 
         if (insertError) throw insertError
+        if (!inserted || inserted.length === 0) {
+          throw new Error(
+            'Insert nie utworzył wiersza. Możliwe przyczyny: brak uprawnień (RLS) ' +
+              'lub błąd unique constraint.'
+          )
+        }
       }
 
+      setSuccess(true)
+      // Po krótkim opóźnieniu chowamy banner sukcesu, żeby nie nakładał
+      // się na ewentualny re-mount formularza po onSuccess()
+      setTimeout(() => setSuccess(false), 3000)
       onSuccess?.()
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[ClientForm] Error', err)
       setError(err instanceof Error ? err.message : 'Błąd przy zapisywaniu')
     } finally {
       setLoading(false)
@@ -66,8 +103,13 @@ export function ClientForm({ initialData, onSuccess }: ClientFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="p-3 bg-red-50 text-red-700 rounded text-sm">
+        <div className="p-3 bg-danger-50 text-danger-800 border border-danger-100 rounded-lg text-sm">
           {error}
+        </div>
+      )}
+      {success && (
+        <div className="p-3 bg-success-50 text-success-800 border border-success-100 rounded-lg text-sm">
+          Zapisano zmiany ✓
         </div>
       )}
 
