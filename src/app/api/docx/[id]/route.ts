@@ -2233,16 +2233,3 @@ export async function GET(
     return new Response(debugBody, { status: 500 })
   }
 }
- error as Error
-    console.error('Error generating DOCX:', {
-      message: err?.message,
-      name: err?.name,
-      stack: err?.stack,
-    })
-    const debugBody =
-      process.env.NODE_ENV === 'production'
-        ? `Blad podczas generowania DOCX: ${err?.message || 'unknown'}`
-        : `Blad podczas generowania DOCX\n\n${err?.stack || err?.message || 'unknown'}`
-    return new Response(debugBody, { status: 500 })
-  }
-}
