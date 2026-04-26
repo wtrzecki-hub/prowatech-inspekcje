@@ -227,43 +227,52 @@ export type Database = {
       }
       historical_protocols: {
         Row: {
-          created_at: string
+          file_size_bytes: number | null
           id: string
           inspection_date: string | null
-          inspection_type: string | null
-          is_deleted: boolean | null
-          pdf_url: string | null
+          inspection_type: string
+          notes: string | null
           protocol_number: string | null
-          summary_notes: string | null
+          protocol_pdf_r2_key: string
+          protocol_pdf_url: string
+          source_filename: string | null
           turbine_id: string
           updated_at: string
+          uploaded_at: string
           uploaded_by: string | null
+          year: number
         }
         Insert: {
-          created_at?: string
+          file_size_bytes?: number | null
           id?: string
           inspection_date?: string | null
-          inspection_type?: string | null
-          is_deleted?: boolean | null
-          pdf_url?: string | null
+          inspection_type: string
+          notes?: string | null
           protocol_number?: string | null
-          summary_notes?: string | null
+          protocol_pdf_r2_key: string
+          protocol_pdf_url: string
+          source_filename?: string | null
           turbine_id: string
           updated_at?: string
+          uploaded_at?: string
           uploaded_by?: string | null
+          year: number
         }
         Update: {
-          created_at?: string
+          file_size_bytes?: number | null
           id?: string
           inspection_date?: string | null
-          inspection_type?: string | null
-          is_deleted?: boolean | null
-          pdf_url?: string | null
+          inspection_type?: string
+          notes?: string | null
           protocol_number?: string | null
-          summary_notes?: string | null
+          protocol_pdf_r2_key?: string
+          protocol_pdf_url?: string
+          source_filename?: string | null
           turbine_id?: string
           updated_at?: string
+          uploaded_at?: string
           uploaded_by?: string | null
+          year?: number
         }
         Relationships: [
           {
@@ -271,13 +280,6 @@ export type Database = {
             columns: ["turbine_id"]
             isOneToOne: false
             referencedRelation: "turbines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "historical_protocols_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

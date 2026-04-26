@@ -30,6 +30,7 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import Link from 'next/link'
+import HistoricalProtocolsTab from '@/components/turbine/historical-protocols-tab'
 
 interface Turbine {
   id: string
@@ -494,6 +495,7 @@ export default function TurbineDetailPage() {
           <TabTrigger value="zalecenia" label="Zalecenia" count={openRecsCount} tone={openRecsCount > 0 ? 'warning' : 'muted'} />
           <TabTrigger value="zdjecia" label="Zdjęcia" />
           <TabTrigger value="certyfikaty" label="Certyfikaty" />
+          <TabTrigger value="archiwum" label="Archiwum" />
         </TabsList>
 
         {/* TAB: Przegląd — wykres, KPI + obecna zawartość */}
@@ -768,6 +770,11 @@ export default function TurbineDetailPage() {
         {/* TAB: Certyfikaty */}
         <TabsContent value="certyfikaty" className="mt-0">
           <CertificatesList inspectors={certInspectors} />
+        </TabsContent>
+
+        {/* TAB: Archiwum (Faza 15.F) */}
+        <TabsContent value="archiwum" className="mt-0">
+          <HistoricalProtocolsTab turbineId={turbineId} canEdit={canUpload} />
         </TabsContent>
       </Tabs>
     </div>
