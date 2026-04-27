@@ -92,11 +92,15 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!profile || (profile.role !== "admin" && profile.role !== "inspektor")) {
+    // UWAGA: enum user_role w bazie używa wartości po angielsku (admin/inspector/
+    // client_user/viewer). Wcześniej tu był typo 'inspektor' (po polsku) który
+    // blokował wszystkie uploady robione przez inspektorów (403). Patrz PROGRESS.md
+    // gotcha "enum user_role w bazie używa wartości po angielsku" (Faza 15.E).
+    if (!profile || (profile.role !== "admin" && profile.role !== "inspector")) {
       return NextResponse.json(
         {
           error:
-            "Forbidden — upload tylko dla admin/inspektor. Profil nie znaleziony lub niewłaściwa rola.",
+            "Forbidden — upload tylko dla admin/inspector. Profil nie znaleziony lub niewłaściwa rola.",
         },
         { status: 403 }
       );
