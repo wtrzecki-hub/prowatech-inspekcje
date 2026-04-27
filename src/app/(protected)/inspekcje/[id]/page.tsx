@@ -733,7 +733,8 @@ export default function InspectionDetailPage() {
           </details>
         </TabsContent>
 
-        {/* Tab: Photos */}
+        {/* Tab: Photos — zachowane jako widok zbiorczy galerii.
+            Per-element widok jest w karcie elementu (Krok 3). */}
         <TabsContent value="zdjecia" className="space-y-4">
           <h2 className="text-[15px] font-bold text-graphite-900">Zdjęcia</h2>
           <PhotoGallery inspectionId={inspection.id} elements={elementIds} />
