@@ -131,12 +131,40 @@ export default function InspectionDetailPage() {
   const [showOnlyNotes, setShowOnlyNotes] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Zdjęcia inspekcji — ładowane raz, dystrybuowane do ElementCardów per
+  // element_id. Refresh przez `refreshPhotos` po upload/delete.
+  const [allPhotos, setAllPhotos] = useState<
+    Array<{
+      id: string
+      photo_number: number | null
+      file_url: string | null
+      description: string | null
+      element_id: string | null
+    }>
+  >([])
+
   const elementSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inspectionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     fetchInspectionData()
+    void refreshPhotos()
   }, [id])
+
+  const refreshPhotos = async () => {
+    const supabase = createClient()
+    try {
+      const { data, error: photosError } = await supabase
+        .from('inspection_photos')
+        .select('id, photo_number, file_url, description, element_id')
+        .eq('inspection_id', id)
+        .order('photo_number', { ascending: true, nullsFirst: false })
+      if (photosError) throw photosError
+      setAllPhotos(data || [])
+    } catch (err) {
+      console.error('[InspectionDetail] refreshPhotos failed:', err)
+    }
+  }
 
   const fetchInspectionData = async () => {
     const supabase = createClient()
@@ -624,14 +652,24 @@ export default function InspectionDetailPage() {
           )}
 
           <div className="space-y-4">
-            {filteredElements.map((element) => (
-              <ElementCard
-                key={element.id}
-                element={element}
-                inspectionType={inspection.inspection_type}
-                onUpdate={(data) => handleElementUpdate(element.id, data)}
-              />
-            ))}
+            {(() => {
+              const maxPhotoNumber = allPhotos.reduce(
+                (max, p) => Math.max(max, p.photo_number ?? 0),
+                0,
+              )
+              return filteredElements.map((element) => (
+                <ElementCard
+                  key={element.id}
+                  element={element}
+                  inspectionType={inspection.inspection_type}
+                  photos={allPhotos.filter((p) => p.element_id === element.id)}
+                  inspectionId={inspection.id}
+                  maxPhotoNumber={maxPhotoNumber}
+                  onUpdate={(data) => handleElementUpdate(element.id, data)}
+                  onPhotosChanged={() => void refreshPhotos()}
+                />
+              ))
+            })()}
           </div>
 
           {filteredElements.length === 0 && (
