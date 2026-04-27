@@ -42,10 +42,19 @@ interface PreviousRecommendation {
 interface AutoImportInfo {
   /** Ile zaleceń zaimportowano w tej sesji. */
   count: number
-  /** Data poprzedniej inspekcji (ISO string, np. '2025-04-15'). */
+  /** Data poprzedniej inspekcji (ISO string, np. '2025-04-15'). Null gdy
+   *  source = 'turbine_legacy'. */
   fromDate: string | null
-  /** Numer protokołu poprzedniej inspekcji jeśli jest. */
+  /** Numer protokołu poprzedniej inspekcji jeśli jest. Null gdy source = 'turbine_legacy'. */
   fromProtocolNumber: string | null
+  /**
+   * Źródło importu:
+   *  - 'previous_inspection' = znaleziono poprzednią zakończoną inspekcję
+   *    z `repair_scope_items` lub `repair_recommendations`
+   *  - 'turbine_legacy' = fallback na `turbines.previous_findings` (text field
+   *    z migracji starych danych, split po `\n`)
+   */
+  source: 'previous_inspection' | 'turbine_legacy'
 }
 
 interface PreviousRecommendationsTableProps {
@@ -158,9 +167,12 @@ export function PreviousRecommendationsTable({
    * Wewnętrzna logika importu — używana przez auto-import na mount oraz
    * przez ręczny przycisk „Importuj ponownie".
    *
-   * Próbuje 2 źródeł w kolejności:
-   *   1. repair_scope_items z poprzedniej inspekcji (PIIB Faza 10)
-   *   2. repair_recommendations.scope_description (legacy)
+   * 3 warstwy fallbacku, w kolejności:
+   *   1. repair_scope_items z ostatniej zakończonej inspekcji (PIIB Faza 10)
+   *   2. repair_recommendations.scope_description (legacy stara struktura)
+   *   3. turbines.previous_findings + previous_findings_status (legacy text
+   *      z migracji starych danych, split po `\n`, parsowanie statusu jeśli
+   *      kolumna `_status` ma odpowiadające linie)
    *
    * Zwraca metadata o tym co zostało zaimportowane, lub null jeśli nic.
    */
@@ -172,7 +184,19 @@ export function PreviousRecommendationsTable({
     try {
       const sb = supabase()
 
-      // Znajdź ostatnią zakończoną inspekcję tej turbiny (oprócz bieżącej)
+      type ImportItem = {
+        text: string
+        status?: 'tak' | 'nie' | 'w_trakcie' | null
+        remarks?: string | null
+      }
+      let recommendations: ImportItem[] = []
+      let source: AutoImportInfo['source'] = 'previous_inspection'
+      let fromDate: string | null = null
+      let fromProtocolNumber: string | null = null
+
+      // ---------------------------------------------------------------------
+      // Warstwa 1+2: poprzednia zakończona inspekcja
+      // ---------------------------------------------------------------------
       const { data: prevInspections, error: prevErr } = await sb
         .from('inspections')
         .select('id, inspection_date, status, protocol_number')
@@ -185,44 +209,112 @@ export function PreviousRecommendationsTable({
 
       if (prevErr) throw prevErr
       const prev = prevInspections?.[0]
-      if (!prev) {
-        if (!options.silent) {
-          alert('Brak poprzedniej zakończonej inspekcji dla tej turbiny.')
-        }
-        return null
-      }
 
-      // Spróbuj repair_scope_items (nowy PIIB)
-      let recommendations: { text: string }[] = []
-      const { data: scopeData } = await sb
-        .from('repair_scope_items')
-        .select('scope_description')
-        .eq('inspection_id', prev.id)
-        .order('item_number', { ascending: true })
-
-      if (scopeData && scopeData.length > 0) {
-        recommendations = scopeData.map((s) => ({
-          text: s.scope_description as string,
-        }))
-      } else {
-        // Fallback: legacy repair_recommendations
-        const { data: legacyData } = await sb
-          .from('repair_recommendations')
+      if (prev) {
+        // Warstwa 1: repair_scope_items (PIIB)
+        const { data: scopeData } = await sb
+          .from('repair_scope_items')
           .select('scope_description')
           .eq('inspection_id', prev.id)
+          .order('item_number', { ascending: true })
 
-        recommendations = (legacyData || []).map((r) => ({
-          text: r.scope_description as string,
-        }))
+        if (scopeData && scopeData.length > 0) {
+          recommendations = scopeData.map((s) => ({
+            text: s.scope_description as string,
+          }))
+        } else {
+          // Warstwa 2: legacy repair_recommendations
+          const { data: legacyData } = await sb
+            .from('repair_recommendations')
+            .select('scope_description')
+            .eq('inspection_id', prev.id)
+          recommendations = (legacyData || []).map((r) => ({
+            text: r.scope_description as string,
+          }))
+        }
+
+        if (recommendations.length > 0) {
+          fromDate = prev.inspection_date as string
+          fromProtocolNumber = (prev.protocol_number as string | null) ?? null
+        }
       }
 
+      // ---------------------------------------------------------------------
+      // Warstwa 3: turbines.previous_findings (legacy text, split \n)
+      // Wpadamy tu gdy: brak poprzedniej inspekcji ALBO poprzednia bez
+      // zaleceń. Większość bazy w 2026-04 jeszcze tu siedzi (1 inspekcja
+      // per turbina w nowym appie), więc to ratujący fallback.
+      // ---------------------------------------------------------------------
+      if (recommendations.length === 0) {
+        const { data: turbineData } = await sb
+          .from('turbines')
+          .select('previous_findings, previous_findings_status')
+          .eq('id', turbineId)
+          .maybeSingle()
+
+        const rawFindings = (turbineData?.previous_findings as string | null) || ''
+        const rawStatus =
+          (turbineData?.previous_findings_status as string | null) || ''
+
+        if (
+          rawFindings &&
+          rawFindings.trim() &&
+          rawFindings.trim().toLowerCase() !== 'brak robót'
+        ) {
+          const findingLines = rawFindings
+            .split('\n')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0 && s.toLowerCase() !== 'brak robót')
+
+          const statusLines = rawStatus.split('\n').map((s) => s.trim())
+
+          recommendations = findingLines.map((text, idx) => {
+            const st = (statusLines[idx] || '').toLowerCase()
+            let status: 'tak' | 'nie' | 'w_trakcie' | null = null
+            if (st.startsWith('nie wykonano') || st.startsWith('niewykonano')) {
+              status = 'nie'
+            } else if (st.startsWith('wykonano')) {
+              status = 'tak'
+            } else if (
+              st.includes('trakcie') ||
+              st.startsWith('częściowo') ||
+              st.startsWith('w toku')
+            ) {
+              status = 'w_trakcie'
+            }
+            return {
+              text,
+              status,
+              // Jeśli status text był nietypowy (nie matchuje regex) — zachowaj
+              // go jako uwagi, żeby kontekst nie został zgubiony.
+              remarks:
+                status === null && statusLines[idx]?.length
+                  ? statusLines[idx]
+                  : null,
+            }
+          })
+
+          if (recommendations.length > 0) {
+            source = 'turbine_legacy'
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // Nic z 3 warstw — koniec, info dla user-a (silent skip dla auto-mount)
+      // ---------------------------------------------------------------------
       if (recommendations.length === 0) {
         if (!options.silent) {
-          alert('Poprzednia inspekcja nie zawierała zaleceń remontowych.')
+          alert(
+            'Brak danych o poprzednich zaleceniach: ani w nowych protokołach tej turbiny, ani w notatkach „previous_findings".',
+          )
         }
         return null
       }
 
+      // ---------------------------------------------------------------------
+      // INSERT do previous_recommendations
+      // ---------------------------------------------------------------------
       const baseNumber =
         items.length > 0 ? Math.max(...items.map((i) => i.item_number)) : 0
 
@@ -230,8 +322,8 @@ export function PreviousRecommendationsTable({
         inspection_id: inspectionId,
         item_number: baseNumber + idx + 1,
         recommendation_text: r.text,
-        completion_status: null,
-        remarks: null,
+        completion_status: r.status ?? null,
+        remarks: r.remarks ?? null,
       }))
 
       const { data: inserted, error: insertErr } = await sb
@@ -245,8 +337,9 @@ export function PreviousRecommendationsTable({
 
       const info: AutoImportInfo = {
         count: newItems.length,
-        fromDate: prev.inspection_date as string,
-        fromProtocolNumber: (prev.protocol_number as string | null) ?? null,
+        fromDate,
+        fromProtocolNumber,
+        source,
       }
       setAutoImportInfo(info)
       return info
@@ -365,27 +458,48 @@ export function PreviousRecommendationsTable({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Banner auto-importu (sesja-only — pokazany od momentu importu
-            do reload strony, nie persystowany). */}
+            do reload strony, nie persystowany).
+            Tekst zależny od źródła: poprzednia inspekcja vs notatki na karcie
+            turbiny (legacy migracja). */}
         {autoImportInfo && autoImportInfo.count > 0 && (
           <div className="rounded-xl border border-info-200 bg-info-50 p-3 flex items-start gap-3">
             <Sparkles size={18} className="text-info-700 shrink-0 mt-0.5" />
             <div className="text-sm text-info-900 flex-1">
-              <p className="font-semibold">
-                Zaczerpnięto {autoImportInfo.count}{' '}
-                {autoImportInfo.count === 1 ? 'zalecenie' : 'zaleceń'} z
-                poprzedniej kontroli
-                {autoImportInfo.fromDate && (
-                  <> (z dn. {formatDate(autoImportInfo.fromDate)}</>
-                )}
-                {autoImportInfo.fromProtocolNumber && (
-                  <>, protokół {autoImportInfo.fromProtocolNumber}</>
-                )}
-                {autoImportInfo.fromDate && <>)</>}.
-              </p>
+              {autoImportInfo.source === 'previous_inspection' ? (
+                <p className="font-semibold">
+                  Zaczerpnięto {autoImportInfo.count}{' '}
+                  {autoImportInfo.count === 1 ? 'zalecenie' : 'zaleceń'} z
+                  poprzedniej kontroli
+                  {autoImportInfo.fromDate && (
+                    <> (z dn. {formatDate(autoImportInfo.fromDate)}</>
+                  )}
+                  {autoImportInfo.fromProtocolNumber && (
+                    <>, protokół {autoImportInfo.fromProtocolNumber}</>
+                  )}
+                  {autoImportInfo.fromDate && <>)</>}.
+                </p>
+              ) : (
+                <p className="font-semibold">
+                  Zaczerpnięto {autoImportInfo.count}{' '}
+                  {autoImportInfo.count === 1 ? 'zalecenie' : 'zaleceń'} z
+                  notatek na karcie turbiny (legacy z migracji).
+                </p>
+              )}
               <p className="text-xs text-info-800 mt-1">
-                Dla każdego oznacz <strong>Wykonano</strong> /{' '}
-                <strong>Nie wykonano</strong> / <strong>W trakcie</strong>{' '}
-                poniżej.
+                {autoImportInfo.source === 'turbine_legacy' ? (
+                  <>
+                    Statusy „Wykonano"/„Nie wykonano" zostały{' '}
+                    <strong>wstępnie odczytane</strong> z pola
+                    {' '}<code className="text-[11px]">previous_findings_status</code>.
+                    Sprawdź i ewentualnie popraw poniżej.
+                  </>
+                ) : (
+                  <>
+                    Dla każdego oznacz <strong>Wykonano</strong> /{' '}
+                    <strong>Nie wykonano</strong> / <strong>W trakcie</strong>{' '}
+                    poniżej.
+                  </>
+                )}
               </p>
             </div>
             <button
