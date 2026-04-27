@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONDITION_COLORS } from "@/lib/constants";
+import { resolvePortalClient } from "@/lib/portal/resolve-client";
 
 interface Turbine {
   id: string;
@@ -52,18 +53,9 @@ export default function PortalTurbineDetailPage() {
   useEffect(() => {
     const fetch = async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { data: clientUser } = await supabase
-        .from("client_users")
-        .select("client_id")
-        .eq("user_id", session.user.id)
-        .single();
-
-      if (!clientUser) return;
+      const resolved = await resolvePortalClient(supabase);
+      if (!resolved.ok) return;
+      const clientId = resolved.context.clientId;
 
       const { data: turbineData } = await supabase
         .from("turbines")
@@ -81,7 +73,7 @@ export default function PortalTurbineDetailPage() {
       }
 
       const farm = turbineData.wind_farms as unknown as { name: string; client_id: string } | null;
-      if (farm?.client_id !== clientUser.client_id) {
+      if (farm?.client_id !== clientId) {
         setForbidden(true);
         setLoading(false);
         return;

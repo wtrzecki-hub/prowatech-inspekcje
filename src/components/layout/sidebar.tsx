@@ -13,6 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Activity,
+  Library,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -37,19 +39,18 @@ const NAV_ITEMS_BASE = [
   { label: "Farmy wiatrowe", href: "/farmy", icon: Wind },
   { label: "Inspekcje", href: "/inspekcje", icon: ClipboardCheck },
   { label: "Inspektorzy", href: "/inspektorzy", icon: Users },
+  { label: "Biblioteka defektów", href: "/biblioteka-defektow", icon: Library },
 ];
 
 const NAV_ITEMS_ADMIN = [
+  { label: "Ustawienia", href: "/ustawienia", icon: Settings },
   { label: "Diagnostyka", href: "/diagnostyka", icon: Activity },
 ];
 
 export function Sidebar({ user, userRole }: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const navItems =
-    userRole === "admin"
-      ? [...NAV_ITEMS_BASE, ...NAV_ITEMS_ADMIN]
-      : NAV_ITEMS_BASE;
+  const isAdmin = userRole === "admin";
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -107,7 +108,7 @@ export function Sidebar({ user, userRole }: SidebarProps) {
       {/* Navigation Items */}
       <ScrollArea className="flex-1 px-3 py-4">
         <div className="space-y-1">
-          {navItems.map((item) => {
+          {NAV_ITEMS_BASE.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
 
@@ -139,6 +140,54 @@ export function Sidebar({ user, userRole }: SidebarProps) {
             );
           })}
         </div>
+
+        {isAdmin && (
+          <>
+            {!isCollapsed && (
+              <div className="mt-6 mb-2 px-3">
+                <p className="text-[11px] font-semibold tracking-wider uppercase text-graphite-400">
+                  Administracja
+                </p>
+              </div>
+            )}
+            {isCollapsed && (
+              <div className="mt-6 mb-2 mx-3 border-t border-graphite-200" />
+            )}
+            <div className="space-y-1">
+              {NAV_ITEMS_ADMIN.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer",
+                        isCollapsed && "justify-center px-2",
+                        isActive
+                          ? "bg-primary-50 text-primary-700 font-semibold"
+                          : "text-graphite-500 hover:bg-graphite-50 hover:text-graphite-900 font-medium"
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-5 w-5 flex-shrink-0",
+                          isActive ? "text-primary-600" : "text-graphite-500"
+                        )}
+                      />
+                      {!isCollapsed && (
+                        <span className="text-sm">{item.label}</span>
+                      )}
+                      {isActive && !isCollapsed && (
+                        <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-600" />
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </>
+        )}
       </ScrollArea>
 
       {/* User Section */}

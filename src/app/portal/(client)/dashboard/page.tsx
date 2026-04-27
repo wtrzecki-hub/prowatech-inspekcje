@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { INSPECTION_STATUS, CONDITION_COLORS } from "@/lib/constants";
+import { resolvePortalClient } from "@/lib/portal/resolve-client";
 
 interface DashboardData {
   clientName: string;
@@ -45,22 +46,11 @@ export default function PortalDashboardPage() {
   useEffect(() => {
     const fetch = async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
+      const resolved = await resolvePortalClient(supabase);
+      if (!resolved.ok) return;
 
-      const { data: clientUser } = await supabase
-        .from("client_users")
-        .select("client_id, clients(name)")
-        .eq("user_id", session.user.id)
-        .single();
-
-      if (!clientUser) return;
-
-      const clientId = clientUser.client_id;
-      const clientName =
-        (clientUser.clients as unknown as { name: string } | null)?.name ?? "";
+      const clientId = resolved.context.clientId;
+      const clientName = resolved.context.clientName;
 
       const [farmsRes, turbinesRes, recsRes, inspRes] = await Promise.all([
         supabase

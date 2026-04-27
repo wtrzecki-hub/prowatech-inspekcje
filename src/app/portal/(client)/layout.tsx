@@ -7,6 +7,8 @@ import { LayoutDashboard, Wind, FileText, User, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { readImpersonateCookie } from "@/lib/portal/resolve-client";
+import { AdminImpersonateBanner } from "@/components/portal/admin-impersonate-banner";
 
 const navItems = [
   { label: "Panel", href: "/portal/dashboard", icon: LayoutDashboard },
@@ -25,6 +27,7 @@ export default function PortalClientLayout({
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [impersonateClientName, setImpersonateClientName] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -45,7 +48,37 @@ export default function PortalClientLayout({
         .eq("id", session.user.id)
         .single();
 
-      if (!profile || profile.role !== "client_user") {
+      if (!profile) {
+        await supabase.auth.signOut();
+        router.push("/portal/login");
+        return;
+      }
+
+      const impersonateClientId = readImpersonateCookie();
+
+      // Admin z cookie impersonacji — wpuszczamy
+      if (profile.role === "admin" && impersonateClientId) {
+        const { data: client } = await supabase
+          .from("clients")
+          .select("name")
+          .eq("id", impersonateClientId)
+          .not("is_deleted", "is", true)
+          .single();
+        if (!client) {
+          // Cookie wskazuje na nieistniejącego klienta — czyść i przekieruj
+          await fetch("/api/admin/impersonate", { method: "DELETE" });
+          router.push("/dashboard");
+          return;
+        }
+        setImpersonateClientName(client.name);
+        setUserName(`${profile.full_name || profile.email} (admin)`);
+        setUserEmail(profile.email || "");
+        setLoading(false);
+        return;
+      }
+
+      // Standardowy client_user
+      if (profile.role !== "client_user") {
         await supabase.auth.signOut();
         router.push("/portal/login");
         return;
@@ -170,6 +203,9 @@ export default function PortalClientLayout({
 
       {/* Mobile top bar */}
       <div className="flex flex-col flex-1 overflow-hidden">
+        {impersonateClientName && (
+          <AdminImpersonateBanner clientName={impersonateClientName} />
+        )}
         <div className="md:hidden flex items-center justify-between px-4 h-14 bg-white border-b border-graphite-100">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-primary rounded-lg">

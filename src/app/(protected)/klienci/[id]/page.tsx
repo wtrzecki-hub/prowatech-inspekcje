@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { ClientForm } from '@/components/forms/client-form'
 import { WindFarmForm } from '@/components/forms/wind-farm-form'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Plus, Wind, Globe, Copy, CheckCircle2, AlertCircle, UserPlus } from 'lucide-react'
+import { ArrowLeft, Plus, Wind, Globe, Copy, CheckCircle2, AlertCircle, UserPlus, ShieldCheck, ExternalLink, Loader2 } from 'lucide-react'
 import { STATUS_COLORS, INSPECTION_STATUSES } from '@/lib/constants'
 import { RatingBadge } from '@/components/inspection/rating-badge'
 
@@ -72,10 +72,47 @@ export default function ClientDetailPage() {
   const [tempPassword, setTempPassword] = useState<string | null>(null)
   const [portalError, setPortalError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [impersonating, setImpersonating] = useState(false)
+  const [impersonateError, setImpersonateError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchClientData()
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+        .then(({ data }) => setUserRole(data?.role ?? null))
+    })
   }, [clientId])
+
+  async function handleImpersonate() {
+    setImpersonating(true)
+    setImpersonateError(null)
+    try {
+      const res = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setImpersonateError(json.error || 'Nie udało się ustawić impersonacji')
+        setImpersonating(false)
+        return
+      }
+      // Otwieramy portal w nowej karcie żeby admin nie tracił kontekstu
+      window.open('/portal/dashboard', '_blank')
+      setImpersonating(false)
+    } catch (err) {
+      setImpersonateError(err instanceof Error ? err.message : 'Błąd sieci')
+      setImpersonating(false)
+    }
+  }
 
   async function fetchClientData() {
     const supabase = createClient()
@@ -222,6 +259,53 @@ export default function ClientDetailPage() {
           <ClientForm initialData={client} onSuccess={handleClientUpdated} />
         </CardContent>
       </Card>
+
+      {/* Diagnostyka portalu — tylko admin */}
+      {userRole === 'admin' && (
+        <Card className="rounded-xl border border-graphite-200 shadow-xs">
+          <CardHeader className="border-b border-graphite-100 pb-4">
+            <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-graphite-500" />
+              Diagnostyka portalu — wejdź jako klient
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3">
+            <p className="text-sm text-graphite-600">
+              Otwórz portal klienta z tożsamością tego klienta — żeby zobaczyć
+              dokładnie to co on widzi (KPI, listy, protokoły, archiwum). Twoja
+              sesja administratora pozostaje bez zmian; tryb wyłączysz przyciskiem
+              w banerze portalu.
+            </p>
+            {impersonateError && (
+              <div className="flex items-center gap-2 p-3 bg-danger-50 border border-danger-100 rounded-lg text-danger-800 text-sm">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {impersonateError === 'forbidden'
+                  ? 'Brak uprawnień (wymaga roli admin).'
+                  : impersonateError === 'client_not_found'
+                  ? 'Klient nieaktywny lub usunięty.'
+                  : impersonateError}
+              </div>
+            )}
+            <Button
+              size="sm"
+              onClick={handleImpersonate}
+              disabled={impersonating}
+              variant="outline"
+              className="gap-2"
+            >
+              {impersonating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4" />
+              )}
+              {impersonating ? 'Otwieram…' : `Otwórz portal jako ${client.short_name || client.name}`}
+            </Button>
+            <p className="text-xs text-graphite-500">
+              Cookie sesyjne ustawiane na 8 godzin. Otwarcie w nowej karcie.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Portal klienta */}
       <Card className="rounded-xl border border-graphite-200 shadow-xs">

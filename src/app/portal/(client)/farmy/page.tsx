@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolvePortalClient } from "@/lib/portal/resolve-client";
 
 interface Farm {
   id: string;
@@ -51,23 +52,13 @@ export default function PortalFarmyPage() {
   useEffect(() => {
     const fetch = async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { data: clientUser } = await supabase
-        .from("client_users")
-        .select("client_id")
-        .eq("user_id", session.user.id)
-        .single();
-
-      if (!clientUser) return;
+      const resolved = await resolvePortalClient(supabase);
+      if (!resolved.ok) return;
 
       const { data: farmsData } = await supabase
         .from("wind_farms")
         .select("id, name, location_address, number_of_turbines, total_capacity_mw")
-        .eq("client_id", clientUser.client_id)
+        .eq("client_id", resolved.context.clientId)
         .not("is_deleted", "is", true)
         .order("name");
 

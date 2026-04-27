@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONDITION_COLORS } from "@/lib/constants";
+import { resolvePortalClient } from "@/lib/portal/resolve-client";
 
 interface Protocol {
   id: string;
@@ -44,18 +45,9 @@ export default function PortalProtokolyPage() {
   useEffect(() => {
     const fetchAll = async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { data: clientUser } = await supabase
-        .from("client_users")
-        .select("client_id")
-        .eq("user_id", session.user.id)
-        .single();
-
-      if (!clientUser) return;
+      const resolved = await resolvePortalClient(supabase);
+      if (!resolved.ok) return;
+      const clientId = resolved.context.clientId;
 
       // Aktywne protokoły z inspekcji (PIIB w aplikacji)
       const { data: inspections } = await supabase
@@ -64,7 +56,7 @@ export default function PortalProtokolyPage() {
           `id, protocol_number, inspection_date, inspection_type, overall_condition_rating,
            turbines!inner(turbine_code, wind_farms!inner(client_id, name))`
         )
-        .eq("turbines.wind_farms.client_id", clientUser.client_id)
+        .eq("turbines.wind_farms.client_id", clientId)
         .eq("status", "signed")
         .not("is_deleted", "is", true)
         .order("inspection_date", { ascending: false });
@@ -94,8 +86,9 @@ export default function PortalProtokolyPage() {
         .select(
           `id, year, inspection_type, protocol_number, inspection_date,
            protocol_pdf_url, file_size_bytes,
-           turbines!inner(turbine_code, wind_farms!inner(name))`
+           turbines!inner(turbine_code, wind_farms!inner(client_id, name))`
         )
+        .eq("turbines.wind_farms.client_id", clientId)
         .order("year", { ascending: false })
         .order("inspection_type", { ascending: true });
 

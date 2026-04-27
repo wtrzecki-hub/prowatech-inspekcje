@@ -10,6 +10,8 @@ import {
   ClipboardCheck,
   Users,
   Activity,
+  Library,
+  Settings,
 } from "lucide-react";
 import {
   Sheet,
@@ -31,18 +33,50 @@ const NAV_ITEMS_BASE = [
   { label: "Farmy wiatrowe", href: "/farmy", icon: Wind },
   { label: "Inspekcje", href: "/inspekcje", icon: ClipboardCheck },
   { label: "Inspektorzy", href: "/inspektorzy", icon: Users },
+  { label: "Biblioteka defektów", href: "/biblioteka-defektow", icon: Library },
 ];
 
 const NAV_ITEMS_ADMIN = [
+  { label: "Ustawienia", href: "/ustawienia", icon: Settings },
   { label: "Diagnostyka", href: "/diagnostyka", icon: Activity },
 ];
 
 export function MobileNav({ isOpen, onOpenChange, userRole }: MobileNavProps) {
   const pathname = usePathname();
-  const navItems =
-    userRole === "admin"
-      ? [...NAV_ITEMS_BASE, ...NAV_ITEMS_ADMIN]
-      : NAV_ITEMS_BASE;
+  const isAdmin = userRole === "admin";
+
+  const renderItem = (item: { label: string; href: string; icon: typeof LayoutDashboard }) => {
+    const Icon = item.icon;
+    const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() => onOpenChange(false)}
+      >
+        <div
+          className={cn(
+            "flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150",
+            isActive
+              ? "bg-primary-50 text-primary-700 font-semibold"
+              : "text-graphite-500 hover:bg-graphite-50 hover:text-graphite-900 font-medium"
+          )}
+        >
+          <Icon
+            className={cn(
+              "h-5 w-5 flex-shrink-0",
+              isActive ? "text-primary-600" : "text-graphite-500"
+            )}
+          />
+          <span className="text-sm">{item.label}</span>
+          {isActive && (
+            <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-600" />
+          )}
+        </div>
+      </Link>
+    );
+  };
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -54,39 +88,21 @@ export function MobileNav({ isOpen, onOpenChange, userRole }: MobileNavProps) {
         </SheetHeader>
 
         <div className="px-3 py-4 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => onOpenChange(false)}
-              >
-                <div
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150",
-                    isActive
-                      ? "bg-primary-50 text-primary-700 font-semibold"
-                      : "text-graphite-500 hover:bg-graphite-50 hover:text-graphite-900 font-medium"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "h-5 w-5 flex-shrink-0",
-                      isActive ? "text-primary-600" : "text-graphite-500"
-                    )}
-                  />
-                  <span className="text-sm">{item.label}</span>
-                  {isActive && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-600" />
-                  )}
-                </div>
-              </Link>
-            );
-          })}
+          {NAV_ITEMS_BASE.map(renderItem)}
         </div>
+
+        {isAdmin && (
+          <>
+            <div className="mt-2 mb-2 px-3">
+              <p className="text-[11px] font-semibold tracking-wider uppercase text-graphite-400">
+                Administracja
+              </p>
+            </div>
+            <div className="px-3 space-y-1">
+              {NAV_ITEMS_ADMIN.map(renderItem)}
+            </div>
+          </>
+        )}
       </SheetContent>
     </Sheet>
   );
