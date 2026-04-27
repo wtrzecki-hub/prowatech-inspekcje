@@ -130,17 +130,11 @@ export default function PortalClientLayout({
       {/* Sidebar */}
       <div className="hidden md:flex flex-col w-60 bg-white border-r border-graphite-100 shadow-sm flex-shrink-0">
         <div className="p-4 h-16 flex items-center gap-2.5 border-b border-graphite-100">
-          <div className="p-2 bg-primary rounded-lg">
-            <Wind className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-graphite-500 uppercase tracking-widest leading-none mb-0.5">
-              ProWaTech
-            </p>
-            <p className="text-xs font-bold text-graphite-900 leading-tight">
-              Portal Operatora
-            </p>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-prowatech.png" alt="ProWaTech" className="h-9 w-auto flex-shrink-0" />
+          <p className="text-xs font-bold text-graphite-900 leading-tight">
+            Portal Operatora
+          </p>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -208,9 +202,8 @@ export default function PortalClientLayout({
         )}
         <div className="md:hidden flex items-center justify-between px-4 h-14 bg-white border-b border-graphite-100">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-primary rounded-lg">
-              <Wind className="h-4 w-4 text-white" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-prowatech.png" alt="ProWaTech" className="h-7 w-auto flex-shrink-0" />
             <span className="text-sm font-bold text-graphite-900">
               Portal Operatora
             </span>

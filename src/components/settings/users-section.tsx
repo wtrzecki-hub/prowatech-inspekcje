@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Search, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Loader2, Search, ShieldCheck, AlertTriangle, UserPlus } from "lucide-react";
+import { AddUserDialog } from "@/components/settings/add-user-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -91,22 +92,27 @@ export function UsersSection({ currentUserId }: UsersSectionProps) {
     newRole: UserRole;
   } | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  const reloadUsers = async () => {
+    const supabase = createClient();
+    const { data, error: err } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, phone, role, created_at")
+      .order("created_at", { ascending: false });
+    if (err) {
+      setError(err.message);
+    } else {
+      setUsers((data || []) as UserRow[]);
+    }
+  };
 
   useEffect(() => {
-    const supabase = createClient();
-    const load = async () => {
-      const { data, error: err } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, phone, role, created_at")
-        .order("created_at", { ascending: false });
-      if (err) {
-        setError(err.message);
-      } else {
-        setUsers((data || []) as UserRow[]);
-      }
+    const init = async () => {
+      await reloadUsers();
       setLoading(false);
     };
-    load();
+    init();
   }, []);
 
   const filtered = useMemo(() => {
@@ -197,11 +203,19 @@ export function UsersSection({ currentUserId }: UsersSectionProps) {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-base flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-graphite-500" />
             Wszyscy użytkownicy
           </CardTitle>
+          <Button
+            size="sm"
+            onClick={() => setAddDialogOpen(true)}
+            className="gap-2"
+          >
+            <UserPlus className="h-4 w-4" />
+            Dodaj użytkownika
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}
@@ -319,9 +333,9 @@ export function UsersSection({ currentUserId }: UsersSectionProps) {
 
           <p className="text-xs text-graphite-500">
             Pokazano {filtered.length} z {users.length}.{" "}
-            <strong>Tworzenie kont:</strong> klient_user — zakładka „Portal klienta" w widoku{" "}
-            <code className="font-mono">/klienci/[id]</code>; admin/inspector — pierwsze
-            logowanie przez Google OAuth (rola domyślna „viewer", tutaj awansujesz).
+            <strong>Tworzenie kont:</strong> przyciskiem „Dodaj użytkownika" powyżej
+            (wszystkie role). Alternatywnie: klient_user przez „Portal klienta" w widoku{" "}
+            <code className="font-mono">/klienci/[id]</code>; admin/inspector przez Google OAuth.
           </p>
         </CardContent>
       </Card>
@@ -369,6 +383,17 @@ export function UsersSection({ currentUserId }: UsersSectionProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Add user dialog */}
+      <AddUserDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        onCreated={() => {
+          // Po utworzeniu — odświeżamy listę. Dialog zostaje otwarty, żeby admin
+          // mógł skopiować temp password (zamknie ręcznie przyciskiem "Zamknij").
+          reloadUsers();
+        }}
+      />
     </div>
   );
 }
