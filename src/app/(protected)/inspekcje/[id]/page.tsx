@@ -23,6 +23,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 
 import { StatusBar } from '@/components/inspection/status-bar'
 import { ElementCard } from '@/components/inspection/element-card'
+import {
+  BulkStatusBar,
+  CONDITION_BULK_OPTIONS,
+  USAGE_BULK_OPTIONS,
+} from '@/components/inspection/bulk-status-bar'
 import { ServiceChecklist } from '@/components/inspection/service-checklist'
 import { ElectricalMeasurements } from '@/components/inspection/electrical-measurements'
 import { RepairTable } from '@/components/inspection/repair-table'
@@ -562,6 +567,61 @@ export default function InspectionDetailPage() {
               Pokaż tylko z uwagami
             </label>
           </div>
+
+          {/* Bulk-status bar — szybkie ustawienie oceny dla wszystkich elementów,
+              z pominięciem N/D. Operuje na pełnej liście, nie na filtrze. */}
+          <BulkStatusBar
+            title="Ustaw ocenę dla wszystkich elementów"
+            hint={'Szybkie wstępne uzupełnienie. Po kliknięciu możesz zmienić ocenę poszczególnych elementów ręcznie. Pomija „Nie dotyczy".'}
+            elements={elements.map((el) => ({
+              id: el.id,
+              value: el.condition_rating,
+              not_applicable: el.not_applicable,
+            }))}
+            field="condition_rating"
+            options={CONDITION_BULK_OPTIONS}
+            onApplied={(updates) => {
+              setElements((prev) =>
+                prev.map((el) => {
+                  const u = updates.find((x) => x.id === el.id)
+                  return u
+                    ? { ...el, condition_rating: u.value as ConditionRating | null }
+                    : el
+                }),
+              )
+            }}
+          />
+
+          {/* Bulk-status dla "Przydatność do użytkowania" — tylko 5-letni (PIIB sekcja III). */}
+          {inspection.inspection_type === 'five_year' && (
+            <BulkStatusBar
+              title="Ustaw przydatność do użytkowania dla wszystkich"
+              hint={'Pole 5-letnie wg art. 62 ust. 1 pkt 2 PB. Pomija elementy „Nie dotyczy".'}
+              elements={elements.map((el) => ({
+                id: el.id,
+                value: el.usage_suitability,
+                not_applicable: el.not_applicable,
+              }))}
+              field="usage_suitability"
+              options={USAGE_BULK_OPTIONS}
+              onApplied={(updates) => {
+                setElements((prev) =>
+                  prev.map((el) => {
+                    const u = updates.find((x) => x.id === el.id)
+                    return u
+                      ? {
+                          ...el,
+                          usage_suitability: u.value as
+                            | 'spelnia'
+                            | 'nie_spelnia'
+                            | null,
+                        }
+                      : el
+                  }),
+                )
+              }}
+            />
+          )}
 
           <div className="space-y-4">
             {filteredElements.map((element) => (
