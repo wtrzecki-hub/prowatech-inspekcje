@@ -150,7 +150,7 @@ export async function GET(
         owner_name, manager_name, contractor_info, additional_participants,
         documents_reviewed, general_findings_intro, kob_entries_summary,
         turbines (
-          id, turbine_code, model, manufacturer, rated_power_mw, serial_number,
+          id, turbine_code, ew_designation, model, manufacturer, rated_power_mw, serial_number,
           location_address, tower_height_m, hub_height_m, rotor_diameter_m,
           building_permit_number, building_permit_date, commissioning_year,
           tower_construction_type,
@@ -721,6 +721,16 @@ export async function GET(
     }
 
     addKeyValueTable([
+      // Krok 6: oznaczenie EW (np. "EW 1") z karty turbiny — wyświetlane
+      // tylko gdy ustawione, żeby nie generować pustego wiersza w protokole.
+      ...(turbine?.ew_designation
+        ? [
+            {
+              label: 'Oznaczenie turbiny',
+              value: turbine.ew_designation as string,
+            },
+          ]
+        : []),
       { label: 'Adres obiektu budowlanego', value: insp.object_address || '' },
       {
         label: 'Numer ewidencyjny obiektu',

@@ -369,6 +369,7 @@ export async function GET(
         turbines (
           id,
           turbine_code,
+          ew_designation,
           model,
           manufacturer,
           rated_power_mw,
@@ -975,6 +976,11 @@ export async function GET(
     const metaTable = new Table({
       width: { size: USABLE_WIDTH, type: WidthType.DXA },
       rows: [
+        // Krok 6: oznaczenie EW (np. "EW 1") z karty turbiny — wyświetlane
+        // tylko gdy ustawione, żeby nie generować pustego wiersza w protokole.
+        ...(turbine?.ew_designation
+          ? [metaRow('Oznaczenie turbiny:', turbine.ew_designation as string)]
+          : []),
         metaRow('Adres obiektu budowlanego:', insp.object_address || ''),
         metaRow('Numer ewidencyjny obiektu:', insp.object_registry_number || ''),
         metaRow(

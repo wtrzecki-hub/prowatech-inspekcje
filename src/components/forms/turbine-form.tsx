@@ -11,6 +11,7 @@ interface TurbineFormProps {
   initialData?: {
     id: string
     turbine_code: string
+    ew_designation?: string | null
     manufacturer: string
     model: string
     rated_power_mw: number
@@ -36,8 +37,10 @@ export function TurbineForm({
     setError(null)
 
     const formData = new FormData(e.currentTarget)
+    const ewRaw = (formData.get('ew_designation') as string | null)?.trim()
     const data = {
       turbine_code: formData.get('turbine_code'),
+      ew_designation: ewRaw || null,
       manufacturer: formData.get('manufacturer'),
       model: formData.get('model'),
       rated_power_mw: parseFloat(formData.get('rated_power_mw') as string),
@@ -88,6 +91,21 @@ export function TurbineForm({
           defaultValue={initialData?.turbine_code || ''}
           placeholder="T001"
         />
+      </div>
+
+      <div>
+        <Label htmlFor="ew_designation">Oznaczenie EW (opcjonalnie)</Label>
+        <Input
+          id="ew_designation"
+          name="ew_designation"
+          defaultValue={initialData?.ew_designation || ''}
+          placeholder="EW 1"
+        />
+        <p className="text-xs text-graphite-500 mt-1">
+          Identyfikator turbiny w obrębie farmy używany w nagłówku protokołów
+          PIIB (np. „EW 1", „EW 12"). Free text — możesz pominąć jeśli farma
+          nie używa tego oznaczenia.
+        </p>
       </div>
 
       <div>

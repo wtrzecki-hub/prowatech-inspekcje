@@ -1258,6 +1258,7 @@ export type Database = {
           construction_completion_date: string | null
           created_at: string
           created_by: string | null
+          ew_designation: string | null
           google_drive_folder_url: string | null
           has_as_built_documentation: boolean | null
           has_building_log_book: boolean | null
@@ -1304,6 +1305,7 @@ export type Database = {
           construction_completion_date?: string | null
           created_at?: string
           created_by?: string | null
+          ew_designation?: string | null
           google_drive_folder_url?: string | null
           has_as_built_documentation?: boolean | null
           has_building_log_book?: boolean | null
@@ -1350,6 +1352,7 @@ export type Database = {
           construction_completion_date?: string | null
           created_at?: string
           created_by?: string | null
+          ew_designation?: string | null
           google_drive_folder_url?: string | null
           has_as_built_documentation?: boolean | null
           has_building_log_book?: boolean | null
@@ -1410,6 +1413,7 @@ export type Database = {
           commissioning_date: string | null
           created_at: string
           created_by: string | null
+          ew_designation: string | null
           google_drive_folder_url: string | null
           id: string
           is_deleted: boolean
@@ -1430,6 +1434,7 @@ export type Database = {
           commissioning_date?: string | null
           created_at?: string
           created_by?: string | null
+          ew_designation?: string | null
           google_drive_folder_url?: string | null
           id?: string
           is_deleted?: boolean
@@ -1450,6 +1455,7 @@ export type Database = {
           commissioning_date?: string | null
           created_at?: string
           created_by?: string | null
+          ew_designation?: string | null
           google_drive_folder_url?: string | null
           id?: string
           is_deleted?: boolean
