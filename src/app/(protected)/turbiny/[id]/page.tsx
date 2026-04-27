@@ -35,6 +35,9 @@ import HistoricalProtocolsTab from '@/components/turbine/historical-protocols-ta
 interface Turbine {
   id: string
   turbine_code: string
+  /** Krok 6: oznaczenie EW w obrębie farmy (np. "EW 1"), używane jako primary
+   *  identyfikator w hero i w nagłówku protokołów PIIB. Free text, opcjonalne. */
+  ew_designation: string | null
   manufacturer: string
   model: string
   rated_power_mw: number
@@ -813,7 +816,27 @@ function TurbineHero({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-mono text-[26px] font-bold tracking-tight leading-none text-white">
-                {turbine.turbine_code}
+                {/* Krok 6 (Waldek 2026-04-27): kolejność wyświetlania w hero —
+                    EW prepondowane, miejscowość pośrodku, kod turbiny na końcu
+                    (najmniej istotny). Parsujemy turbine_code wzorcem
+                    `T<digits>-<location>`; jeśli nie pasuje → pokazujemy oryginał.
+                    Format finalny: `EW 1 · Kowalewo Opactwo · T150`.
+                    Przy braku ew_designation → tylko `T150-Kowalewo Opactwo`. */}
+                {(() => {
+                  const codeMatch = /^([A-Z]?\s*\d+[A-Z]?)\s*[-–]\s*(.+)$/i.exec(
+                    turbine.turbine_code,
+                  )
+                  const codeShort = codeMatch?.[1]?.trim() ?? null
+                  const codeLocation = codeMatch?.[2]?.trim() ?? null
+
+                  if (turbine.ew_designation && codeShort && codeLocation) {
+                    return `${turbine.ew_designation} · ${codeLocation} · ${codeShort}`
+                  }
+                  if (turbine.ew_designation) {
+                    return `${turbine.ew_designation} · ${turbine.turbine_code}`
+                  }
+                  return turbine.turbine_code
+                })()}
               </h1>
               {openRecsCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-warning-100 text-warning-800">
