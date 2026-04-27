@@ -8,6 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   MapPin,
   Wind,
   Calendar,
@@ -17,6 +23,7 @@ import {
   ExternalLink,
   Camera,
   Loader2,
+  Pencil,
   Plus,
   ClipboardCheck,
   Download,
@@ -30,6 +37,7 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import Link from 'next/link'
+import { TurbineForm } from '@/components/forms/turbine-form'
 import HistoricalProtocolsTab from '@/components/turbine/historical-protocols-tab'
 
 interface Turbine {
@@ -487,7 +495,15 @@ export default function TurbineDetailPage() {
         daysUntilInspection={daysUntilInspection}
         isOverdue={isOverdue}
         canAddInspection={canUpload}
+        canEdit={canUpload}
         onAddInspection={() => router.push(`/inspekcje/nowa?turbineId=${turbineId}`)}
+        onTurbineUpdated={() => {
+          // Refresh turbine data after edit — re-fetch turbine + dependents.
+          // Najprostsze: reload strony. Alternatywa: ekstrakcja fetchTurbineData()
+          // do useCallback i wywołanie tutaj. Reload prostszy + nie wymaga refactoru.
+          router.refresh()
+          window.location.reload()
+        }}
       />
 
       {/* ───── TABS ─────────────────────────────────────────────────────── */}
@@ -792,17 +808,22 @@ function TurbineHero({
   daysUntilInspection,
   isOverdue,
   canAddInspection,
+  canEdit,
   onAddInspection,
+  onTurbineUpdated,
 }: {
   turbine: Turbine
   openRecsCount: number
   daysUntilInspection: number | null
   isOverdue: boolean | null
   canAddInspection: boolean
+  canEdit: boolean
   onAddInspection: () => void
+  onTurbineUpdated: () => void
 }) {
   const clientName = turbine.wind_farms?.clients?.name
   const farmName = turbine.wind_farms?.name
+  const [isEditOpen, setIsEditOpen] = useState(false)
 
   return (
     <div className="rounded-xl bg-graphite-900 text-white shadow-sm border border-graphite-800 p-6 space-y-5">
@@ -871,16 +892,57 @@ function TurbineHero({
           </div>
         </div>
 
-        {canAddInspection && (
-          <Button
-            onClick={onAddInspection}
-            className="h-10 gap-2 bg-primary-600 hover:bg-primary-700 text-white shrink-0"
-          >
-            <Plus className="h-4 w-4" />
-            Nowa inspekcja
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {canEdit && (
+            <Button
+              variant="outline"
+              onClick={() => setIsEditOpen(true)}
+              className="h-10 gap-2 bg-graphite-800 border-graphite-700 text-white hover:bg-graphite-700"
+            >
+              <Pencil className="h-4 w-4" />
+              Edytuj
+            </Button>
+          )}
+          {canAddInspection && (
+            <Button
+              onClick={onAddInspection}
+              className="h-10 gap-2 bg-primary-600 hover:bg-primary-700 text-white"
+            >
+              <Plus className="h-4 w-4" />
+              Nowa inspekcja
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Edit dialog — TurbineForm w dialogu z initialData. Po sukcesie reload. */}
+      {canEdit && (
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edytuj turbinę</DialogTitle>
+            </DialogHeader>
+            <TurbineForm
+              windFarmId={turbine.wind_farm_id}
+              initialData={{
+                id: turbine.id,
+                turbine_code: turbine.turbine_code,
+                ew_designation: turbine.ew_designation,
+                manufacturer: turbine.manufacturer,
+                model: turbine.model,
+                rated_power_mw: turbine.rated_power_mw,
+                tower_height_m: turbine.tower_height_m,
+                rotor_diameter_m: turbine.rotor_diameter_m,
+                serial_number: turbine.serial_number,
+              }}
+              onSuccess={() => {
+                setIsEditOpen(false)
+                onTurbineUpdated()
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Specs grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-5 gap-y-3 pt-4 border-t border-graphite-800">
