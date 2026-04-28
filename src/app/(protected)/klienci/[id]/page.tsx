@@ -41,10 +41,30 @@ interface Client {
 interface WindFarm {
   id: string
   name: string
+  area_label: string | null
   location_address: string
   total_capacity_mw: number
   number_of_turbines: number
   turbines?: { id: string }[]
+}
+
+const AREA_ORDER = ['Wschód', 'Zachód', 'Południe']
+
+function groupFarmsByArea(farms: WindFarm[]): { area: string | null; farms: WindFarm[] }[] {
+  const map = new Map<string | null, WindFarm[]>()
+  for (const f of farms) {
+    const key = f.area_label ?? null
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(f)
+  }
+  // Sortowanie: znane obszary w stałej kolejności (Wschód/Zachód/Południe), reszta alfabetycznie, NULL na końcu
+  const known = AREA_ORDER.filter((a) => map.has(a)).map((a) => ({ area: a, farms: map.get(a)! }))
+  const otherKeys = Array.from(map.keys())
+    .filter((k): k is string => k !== null && !AREA_ORDER.includes(k))
+    .sort()
+  const others = otherKeys.map((a) => ({ area: a, farms: map.get(a)! }))
+  const noArea = map.has(null) ? [{ area: null, farms: map.get(null)! }] : []
+  return [...known, ...others, ...noArea]
 }
 
 interface Inspection {
@@ -431,35 +451,72 @@ export default function ClientDetailPage() {
               <p className="text-sm font-semibold text-graphite-800">Brak farm wiatrowych</p>
               <p className="text-xs text-graphite-500 mt-1">Dodaj pierwszą farmę dla tego klienta</p>
             </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {windFarms.map((farm) => (
-                <Card
-                  key={farm.id}
-                  className="cursor-pointer hover:shadow-sm transition-shadow rounded-xl border border-graphite-200"
-                  onClick={() => router.push(`/farmy/${farm.id}`)}
-                >
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold text-graphite-900 mb-2">{farm.name}</h3>
-                    <div className="space-y-1 text-sm">
-                      <p className="text-graphite-500">
-                        <span className="text-graphite-800 font-medium">Lokalizacja:</span>{' '}
-                        {farm.location_address}
-                      </p>
-                      <p className="text-graphite-500">
-                        <span className="text-graphite-800 font-medium">Moc łączna:</span>{' '}
-                        <span className="font-mono">{farm.total_capacity_mw} MW</span>
-                      </p>
-                      <p className="text-graphite-500">
-                        <span className="text-graphite-800 font-medium">Turbiny:</span>{' '}
-                        <span className="font-mono">{farm.turbines?.length ?? farm.number_of_turbines}</span>
-                      </p>
+          ) : (() => {
+            // Grupowanie po area_label (np. POTEGOWO MASHAV: Wschód/Zachód/Południe).
+            // Klienci bez area_label dla żadnej farmy → flat layout (dotychczasowy).
+            const groups = groupFarmsByArea(windFarms)
+            const hasAnyArea = groups.some((g) => g.area !== null)
+
+            const renderFarmCard = (farm: WindFarm) => (
+              <Card
+                key={farm.id}
+                className="cursor-pointer hover:shadow-sm transition-shadow rounded-xl border border-graphite-200"
+                onClick={() => router.push(`/farmy/${farm.id}`)}
+              >
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-graphite-900 mb-2">{farm.name}</h3>
+                  <div className="space-y-1 text-sm">
+                    <p className="text-graphite-500">
+                      <span className="text-graphite-800 font-medium">Lokalizacja:</span>{' '}
+                      {farm.location_address}
+                    </p>
+                    <p className="text-graphite-500">
+                      <span className="text-graphite-800 font-medium">Moc łączna:</span>{' '}
+                      <span className="font-mono">{farm.total_capacity_mw} MW</span>
+                    </p>
+                    <p className="text-graphite-500">
+                      <span className="text-graphite-800 font-medium">Turbiny:</span>{' '}
+                      <span className="font-mono">{farm.turbines?.length ?? farm.number_of_turbines}</span>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+
+            if (!hasAnyArea) {
+              return (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {windFarms.map(renderFarmCard)}
+                </div>
+              )
+            }
+
+            return (
+              <div className="space-y-6">
+                {groups.map((g) => {
+                  const totalTurbines = g.farms.reduce(
+                    (acc, f) => acc + (f.turbines?.length ?? f.number_of_turbines ?? 0),
+                    0,
+                  )
+                  return (
+                    <div key={g.area ?? '__no_area__'}>
+                      <div className="flex items-baseline gap-2 mb-3 pb-2 border-b border-graphite-100">
+                        <h4 className="text-[13px] font-semibold uppercase tracking-wider text-graphite-700">
+                          {g.area === null ? 'Pozostałe' : `Obszar · ${g.area}`}
+                        </h4>
+                        <span className="font-mono text-[11px] text-graphite-400">
+                          {g.farms.length} farm · {totalTurbines} turbin
+                        </span>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {g.farms.map(renderFarmCard)}
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                  )
+                })}
+              </div>
+            )
+          })()}
         </CardContent>
       </Card>
 
