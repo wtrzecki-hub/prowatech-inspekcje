@@ -85,7 +85,12 @@ interface HistoricalProtocolsTabProps {
   canEdit: boolean
 }
 
+type UploadMode = 'create' | 'fill-placeholder' | 'replace-file'
+
 interface UploadFormState {
+  mode: UploadMode
+  /** Id istniejącego rekordu (placeholder lub rekord z plikiem do zastąpienia) */
+  targetId: string | null
   file: File | null
   year: string
   inspectionType: InspectionType
@@ -96,6 +101,8 @@ interface UploadFormState {
 }
 
 const EMPTY_UPLOAD_FORM: UploadFormState = {
+  mode: 'create',
+  targetId: null,
   file: null,
   year: '',
   inspectionType: 'annual',
@@ -171,16 +178,68 @@ export default function HistoricalProtocolsTab({
 
     const parsed = parseHistoricalProtocolFilename(file.name)
 
-    setForm({
-      file,
-      year: parsed.year ? String(parsed.year) : '',
-      inspectionType: parsed.inspectionType ?? 'annual',
-      protocolNumber: parsed.protocolNumber ?? '',
-      inspectionDate: parsed.inspectionDate ?? '',
-      notes: parsed.location ? `Z nazwy: ${parsed.location}` : '',
-      parsed,
+    // W trybie fill-placeholder / replace-file rok i typ są zablokowane
+    // (powiązane z istniejącym rekordem), więc parser ich nie nadpisuje.
+    // Pozostałe pola wypełniamy z parsera tylko jeśli są puste.
+    setForm((prev) => {
+      if (prev.mode === 'create') {
+        return {
+          ...prev,
+          file,
+          year: parsed.year ? String(parsed.year) : '',
+          inspectionType: parsed.inspectionType ?? 'annual',
+          protocolNumber: parsed.protocolNumber ?? '',
+          inspectionDate: parsed.inspectionDate ?? '',
+          notes: parsed.location ? `Z nazwy: ${parsed.location}` : '',
+          parsed,
+        }
+      }
+      return {
+        ...prev,
+        file,
+        protocolNumber:
+          prev.protocolNumber.trim() || parsed.protocolNumber || '',
+        inspectionDate: prev.inspectionDate || parsed.inspectionDate || '',
+        notes:
+          prev.notes.trim() ||
+          (parsed.location ? `Z nazwy: ${parsed.location}` : ''),
+        parsed,
+      }
     })
     setUploadError(null)
+  }
+
+  const openUploadForPlaceholder = (p: HistoricalProtocol) => {
+    setForm({
+      mode: 'fill-placeholder',
+      targetId: p.id,
+      file: null,
+      year: String(p.year),
+      inspectionType: p.inspection_type,
+      protocolNumber: p.protocol_number ?? '',
+      inspectionDate: p.inspection_date ?? '',
+      notes: p.notes ?? '',
+      parsed: null,
+    })
+    setUploadError(null)
+    setUploadDialogOpen(true)
+  }
+
+  const openUploadForReplace = (p: HistoricalProtocol) => {
+    setForm({
+      mode: 'replace-file',
+      targetId: p.id,
+      file: null,
+      year: String(p.year),
+      inspectionType: p.inspection_type,
+      protocolNumber: p.protocol_number ?? '',
+      inspectionDate: p.inspection_date ?? '',
+      notes: p.notes ?? '',
+      parsed: null,
+    })
+    setUploadError(null)
+    setEditing(null)
+    setUploadDialogOpen(true)
   }
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -266,37 +325,61 @@ export default function HistoricalProtocolsTab({
         throw new Error(`Upload R2: ${putRes.status} ${putRes.statusText}`)
       }
 
-      // Krok 3: INSERT do DB
+      // Krok 3: INSERT albo UPDATE w zależności od trybu
       const { data: { user } } = await supabase.auth.getUser()
-      const insertPayload = {
-        turbine_id: turbineId,
-        year: yearNum,
-        inspection_type: form.inspectionType,
-        protocol_pdf_r2_key: key,
-        protocol_pdf_url: publicUrl,
-        file_size_bytes: form.file.size,
-        source_filename: form.file.name,
-        protocol_number: form.protocolNumber.trim() || null,
-        inspection_date: form.inspectionDate || null,
-        notes: form.notes.trim() || null,
-        uploaded_by: user?.id ?? null,
-      }
-      const { error: insertErr } = await supabase
-        .from('historical_protocols')
-        .insert(insertPayload)
 
-      if (insertErr) {
-        // Plik został wgrany na R2, ale INSERT się walnął — sirota
-        // (np. duplicate UNIQUE(turbine_id, year, inspection_type))
-        // TODO: cleanup R2 key — na razie informujemy admina
-        if (insertErr.code === '23505') {
-          throw new Error(
-            `Protokół dla roku ${yearNum} (${
-              form.inspectionType === 'annual' ? 'roczna' : '5-letnia'
-            }) już istnieje dla tej turbiny. Edytuj istniejący wpis lub usuń go najpierw.`
-          )
+      if (form.mode === 'create') {
+        const insertPayload = {
+          turbine_id: turbineId,
+          year: yearNum,
+          inspection_type: form.inspectionType,
+          protocol_pdf_r2_key: key,
+          protocol_pdf_url: publicUrl,
+          file_size_bytes: form.file.size,
+          source_filename: form.file.name,
+          protocol_number: form.protocolNumber.trim() || null,
+          inspection_date: form.inspectionDate || null,
+          notes: form.notes.trim() || null,
+          uploaded_by: user?.id ?? null,
         }
-        throw new Error(`Zapis do bazy: ${insertErr.message}`)
+        const { error: insertErr } = await supabase
+          .from('historical_protocols')
+          .insert(insertPayload)
+
+        if (insertErr) {
+          // Plik został wgrany na R2, ale INSERT się walnął — sirota
+          // (np. duplicate UNIQUE(turbine_id, year, inspection_type))
+          if (insertErr.code === '23505') {
+            throw new Error(
+              `Protokół dla roku ${yearNum} (${
+                form.inspectionType === 'annual' ? 'roczna' : '5-letnia'
+              }) już istnieje dla tej turbiny. Wgraj plik z wiersza istniejącego placeholdera albo edytuj wpis.`
+            )
+          }
+          throw new Error(`Zapis do bazy: ${insertErr.message}`)
+        }
+      } else {
+        // fill-placeholder lub replace-file — UPDATE konkretnego rekordu.
+        // Notes z `Placeholder z importu arkusza...` zastępujemy jeśli user zostawił
+        // pole takie jakie było (signal: niezmienione vs initial).
+        const updatePayload: Record<string, unknown> = {
+          protocol_pdf_r2_key: key,
+          protocol_pdf_url: publicUrl,
+          file_size_bytes: form.file.size,
+          source_filename: form.file.name,
+          protocol_number: form.protocolNumber.trim() || null,
+          inspection_date: form.inspectionDate || null,
+          notes: form.notes.trim() || null,
+          uploaded_by: user?.id ?? null,
+        }
+        const { error: updErr } = await supabase
+          .from('historical_protocols')
+          .update(updatePayload)
+          .eq('id', form.targetId!)
+
+        if (updErr) {
+          throw new Error(`Aktualizacja rekordu: ${updErr.message}`)
+        }
       }
 
       // Sukces
@@ -437,6 +520,7 @@ export default function HistoricalProtocolsTab({
                   canEdit={canEdit}
                   onEdit={() => setEditing({ ...p })}
                   onDelete={() => setDeleteConfirm(p)}
+                  onUploadFile={() => openUploadForPlaceholder(p)}
                 />
               ))}
             </div>
@@ -448,11 +532,33 @@ export default function HistoricalProtocolsTab({
       <Dialog open={uploadDialogOpen} onOpenChange={(open) => !open && closeUploadDialog()}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Dodaj historyczny protokół</DialogTitle>
+            <DialogTitle>
+              {form.mode === 'fill-placeholder'
+                ? 'Wgraj plik do placeholdera'
+                : form.mode === 'replace-file'
+                ? 'Zastąp plik PDF'
+                : 'Dodaj historyczny protokół'}
+            </DialogTitle>
             <DialogDescription>
-              Wgraj skan PDF protokołu kontroli z archiwum. Pola poniżej zostaną
-              auto-uzupełnione z nazwy pliku jeśli pasuje do wzorca ProWaTech
-              (<span className="font-mono text-[11px]">NN_T_RRRR Protokol_kontroli_typ ...</span>).
+              {form.mode === 'fill-placeholder' ? (
+                <>
+                  Wgrywasz skan PDF do istniejącego wpisu (
+                  <span className="font-mono">{form.year}</span> ·{' '}
+                  {form.inspectionType === 'annual' ? 'Roczna' : '5-letnia'}). Rok
+                  i typ są zablokowane — pozostałe pola możesz dopracować.
+                </>
+              ) : form.mode === 'replace-file' ? (
+                <>
+                  Zastępujesz aktualny plik PDF nowym skanem. Rok i typ pozostają
+                  bez zmian; metadane możesz zaktualizować przy okazji.
+                </>
+              ) : (
+                <>
+                  Wgraj skan PDF protokołu kontroli z archiwum. Pola poniżej zostaną
+                  auto-uzupełnione z nazwy pliku jeśli pasuje do wzorca ProWaTech
+                  (<span className="font-mono text-[11px]">NN_T_RRRR Protokol_kontroli_typ ...</span>).
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -539,7 +645,7 @@ export default function HistoricalProtocolsTab({
                       value={form.year}
                       onChange={(e) => setForm({ ...form, year: e.target.value })}
                       className="font-mono"
-                      disabled={uploading}
+                      disabled={uploading || form.mode !== 'create'}
                     />
                   </div>
                   <div>
@@ -550,7 +656,7 @@ export default function HistoricalProtocolsTab({
                         variant={form.inspectionType === 'annual' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setForm({ ...form, inspectionType: 'annual' })}
-                        disabled={uploading}
+                        disabled={uploading || form.mode !== 'create'}
                         className="flex-1"
                       >
                         Roczna
@@ -560,7 +666,7 @@ export default function HistoricalProtocolsTab({
                         variant={form.inspectionType === 'five_year' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setForm({ ...form, inspectionType: 'five_year' })}
-                        disabled={uploading}
+                        disabled={uploading || form.mode !== 'create'}
                         className="flex-1"
                       >
                         5-letnia
@@ -647,12 +753,60 @@ export default function HistoricalProtocolsTab({
           <DialogHeader>
             <DialogTitle>Edytuj metadane protokołu</DialogTitle>
             <DialogDescription>
-              Plik PDF pozostaje bez zmian — edytujesz tylko opis.
+              {editing?.protocol_pdf_url
+                ? 'Edytujesz opis. Aby zastąpić plik PDF, użyj przycisku poniżej.'
+                : 'Wpis nie ma jeszcze pliku PDF — wgraj go przyciskiem poniżej.'}
             </DialogDescription>
           </DialogHeader>
 
           {editing && (
             <div className="space-y-4">
+              {/* Sekcja Plik */}
+              <div className="flex items-center gap-3 border border-graphite-200 rounded-xl p-3 bg-graphite-50">
+                <FileText
+                  className={`h-8 w-8 flex-shrink-0 ${
+                    editing.protocol_pdf_url ? 'text-graphite-500' : 'text-graphite-300'
+                  }`}
+                />
+                <div className="flex-1 min-w-0">
+                  {editing.protocol_pdf_url ? (
+                    <>
+                      <p className="text-sm font-medium text-graphite-900 truncate">
+                        {editing.source_filename ?? 'Plik PDF'}
+                      </p>
+                      <p className="text-xs text-graphite-500 font-mono">
+                        {editing.file_size_bytes
+                          ? `${(editing.file_size_bytes / 1024 / 1024).toFixed(2)} MB`
+                          : 'Plik wgrany'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium text-graphite-700">
+                        Brak pliku
+                      </p>
+                      <p className="text-xs text-graphite-500">
+                        Wpis jest placeholderem z importu — kliknij „Wgraj plik".
+                      </p>
+                    </>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    editing.protocol_pdf_url
+                      ? openUploadForReplace(editing)
+                      : openUploadForPlaceholder(editing)
+                  }
+                  className="gap-1"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {editing.protocol_pdf_url ? 'Zastąp plik' : 'Wgraj plik'}
+                </Button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Rok kontroli *</Label>
@@ -788,9 +942,18 @@ interface ProtocolRowProps {
   canEdit: boolean
   onEdit: () => void
   onDelete: () => void
+  onUploadFile: () => void
 }
 
-function ProtocolRow({ protocol, canEdit, onEdit, onDelete }: ProtocolRowProps) {
+function ProtocolRow({
+  protocol,
+  canEdit,
+  onEdit,
+  onDelete,
+  onUploadFile,
+}: ProtocolRowProps) {
+  const hasFile = Boolean(protocol.protocol_pdf_url)
+
   return (
     <div className="grid grid-cols-12 gap-3 items-center px-4 py-3 hover:bg-graphite-50/50 transition-colors text-sm">
       <div className="col-span-1 font-mono font-semibold text-graphite-900">
@@ -818,20 +981,35 @@ function ProtocolRow({ protocol, canEdit, onEdit, onDelete }: ProtocolRowProps) 
         )}
       </div>
       <div className="col-span-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2.5 text-xs gap-1 border-graphite-200"
-          onClick={() => window.open(protocol.protocol_pdf_url, '_blank')}
-        >
-          <Download className="h-3 w-3" />
-          PDF
-          {protocol.file_size_bytes && (
-            <span className="text-graphite-400 font-mono text-[10px] ml-1">
-              {(protocol.file_size_bytes / 1024 / 1024).toFixed(1)} MB
-            </span>
-          )}
-        </Button>
+        {hasFile ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2.5 text-xs gap-1 border-graphite-200"
+            onClick={() => window.open(protocol.protocol_pdf_url, '_blank')}
+          >
+            <Download className="h-3 w-3" />
+            PDF
+            {protocol.file_size_bytes && (
+              <span className="text-graphite-400 font-mono text-[10px] ml-1">
+                {(protocol.file_size_bytes / 1024 / 1024).toFixed(1)} MB
+              </span>
+            )}
+          </Button>
+        ) : canEdit ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2.5 text-xs gap-1 border-dashed border-primary-300 text-primary-700 hover:bg-primary-50"
+            onClick={onUploadFile}
+            title="Wgraj skan PDF do tego placeholdera"
+          >
+            <Upload className="h-3 w-3" />
+            Wgraj plik
+          </Button>
+        ) : (
+          <span className="text-xs text-graphite-400 italic">brak skanu</span>
+        )}
       </div>
       <div className="col-span-2 flex justify-end gap-1">
         {canEdit && (

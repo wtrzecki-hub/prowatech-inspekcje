@@ -31,7 +31,7 @@ interface HistoricalProtocol {
   inspection_type: string;
   protocol_number: string | null;
   inspection_date: string | null;
-  protocol_pdf_url: string;
+  protocol_pdf_url: string | null;
   file_size_bytes: number | null;
   turbine_code: string;
   farm_name: string;
@@ -301,20 +301,26 @@ export default function PortalProtokolyPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-2.5 text-xs gap-1 border-graphite-200"
-                      onClick={() => window.open(h.protocol_pdf_url, "_blank")}
-                    >
-                      <Download className="h-3 w-3" />
-                      PDF
-                      {h.file_size_bytes && (
-                        <span className="text-graphite-400 font-mono text-[10px] ml-1">
-                          {(h.file_size_bytes / 1024 / 1024).toFixed(1)} MB
-                        </span>
-                      )}
-                    </Button>
+                    {h.protocol_pdf_url ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs gap-1 border-graphite-200"
+                        onClick={() => window.open(h.protocol_pdf_url ?? "", "_blank")}
+                      >
+                        <Download className="h-3 w-3" />
+                        PDF
+                        {h.file_size_bytes && (
+                          <span className="text-graphite-400 font-mono text-[10px] ml-1">
+                            {(h.file_size_bytes / 1024 / 1024).toFixed(1)} MB
+                          </span>
+                        )}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-graphite-400 italic px-2">
+                        brak skanu
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
