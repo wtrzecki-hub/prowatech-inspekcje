@@ -43,6 +43,7 @@ interface WindFarm {
 interface Turbine {
   id: string
   turbine_code: string
+  ew_designation: string | null
   manufacturer: string
   model: string
   rated_power_mw: number
@@ -195,7 +196,7 @@ export default function FarmDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-graphite-50/50 hover:bg-graphite-50/50 border-b border-graphite-100">
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 px-5">Kod</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 px-5">Oznaczenie</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Producent</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Model</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Moc MW</TableHead>
@@ -210,7 +211,26 @@ export default function FarmDetailPage() {
                     className="cursor-pointer hover:bg-graphite-50/50 transition-colors border-b border-graphite-100 h-[52px]"
                     onClick={() => router.push(`/turbiny/${turbine.id}`)}
                   >
-                    <TableCell className="font-mono font-semibold text-graphite-900 px-5 text-[13px]">{turbine.turbine_code}</TableCell>
+                    <TableCell className="font-mono font-semibold text-graphite-900 px-5 text-[13px] whitespace-nowrap">
+                      {/* Format zgodny z hero `/turbiny/[id]` — `EW 1 · Lokalizacja · T<code>`.
+                          Parsing turbine_code wzorcem `T<digits>-<location>`; jeśli nie pasuje
+                          → tylko `${ew_designation} · ${turbine_code}` lub goły `turbine_code`. */}
+                      {(() => {
+                        const codeMatch = /^([A-Z]?\s*\d+[A-Z]?)\s*[-–]\s*(.+)$/i.exec(
+                          turbine.turbine_code,
+                        )
+                        const codeShort = codeMatch?.[1]?.trim() ?? null
+                        const codeLocation = codeMatch?.[2]?.trim() ?? null
+
+                        if (turbine.ew_designation && codeShort && codeLocation) {
+                          return `${turbine.ew_designation} · ${codeLocation} · ${codeShort}`
+                        }
+                        if (turbine.ew_designation) {
+                          return `${turbine.ew_designation} · ${turbine.turbine_code}`
+                        }
+                        return turbine.turbine_code
+                      })()}
+                    </TableCell>
                     <TableCell className="text-graphite-500 text-[13px]">{turbine.manufacturer}</TableCell>
                     <TableCell className="text-graphite-500 text-[13px]">{turbine.model}</TableCell>
                     <TableCell className="font-mono text-graphite-800 font-medium text-[13px]">{turbine.rated_power_mw}</TableCell>
