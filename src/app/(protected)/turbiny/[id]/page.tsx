@@ -168,8 +168,8 @@ interface HistoricalRow {
   protocol_number: string | null
   inspection_date: string | null
   inspection_type: 'annual' | 'five_year' | null
-  pdf_url: string | null
-  summary_notes: string | null
+  protocol_pdf_url: string | null
+  notes: string | null
 }
 
 interface CertInspectorRow {
@@ -306,9 +306,9 @@ export default function TurbineDetailPage() {
     try {
       const { data, error } = await supabase
         .from('historical_protocols')
-        .select('id, protocol_number, inspection_date, inspection_type, pdf_url, summary_notes')
+        .select('id, protocol_number, inspection_date, inspection_type, protocol_pdf_url, notes')
         .eq('turbine_id', turbineId)
-        .not('is_deleted', 'is', true)
+        .not('protocol_pdf_url', 'is', null)
         .order('inspection_date', { ascending: false, nullsFirst: false })
       if (error) throw error
       setHistorical((data || []) as HistoricalRow[])
@@ -1457,18 +1457,18 @@ function InspectionsHistoryTable({
                     </span>
                   </td>
                   <td className="text-[13px] text-graphite-400">
-                    <span title={h.summary_notes ?? undefined}>—</span>
+                    <span title={h.notes ?? undefined}>—</span>
                   </td>
                   <td className="pr-5 text-right">
-                    {h.pdf_url ? (
+                    {h.protocol_pdf_url ? (
                       <Link
-                        href={h.pdf_url}
+                        href={h.protocol_pdf_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-700 hover:text-primary-800"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
-                        GDrive
+                        Archiwum
                       </Link>
                     ) : (
                       <span className="text-[12px] text-graphite-400">brak pliku</span>
