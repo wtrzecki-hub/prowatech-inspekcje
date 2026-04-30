@@ -909,7 +909,7 @@ export function TurbineInspectionForm({
                 <div className="space-y-2">
                   <Label className="text-base flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                    Data przeglądu
+                    Data protokołu
                   </Label>
                   <Input
                     type="date"
@@ -917,6 +917,9 @@ export function TurbineInspectionForm({
                     onChange={(e) => setInspectionDate(e.target.value)}
                     className="h-12 text-base"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Data wystawienia protokołu — może różnić się od daty wizji terenowej.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -930,6 +933,9 @@ export function TurbineInspectionForm({
                     onChange={(e) => setSiteVisitDate(e.target.value)}
                     className="h-12 text-base"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Data faktycznego pobytu na obiekcie (oględziny w terenie).
+                  </p>
                 </div>
 
                 <div className="space-y-2">
