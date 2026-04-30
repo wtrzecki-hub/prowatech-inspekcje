@@ -1911,7 +1911,7 @@ export function TurbineInspectionForm({
             </Select>
           </div>
 
-          <ScrollArea className="flex-1 mt-3 pr-1">
+          <ScrollArea className="flex-1 mt-3 pr-1 min-h-0">
             <div className="space-y-1">
               {(() => {
                 const items = defectLibrary.filter((d) => {
@@ -2016,7 +2016,7 @@ export function TurbineInspectionForm({
             </Select>
           </div>
 
-          <ScrollArea className="flex-1 mt-3 pr-1">
+          <ScrollArea className="flex-1 mt-3 pr-1 min-h-0">
             <div className="space-y-1">
               {(() => {
                 const items = defectLibrary.filter((d) => {
