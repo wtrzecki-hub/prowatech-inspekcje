@@ -60,14 +60,6 @@ interface Inspector {
   contact: string
 }
 
-interface PrevInspection {
-  id: string
-  date: string
-  protocolNumber: string
-  findings: string
-  completionStatus: string
-}
-
 interface PrevFinding {
   text: string
   originalStatus: string
@@ -303,7 +295,6 @@ export function TurbineInspectionForm({
   const [infra, setInfra] = useState<InfraState>({
     roadAccess: false, maneuvringArea: false, mvCables: false, substation: false, notes: '',
   })
-  const [prevInspections, setPrevInspections] = useState<PrevInspection[]>([])
   const [prevFindings, setPrevFindings]       = useState<PrevFinding[]>([])
 
   // ── Tab 2: Ocena elementów ────────────────────────────────────────
@@ -421,19 +412,6 @@ export function TurbineInspectionForm({
 
   function toggleInfra(field: keyof Omit<InfraState, 'notes'>) {
     setInfra((p) => ({ ...p, [field]: !p[field] }))
-  }
-
-  function addPrevInspection() {
-    setPrevInspections((p) => [
-      ...p,
-      { id: crypto.randomUUID(), date: '', protocolNumber: '', findings: '', completionStatus: '' },
-    ])
-  }
-  function updatePrevInspection(id: string, field: keyof PrevInspection, v: string) {
-    setPrevInspections((p) => p.map((x) => x.id === id ? { ...x, [field]: v } : x))
-  }
-  function removePrevInspection(id: string) {
-    setPrevInspections((p) => p.filter((x) => x.id !== id))
   }
 
   function addRepairRec() {
@@ -1154,65 +1132,11 @@ export function TurbineInspectionForm({
             </Card>
           )}
 
-          {/* Poprzednie kontrole */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary-600" />
-                  Poprzednie kontrole
-                </CardTitle>
-                <Button type="button" variant="outline" size="sm" onClick={addPrevInspection} className="h-10 gap-1.5">
-                  <Plus className="h-4 w-4" /> Dodaj
-                </Button>
-              </div>
-            </CardHeader>
-            {prevInspections.length > 0 && (
-              <CardContent className="space-y-4">
-                {prevInspections.map((pi) => (
-                  <div key={pi.id} className="p-4 border rounded-lg space-y-3 relative">
-                    <button
-                      type="button"
-                      onClick={() => removePrevInspection(pi.id)}
-                      className="absolute top-3 right-3 text-graphite-400 hover:text-danger transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-sm">Data kontroli</Label>
-                        <Input type="date" value={pi.date} onChange={(e) => updatePrevInspection(pi.id, 'date', e.target.value)} className="h-11" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-sm">Nr protokołu</Label>
-                        <Input value={pi.protocolNumber} onChange={(e) => updatePrevInspection(pi.id, 'protocolNumber', e.target.value)} placeholder="np. P/2023/001" className="h-11" />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-sm">Ustalenia</Label>
-                      <Textarea
-                        value={pi.findings}
-                        onChange={(e) => updatePrevInspection(pi.id, 'findings', e.target.value)}
-                        placeholder="Ustalenia z poprzedniej kontroli..."
-                        className="min-h-[64px] resize-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-sm">Stan realizacji</Label>
-                      <Input
-                        value={pi.completionStatus}
-                        onChange={(e) => updatePrevInspection(pi.id, 'completionStatus', e.target.value)}
-                        placeholder="np. Zrealizowano w 100%"
-                        className="h-11"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            )}
-          </Card>
-
-          {/* Zalecenia z poprzedniej kontroli */}
+          {/* Zalecenia z poprzedniej kontroli — auto-import z karty turbiny */}
+          {/* (Wczesniej istniala osobna karta "Poprzednie kontrole" z polami */}
+          {/*  Ustalenia + Stan realizacji - usunieta po zgloszeniu Artura pkt 1 */}
+          {/*  POPRAWKI Z 30.04.2026.docx, bo dane z niej nie byly zapisywane do DB */}
+          {/*  i pokrywaly sie z auto-importowana lista nizej.) */}
           {prevFindings.length > 0 && (
             <Card>
               <CardHeader>
