@@ -1860,8 +1860,16 @@ function PhotoSlot({
           <div className="w-full h-full bg-graphite-50 overflow-hidden border border-graphite-200 rounded-lg">
             <img src={url} alt={alt} className="w-full h-full object-cover" />
           </div>
-          {canUpload && (
-            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white hover:bg-graphite-50 text-graphite-800 text-xs font-medium px-3 py-1.5 rounded shadow flex items-center gap-1"
+            >
+              <ExternalLink className="h-3 w-3" /> Otwórz
+            </a>
+            {canUpload && (
               <button
                 onClick={onUpload}
                 disabled={isUploading}
@@ -1873,8 +1881,8 @@ function PhotoSlot({
                   <><Camera className="h-3 w-3" /> Zmień</>
                 )}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       ) : (
         <div
