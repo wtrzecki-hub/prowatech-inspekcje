@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
@@ -335,6 +336,7 @@ export function TurbineInspectionForm({
 
   // ── Tab 3: Serwis ─────────────────────────────────────────────────
 
+  const [includeServiceInProtocol, setIncludeServiceInProtocol] = useState(true)
   const [serviceCompany, setServiceCompany]       = useState('')
   const [udtCertificate, setUdtCertificate]       = useState('')
   const [lastServiceDate, setLastServiceDate]     = useState('')
@@ -646,6 +648,7 @@ export function TurbineInspectionForm({
         next_service_date: nextServiceDate || null,
         service_protocols_in_kob: protocolsInKob,
         notes: serviceNotes || null,
+        include_in_protocol: includeServiceInProtocol,
       })
       if (svcError) throw svcError
 
@@ -1546,7 +1549,26 @@ export function TurbineInspectionForm({
         {/* ══════════════════════════════════════════════════════════ */}
         <TabsContent value="serwis" className="mt-0 space-y-4">
 
-          <Card>
+          {/* Toggle czy sekcja serwisu trafia do protokolu (Tomasz pkt 5) */}
+          <div className="rounded-xl border border-graphite-200 bg-white p-4 flex items-start gap-3">
+            <Checkbox
+              id="include-service-in-protocol"
+              checked={includeServiceInProtocol}
+              onCheckedChange={(c) => setIncludeServiceInProtocol(c === true)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <Label htmlFor="include-service-in-protocol" className="text-base font-semibold cursor-pointer">
+                Uwzględnij sekcję „Serwis" w protokole
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Zaznacz jeśli masz dane serwisowe (z protokołów ekipy serwisowej lub własnych obserwacji).
+                Odznacz, jeśli serwis ma zostać pominięty w PDF/DOCX (np. brak danych od operatora).
+              </p>
+            </div>
+          </div>
+
+          <Card className={!includeServiceInProtocol ? 'opacity-60' : ''}>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Wrench className="h-5 w-5 text-primary-600" />
@@ -1588,7 +1610,7 @@ export function TurbineInspectionForm({
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={!includeServiceInProtocol ? 'opacity-60' : ''}>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <ClipboardCheck className="h-5 w-5 text-primary-600" />

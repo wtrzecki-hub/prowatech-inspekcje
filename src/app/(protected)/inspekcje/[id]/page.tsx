@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 
 import { StatusBar } from '@/components/inspection/status-bar'
 import { ElementCard } from '@/components/inspection/element-card'
@@ -142,6 +143,10 @@ export default function InspectionDetailPage() {
       element_id: string | null
     }>
   >([])
+
+  // Tomasz pkt 5: czy sekcja "Serwis" trafia do PDF/DOCX. Default true (backward compat).
+  const [serviceIncludeInProtocol, setServiceIncludeInProtocol] = useState<boolean>(true)
+  const [serviceInfoId, setServiceInfoId] = useState<string | null>(null)
 
   const elementSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inspectionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -305,11 +310,51 @@ export default function InspectionDetailPage() {
       setInspectors(
         inspectorsData?.map((item: any) => item.inspector).filter(Boolean) || []
       )
+
+      // Tomasz pkt 5: pobierz flage czy serwis trafia do protokolu
+      const { data: svcData, error: svcErr } = await supabase
+        .from('service_info')
+        .select('id, include_in_protocol')
+        .eq('inspection_id', id)
+        .maybeSingle()
+      if (!svcErr && svcData) {
+        setServiceInfoId(svcData.id)
+        setServiceIncludeInProtocol(svcData.include_in_protocol ?? true)
+      }
     } catch (err) {
       console.error('Error fetching inspection:', err)
       setError('Błąd podczas wczytywania inspekcji')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Tomasz pkt 5: toggle czy serwis trafia do PDF/DOCX
+  const handleToggleServiceInProtocol = async (checked: boolean) => {
+    setServiceIncludeInProtocol(checked)
+    const supabase = createClient()
+    if (serviceInfoId) {
+      const { error } = await supabase
+        .from('service_info')
+        .update({ include_in_protocol: checked })
+        .eq('id', serviceInfoId)
+      if (error) {
+        console.error('[ServiceIncludeToggle] update failed:', error)
+        // Rollback UI gdy fail
+        setServiceIncludeInProtocol(!checked)
+      }
+    } else if (inspection) {
+      // Pierwsze ustawienie - utworz wpis service_info z sama flaga
+      const { data, error } = await supabase
+        .from('service_info')
+        .insert({ inspection_id: inspection.id, include_in_protocol: checked })
+        .select('id')
+        .single()
+      if (!error && data) setServiceInfoId(data.id)
+      else {
+        console.error('[ServiceIncludeToggle] insert failed:', error)
+        setServiceIncludeInProtocol(!checked)
+      }
     }
   }
 
@@ -684,7 +729,29 @@ export default function InspectionDetailPage() {
         {/* Tab: Service */}
         <TabsContent value="serwis" className="space-y-4">
           <h2 className="text-[15px] font-bold text-graphite-900">Historia serwisowania</h2>
-          <ServiceChecklist inspectionId={inspection.id} />
+
+          {/* Tomasz pkt 5: toggle czy sekcja trafia do PDF/DOCX */}
+          <div className="rounded-xl border border-graphite-200 bg-white p-4 flex items-start gap-3">
+            <Checkbox
+              id="include-service-in-protocol"
+              checked={serviceIncludeInProtocol}
+              onCheckedChange={(c) => handleToggleServiceInProtocol(c === true)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <Label htmlFor="include-service-in-protocol" className="text-base font-semibold cursor-pointer">
+                Uwzględnij sekcję „Serwis" w protokole
+              </Label>
+              <p className="text-xs text-graphite-500 mt-1">
+                Zaznacz jeśli masz dane serwisowe (z protokołów ekipy serwisowej lub własnych obserwacji).
+                Odznacz, jeśli serwis ma zostać pominięty w PDF/DOCX (np. brak danych od operatora).
+              </p>
+            </div>
+          </div>
+
+          <div className={!serviceIncludeInProtocol ? 'opacity-60' : ''}>
+            <ServiceChecklist inspectionId={inspection.id} />
+          </div>
         </TabsContent>
 
         {/* Tab: Measurements (only for 5-year) */}

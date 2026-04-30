@@ -1263,53 +1263,57 @@ export async function GET(
     }
 
     // ─── V. SERWIS TECHNICZNY ──────────────────────────────────────────────
-    addSection('V. Informacje o serwisie technicznym turbiny')
-    addBody(
-      'Kontrola połączeń śrubowych, docisku segmentów wieży i czynności techniczne są wykonywane przez certyfikowany serwis (art. 8b ustawy z dnia 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).'
-    )
-    addKeyValueTable([
-      {
-        label: 'Firma serwisowa',
-        value: serviceInfoData?.service_company || '',
-      },
-      {
-        label: 'Nr certyfikatu UDT serwisanta',
-        value: serviceInfoData?.udt_certificate_number || '',
-      },
-      {
-        label: 'Data ostatniego przeglądu',
-        value: formatDate(serviceInfoData?.last_service_date),
-      },
-      {
-        label: 'Nr protokołu serwisowego',
-        value: serviceInfoData?.last_service_protocol_number || '',
-      },
-      {
-        label: 'Data następnego przeglądu',
-        value: formatDate(serviceInfoData?.next_service_date),
-      },
-      {
-        label: 'Protokoły serwisowe załączone do KOB?',
-        value: serviceInfoData?.service_protocols_in_kob ? 'Tak' : 'Nie',
-      },
-    ])
+    // Tomasz pkt 5: sekcja warunkowa - pomijana gdy include_in_protocol=false
+    // (default true dla zachowania zgodnosci z istniejacymi inspekcjami).
+    if (serviceInfoData?.include_in_protocol !== false) {
+      addSection('V. Informacje o serwisie technicznym turbiny')
+      addBody(
+        'Kontrola połączeń śrubowych, docisku segmentów wieży i czynności techniczne są wykonywane przez certyfikowany serwis (art. 8b ustawy z dnia 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).'
+      )
+      addKeyValueTable([
+        {
+          label: 'Firma serwisowa',
+          value: serviceInfoData?.service_company || '',
+        },
+        {
+          label: 'Nr certyfikatu UDT serwisanta',
+          value: serviceInfoData?.udt_certificate_number || '',
+        },
+        {
+          label: 'Data ostatniego przeglądu',
+          value: formatDate(serviceInfoData?.last_service_date),
+        },
+        {
+          label: 'Nr protokołu serwisowego',
+          value: serviceInfoData?.last_service_protocol_number || '',
+        },
+        {
+          label: 'Data następnego przeglądu',
+          value: formatDate(serviceInfoData?.next_service_date),
+        },
+        {
+          label: 'Protokoły serwisowe załączone do KOB?',
+          value: serviceInfoData?.service_protocols_in_kob ? 'Tak' : 'Nie',
+        },
+      ])
 
-    if (serviceChecklistData && serviceChecklistData.length > 0) {
-      addSubHeading('Zakres czynności serwisowych')
-      pdf.setFontSize(FONT_PT.body)
-      pdf.setFont('Roboto', 'normal')
-      for (const item of serviceChecklistData as any[]) {
-        ensureSpace(10)
-        const text = `${item.is_checked ? '[X]' : '[ ]'} ${item.item_name_pl}${
-          item.notes ? ' - ' + item.notes : ''
-        }`
-        const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin - 5)
-        if (item.is_checked) pdf.setTextColor(...RGB.brand700)
-        pdf.text(lines, margin + 2, yPosition)
-        if (item.is_checked) pdf.setTextColor(0)
-        yPosition += lines.length * 4.5 + 1
+      if (serviceChecklistData && serviceChecklistData.length > 0) {
+        addSubHeading('Zakres czynności serwisowych')
+        pdf.setFontSize(FONT_PT.body)
+        pdf.setFont('Roboto', 'normal')
+        for (const item of serviceChecklistData as any[]) {
+          ensureSpace(10)
+          const text = `${item.is_checked ? '[X]' : '[ ]'} ${item.item_name_pl}${
+            item.notes ? ' - ' + item.notes : ''
+          }`
+          const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin - 5)
+          if (item.is_checked) pdf.setTextColor(...RGB.brand700)
+          pdf.text(lines, margin + 2, yPosition)
+          if (item.is_checked) pdf.setTextColor(0)
+          yPosition += lines.length * 4.5 + 1
+        }
+        yPosition += 3
       }
-      yPosition += 3
     }
 
     // ─── ZALECENIA (Zakres czynności / Termin) ──────────────────────────────

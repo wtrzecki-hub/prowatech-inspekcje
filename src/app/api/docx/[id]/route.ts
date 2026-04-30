@@ -2090,17 +2090,22 @@ export async function GET(
       )
     }
 
-    sectionChildren.push(
-      sectionHeading('V. Informacje o serwisie technicznym turbiny'),
-      bodyParagraph(
-        'Kontrola połączeń śrubowych, docisku segmentów wieży i czynności techniczne są wykonywane ' +
-          'przez certyfikowany serwis (art. 8b ustawy z dnia 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).'
-      ),
-      serviceTable,
-      ...(checklistParas.length > 0
-        ? [subHeading('Zakres czynności serwisowych'), ...checklistParas]
-        : []),
+    // Tomasz pkt 5: sekcja V. Serwis warunkowo (default true gdy null)
+    if (serviceInfoData?.include_in_protocol !== false) {
+      sectionChildren.push(
+        sectionHeading('V. Informacje o serwisie technicznym turbiny'),
+        bodyParagraph(
+          'Kontrola połączeń śrubowych, docisku segmentów wieży i czynności techniczne są wykonywane ' +
+            'przez certyfikowany serwis (art. 8b ustawy z dnia 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).'
+        ),
+        serviceTable,
+        ...(checklistParas.length > 0
+          ? [subHeading('Zakres czynności serwisowych'), ...checklistParas]
+          : [])
+      )
+    }
 
+    sectionChildren.push(
       sectionHeading(
         isFiveYear ? 'VI. Zalecenia' : 'IV. Zalecenia'
       ),
