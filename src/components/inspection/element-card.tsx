@@ -1,7 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
+  BookOpen,
   Camera,
   Check,
   ChevronDown,
@@ -9,13 +10,22 @@ import {
   ClipboardCopy,
   FolderOpen,
   Loader2,
+  Search,
   Trash2,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -52,6 +62,17 @@ type ConditionRating =
   | 'zadowalajacy'
   | 'sredni'
   | 'zly'
+
+interface DefectLibraryItem {
+  id: string
+  code: string
+  category: string
+  element_section: string | null
+  name_pl: string
+  description_template: string | null
+  recommendation_template: string | null
+  typical_urgency: string | null
+}
 
 interface InspectionElement {
   id: string
@@ -140,6 +161,49 @@ export function ElementCard({
   const [isLoading, setIsLoading] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Biblioteka usterek (Artur 3a) — lazy fetch on first dialog open.
+  const [showLibrary, setShowLibrary] = useState(false)
+  const [libSearch, setLibSearch] = useState('')
+  const [libCategory, setLibCategory] = useState('__all__')
+  const [library, setLibrary] = useState<DefectLibraryItem[]>([])
+  const [libLoading, setLibLoading] = useState(false)
+
+  useEffect(() => {
+    if (!showLibrary || library.length > 0 || libLoading) return
+    setLibLoading(true)
+    const supabase = createClient()
+    supabase
+      .from('defect_library')
+      .select('id, code, category, element_section, name_pl, description_template, recommendation_template, typical_urgency')
+      .eq('is_active', true)
+      .order('code')
+      .then(({ data, error }) => {
+        if (error) console.error('[ElementCard] fetch library failed:', error)
+        else setLibrary((data || []) as DefectLibraryItem[])
+        setLibLoading(false)
+      })
+  }, [showLibrary, library.length, libLoading])
+
+  const handlePickFromLibrary = (item: DefectLibraryItem) => {
+    const desc = item.description_template?.trim() || null
+    const rec = item.recommendation_template?.trim() || null
+    const hasNotes = (element.notes || '').trim()
+    const hasRec = (element.recommendations || '').trim()
+    if ((hasNotes && desc) || (hasRec && rec)) {
+      if (!confirm('Wybranie wpisu zastąpi obecną treść w polach „Opis stanu" i/lub „Zalecenia". Kontynuować?')) {
+        return
+      }
+    }
+    // Jeden onUpdate z oboma polami — uniknięcie wyścigu z debounce.
+    const update: Partial<InspectionElement> = {}
+    if (desc) update.notes = desc
+    if (rec) update.recommendations = rec
+    onUpdate(update)
+    setShowLibrary(false)
+    setLibSearch('')
+    setLibCategory('__all__')
+  }
 
   // Upload state
   const [uploadingFiles, setUploadingFiles] = useState<
@@ -401,7 +465,7 @@ export function ElementCard({
                       val === 'none' ? null : (val as ConditionRating)
                     )
                   }
-                    >
+                >
                   <SelectTrigger id={`condition-${element.id}`}>
                     <SelectValue placeholder="Wybierz ocenę" />
                   </SelectTrigger>
@@ -444,7 +508,7 @@ export function ElementCard({
                         val === 'none' ? null : (val as 'spelnia' | 'nie_spelnia')
                       )
                     }
-                        >
+                  >
                     <SelectTrigger id={`usage-${element.id}`}>
                       <SelectValue placeholder="Wybierz przydatność" />
                     </SelectTrigger>
@@ -487,15 +551,27 @@ export function ElementCard({
 
               {/* Notatki / opis stanu technicznego */}
               <div className="space-y-2">
-                <Label htmlFor={`notes-${element.id}`} className="font-medium">
-                  Opis stanu technicznego
-                </Label>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <Label htmlFor={`notes-${element.id}`} className="font-medium">
+                    Opis stanu technicznego
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowLibrary(true)}
+                    className="h-7 px-2 text-xs gap-1.5"
+                  >
+                    <BookOpen size={12} />
+                    Z biblioteki
+                  </Button>
+                </div>
                 <Textarea
                   id={`notes-${element.id}`}
                   placeholder="Opis stanu technicznego, wyniki oględzin, stwierdzone uszkodzenia..."
                   value={element.notes || ''}
                   onChange={(e) => handleFieldChange('notes', e.target.value)}
-                      rows={3}
+                  rows={3}
                 />
               </div>
 
@@ -542,7 +618,7 @@ export function ElementCard({
                   onChange={(e) =>
                     handleFieldChange('recommendations', e.target.value)
                   }
-                      rows={3}
+                  rows={3}
                 />
               </div>
 
@@ -780,7 +856,7 @@ export function ElementCard({
                       e.target.value || null
                     )
                   }
-                      className="md:max-w-xs"
+                  className="md:max-w-xs"
                 />
               </div>
 
@@ -796,7 +872,7 @@ export function ElementCard({
                   onChange={(e) =>
                     handleFieldChange('detailed_description', e.target.value)
                   }
-                      rows={4}
+                  rows={4}
                 />
               </div>
             </>
@@ -809,6 +885,116 @@ export function ElementCard({
           )}
         </CardContent>
       )}
+
+      {/* Dialog: Biblioteka usterek (Artur 3a) — jeden klik wstawia opis + zalecenie */}
+      <Dialog open={showLibrary} onOpenChange={setShowLibrary}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary-600" />
+              Biblioteka usterek
+            </DialogTitle>
+            <p className="text-xs text-graphite-500 pt-1">
+              Wybór wpisu wstawia opis wizualny do pola „Opis stanu" i zalecenie naprawcze do pola „Zalecenia / uwagi".
+            </p>
+          </DialogHeader>
+
+          <div className="flex gap-2 mt-2 shrink-0">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-graphite-400" />
+              <Input
+                placeholder="Szukaj po nazwie, opisie lub zaleceniu..."
+                value={libSearch}
+                onChange={(e) => setLibSearch(e.target.value)}
+                className="pl-9 h-10"
+              />
+            </div>
+            <Select value={libCategory} onValueChange={setLibCategory}>
+              <SelectTrigger className="w-52 h-10">
+                <SelectValue placeholder="Kategoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Wszystkie kategorie</SelectItem>
+                {Array.from(new Set(library.map((d) => d.category))).sort().map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <ScrollArea className="flex-1 mt-3 pr-1 min-h-0">
+            <div className="space-y-1">
+              {libLoading ? (
+                <div className="flex items-center justify-center py-12 text-sm text-graphite-500">
+                  <Loader2 size={16} className="animate-spin mr-2" />
+                  Ładowanie biblioteki...
+                </div>
+              ) : (() => {
+                const q = libSearch.toLowerCase()
+                const items = library.filter((d) => {
+                  const matchCat = libCategory === '__all__' || d.category === libCategory
+                  if (!matchCat) return false
+                  if (q === '') return true
+                  return (
+                    d.name_pl.toLowerCase().includes(q) ||
+                    (d.description_template || '').toLowerCase().includes(q) ||
+                    (d.recommendation_template || '').toLowerCase().includes(q) ||
+                    d.code.toLowerCase().includes(q)
+                  )
+                })
+                const grouped = items.reduce<Record<string, DefectLibraryItem[]>>((acc, d) => {
+                  acc[d.category] = acc[d.category] || []
+                  acc[d.category].push(d)
+                  return acc
+                }, {})
+                const cats = Object.keys(grouped).sort()
+                if (cats.length === 0) return (
+                  <p className="text-center text-graphite-500 py-8 text-sm">Brak wyników</p>
+                )
+                return cats.map((cat) => (
+                  <div key={cat} className="mb-3">
+                    <p className="text-xs font-semibold text-graphite-500 uppercase tracking-wide px-2 py-1">
+                      {cat}
+                    </p>
+                    {grouped[cat].map((item) => (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => handlePickFromLibrary(item)}
+                        className="w-full text-left px-3 py-2.5 rounded-md hover:bg-graphite-50 transition-colors flex items-start gap-3 border border-transparent hover:border-graphite-200"
+                      >
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] h-4 px-1 font-mono shrink-0">
+                              {item.code}
+                            </Badge>
+                            <span className="text-sm font-medium leading-snug">{item.name_pl}</span>
+                          </div>
+                          {item.description_template && (
+                            <p className="text-xs text-graphite-500 line-clamp-2">
+                              {item.description_template}
+                            </p>
+                          )}
+                          {item.recommendation_template && (
+                            <p className="text-xs text-primary-700 line-clamp-2">
+                              → {item.recommendation_template}
+                            </p>
+                          )}
+                        </div>
+                        {item.typical_urgency && (
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">
+                            {item.typical_urgency}
+                          </Badge>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ))
+              })()}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
