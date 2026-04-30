@@ -804,46 +804,92 @@ export function TurbineInspectionForm({
 
               <div className="space-y-2">
                 <Label className="text-base">Turbina *</Label>
-                <Input
-                  value={turbineSearch}
-                  onChange={(e) => setTurbineSearch(e.target.value)}
-                  placeholder="Szukaj turbinę (kod, nr seryjny, producent, lokalizacja)..."
-                  className="h-11 text-sm"
-                />
-                <Select value={selectedTurbineId || 'none'} onValueChange={(v) => setSelectedTurbineId(v === 'none' ? '' : v)}>
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue placeholder="Wybierz turbinę..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— wybierz turbinę —</SelectItem>
-                    {filteredTurbinesForSearch.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.turbine_code} — {t.manufacturer} {t.model}
-                        {!selectedFarmName && ` (${t.wind_farms?.name})`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedTurbine && (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 bg-primary-50 rounded-lg text-sm">
-                  <div><span className="text-muted-foreground">Producent:</span> <strong>{selectedTurbine.manufacturer}</strong></div>
-                  <div><span className="text-muted-foreground">Model:</span> <strong>{selectedTurbine.model}</strong></div>
-                  {selectedTurbine.rated_power_mw != null && (
-                    <div><span className="text-muted-foreground">Moc:</span> <strong>{selectedTurbine.rated_power_mw} MW</strong></div>
-                  )}
-                  {selectedTurbine.hub_height_m != null && (
-                    <div><span className="text-muted-foreground">Wys. osi:</span> <strong>{selectedTurbine.hub_height_m} m</strong></div>
-                  )}
-                  <div><span className="text-muted-foreground">Nr seryjny:</span> <strong>{selectedTurbine.serial_number}</strong></div>
-                  <div><span className="text-muted-foreground">Farma:</span> <strong>{selectedTurbine.wind_farms?.name}</strong></div>
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground">Lokalizacja:</span>{' '}
-                    <strong>{selectedTurbine.location_address}</strong>
+                {selectedTurbine ? (
+                  // ── Wybrana turbina (karta z przyciskiem "Zmień") ──
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 bg-primary-50 rounded-lg text-sm relative">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="absolute top-2 right-2 h-7 px-2 text-xs"
+                      onClick={() => {
+                        setSelectedTurbineId('')
+                        setTurbineSearch('')
+                      }}
+                    >
+                      Zmień
+                    </Button>
+                    <div className="col-span-2 font-semibold text-primary-900 mb-1">
+                      {selectedTurbine.turbine_code}
+                      {selectedTurbine.wind_farms?.name && (
+                        <span className="font-normal text-graphite-600">
+                          {' · '}
+                          {selectedTurbine.wind_farms.name}
+                        </span>
+                      )}
+                    </div>
+                    <div><span className="text-muted-foreground">Producent:</span> <strong>{selectedTurbine.manufacturer}</strong></div>
+                    <div><span className="text-muted-foreground">Model:</span> <strong>{selectedTurbine.model}</strong></div>
+                    {selectedTurbine.rated_power_mw != null && (
+                      <div><span className="text-muted-foreground">Moc:</span> <strong>{selectedTurbine.rated_power_mw} MW</strong></div>
+                    )}
+                    {selectedTurbine.hub_height_m != null && (
+                      <div><span className="text-muted-foreground">Wys. osi:</span> <strong>{selectedTurbine.hub_height_m} m</strong></div>
+                    )}
+                    <div><span className="text-muted-foreground">Nr seryjny:</span> <strong>{selectedTurbine.serial_number}</strong></div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Lokalizacja:</span>{' '}
+                      <strong>{selectedTurbine.location_address}</strong>
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  // ── Wyszukiwarka (Input + lista wynikow) ──
+                  <>
+                    <Input
+                      value={turbineSearch}
+                      onChange={(e) => setTurbineSearch(e.target.value)}
+                      placeholder="Wpisz nazwę, kod, lokalizację lub nr seryjny..."
+                      className="h-12 text-base"
+                      autoFocus={!preselectedTurbine}
+                    />
+                    <div className="border border-graphite-200 rounded-lg max-h-80 overflow-y-auto bg-white">
+                      {filteredTurbinesForSearch.length === 0 ? (
+                        <p className="text-sm text-graphite-500 italic p-4 text-center">
+                          {turbineSearch
+                            ? `Brak turbin pasujących do „${turbineSearch}"`
+                            : 'Brak turbin do wyświetlenia'}
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-graphite-100">
+                          {filteredTurbinesForSearch.slice(0, 50).map((t) => (
+                            <li key={t.id}>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedTurbineId(t.id)}
+                                className="w-full text-left px-3 py-2.5 hover:bg-primary-50 transition-colors flex items-baseline gap-2 text-sm"
+                              >
+                                <span className="font-mono font-semibold text-primary-700 shrink-0">
+                                  {t.turbine_code}
+                                </span>
+                                <span className="text-graphite-600 truncate">
+                                  · {t.manufacturer} {t.model}
+                                  {t.wind_farms?.name && ` · ${t.wind_farms.name}`}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                          {filteredTurbinesForSearch.length > 50 && (
+                            <li className="text-xs text-graphite-500 italic p-2 text-center">
+                              Pokazuję pierwszych 50 wyników z {filteredTurbinesForSearch.length}.
+                              Wpisz więcej liter, aby zawęzić.
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
