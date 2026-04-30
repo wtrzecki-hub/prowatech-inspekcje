@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -19,12 +20,18 @@ interface WindFarmFormProps {
     id: string
     name: string
     client_id: string
-    location_address: string
-    latitude: number
-    longitude: number
-    total_capacity_mw: number
-    number_of_turbines: number
-    commissioning_date: string
+    location_address: string | null
+    location_gmina?: string | null
+    location_powiat?: string | null
+    location_voivodeship?: string | null
+    latitude: number | null
+    longitude: number | null
+    total_capacity_mw: number | null
+    number_of_turbines: number | null
+    commissioning_date: string | null
+    area_label?: string | null
+    notes?: string | null
+    google_drive_folder_url?: string | null
   }
   onSuccess?: () => void
 }
@@ -42,7 +49,7 @@ export function WindFarmForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>([])
-  const [selectedClient, setSelectedClient] = useState(clientId || '')
+  const [selectedClient, setSelectedClient] = useState(clientId || initialData?.client_id || '')
 
   useEffect(() => {
     fetchClients()
@@ -71,19 +78,38 @@ export function WindFarmForm({
     setError(null)
 
     const formData = new FormData(e.currentTarget)
+    const str = (k: string) => {
+      const v = formData.get(k)
+      const s = typeof v === 'string' ? v.trim() : ''
+      return s === '' ? null : s
+    }
+    const num = (k: string) => {
+      const v = str(k)
+      if (v === null) return null
+      const n = parseFloat(v)
+      return Number.isFinite(n) ? n : null
+    }
+    const int = (k: string) => {
+      const v = str(k)
+      if (v === null) return null
+      const n = parseInt(v)
+      return Number.isFinite(n) ? n : null
+    }
     const data = {
-      name: formData.get('name'),
+      name: str('name'),
       client_id: selectedClient,
-      location_address: formData.get('location_address'),
-      latitude: parseFloat(
-        formData.get('latitude') as string
-      ),
-      longitude: parseFloat(
-        formData.get('longitude') as string
-      ),
-      total_capacity_mw: parseFloat(formData.get('total_capacity_mw') as string),
-      number_of_turbines: parseInt(formData.get('number_of_turbines') as string),
-      commissioning_date: formData.get('commissioning_date'),
+      location_address: str('location_address'),
+      location_gmina: str('location_gmina'),
+      location_powiat: str('location_powiat'),
+      location_voivodeship: str('location_voivodeship'),
+      latitude: num('latitude'),
+      longitude: num('longitude'),
+      total_capacity_mw: num('total_capacity_mw'),
+      number_of_turbines: int('number_of_turbines'),
+      commissioning_date: str('commissioning_date'),
+      area_label: str('area_label'),
+      notes: str('notes'),
+      google_drive_folder_url: str('google_drive_folder_url'),
     }
 
     try {
@@ -122,7 +148,9 @@ export function WindFarmForm({
         <Label htmlFor="client_id">Klient</Label>
         <Select value={selectedClient} onValueChange={setSelectedClient}>
           <SelectTrigger>
-            <SelectValue />
+            <SelectValue placeholder="Wybierz klienta">
+              {selectedClient && clients.find((c) => c.id === selectedClient)?.name}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {clients.map((client) => (
@@ -146,7 +174,7 @@ export function WindFarmForm({
       </div>
 
       <div>
-        <Label htmlFor="location_address">Lokalizacja</Label>
+        <Label htmlFor="location_address">Miejscowość</Label>
         <Input
           id="location_address"
           name="location_address"
@@ -154,6 +182,48 @@ export function WindFarmForm({
           defaultValue={initialData?.location_address || ''}
           placeholder="Miejscowość"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="location_gmina">Gmina</Label>
+          <Input
+            id="location_gmina"
+            name="location_gmina"
+            defaultValue={initialData?.location_gmina || ''}
+            placeholder="np. Skoki"
+          />
+        </div>
+        <div>
+          <Label htmlFor="location_powiat">Powiat</Label>
+          <Input
+            id="location_powiat"
+            name="location_powiat"
+            defaultValue={initialData?.location_powiat || ''}
+            placeholder="np. wągrowiecki"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="location_voivodeship">Województwo</Label>
+          <Input
+            id="location_voivodeship"
+            name="location_voivodeship"
+            defaultValue={initialData?.location_voivodeship || ''}
+            placeholder="np. wielkopolskie"
+          />
+        </div>
+        <div>
+          <Label htmlFor="area_label">Etykieta obszaru</Label>
+          <Input
+            id="area_label"
+            name="area_label"
+            defaultValue={initialData?.area_label || ''}
+            placeholder="np. POTEGOWO obszar A"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -220,6 +290,28 @@ export function WindFarmForm({
               ? new Date(initialData.commissioning_date).toISOString().split('T')[0]
               : ''
           }
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="google_drive_folder_url">Folder Google Drive (URL)</Label>
+        <Input
+          id="google_drive_folder_url"
+          name="google_drive_folder_url"
+          type="url"
+          defaultValue={initialData?.google_drive_folder_url || ''}
+          placeholder="https://drive.google.com/..."
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="notes">Notatki</Label>
+        <Textarea
+          id="notes"
+          name="notes"
+          defaultValue={initialData?.notes || ''}
+          placeholder="Dodatkowe informacje o farmie"
+          rows={3}
         />
       </div>
 
