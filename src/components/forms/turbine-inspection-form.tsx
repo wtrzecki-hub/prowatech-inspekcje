@@ -1452,59 +1452,60 @@ export function TurbineInspectionForm({
                             </div>
                           )}
 
-                          {/* Notes / Recommendations — for non-good ratings */}
-                          {isProblematicRating(el.rating ?? undefined) && (
-                            <div className="space-y-2">
-                              <div className="space-y-1">
-                                {defectLibrary.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setElementLibTarget({ definitionId: el.definitionId, field: 'notes' })
-                                      setElementLibSearch('')
-                                      setElementLibCategory('__all__')
-                                      setShowElementLibDialog(true)
-                                    }}
-                                    className="flex items-center gap-1.5 text-xs text-primary-700 hover:text-primary-800 font-medium"
-                                  >
-                                    <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (uwagi)
-                                  </button>
-                                )}
-                                <Textarea
-                                  placeholder="Opis stanu / uwagi..."
-                                  value={el.notes}
-                                  onChange={(e) =>
-                                    updateElement(el.definitionId, { notes: e.target.value })
-                                  }
-                                  className="min-h-[64px] text-base resize-none"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                {defectLibrary.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setElementLibTarget({ definitionId: el.definitionId, field: 'recommendations' })
-                                      setElementLibSearch('')
-                                      setElementLibCategory('__all__')
-                                      setShowElementLibDialog(true)
-                                    }}
-                                    className="flex items-center gap-1.5 text-xs text-primary-700 hover:text-primary-800 font-medium"
-                                  >
-                                    <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (zalecenia)
-                                  </button>
-                                )}
-                                <Textarea
-                                  placeholder="Zalecenia naprawcze..."
-                                  value={el.recommendations}
-                                  onChange={(e) =>
-                                    updateElement(el.definitionId, { recommendations: e.target.value })
-                                  }
-                                  className="min-h-[64px] text-base resize-none"
-                                />
-                              </div>
+                          {/* Notes / Recommendations — zawsze widoczne (Tomek + Artur pkt 2b) */}
+                          {/* Wczesniej ukryte za isProblematicRating - pole notes pojawialo sie */}
+                          {/* dopiero przy ocenie >= dostateczny. Inspektor moze chciec dodac uwage */}
+                          {/* "gasnice w dobrym stanie ale brak przegladu od 2 lat" wlasnie przy "Dobry". */}
+                          <div className="space-y-2">
+                            <div className="space-y-1">
+                              {defectLibrary.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setElementLibTarget({ definitionId: el.definitionId, field: 'notes' })
+                                    setElementLibSearch('')
+                                    setElementLibCategory('__all__')
+                                    setShowElementLibDialog(true)
+                                  }}
+                                  className="flex items-center gap-1.5 text-xs text-primary-700 hover:text-primary-800 font-medium"
+                                >
+                                  <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (uwagi)
+                                </button>
+                              )}
+                              <Textarea
+                                placeholder="Opis stanu / uwagi..."
+                                value={el.notes}
+                                onChange={(e) =>
+                                  updateElement(el.definitionId, { notes: e.target.value })
+                                }
+                                className="min-h-[64px] text-base resize-none"
+                              />
                             </div>
-                          )}
+                            <div className="space-y-1">
+                              {defectLibrary.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setElementLibTarget({ definitionId: el.definitionId, field: 'recommendations' })
+                                    setElementLibSearch('')
+                                    setElementLibCategory('__all__')
+                                    setShowElementLibDialog(true)
+                                  }}
+                                  className="flex items-center gap-1.5 text-xs text-primary-700 hover:text-primary-800 font-medium"
+                                >
+                                  <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (zalecenia)
+                                </button>
+                              )}
+                              <Textarea
+                                placeholder="Zalecenia naprawcze..."
+                                value={el.recommendations}
+                                onChange={(e) =>
+                                  updateElement(el.definitionId, { recommendations: e.target.value })
+                                }
+                                className="min-h-[64px] text-base resize-none"
+                              />
+                            </div>
+                          </div>
 
                           {/* 5-year extended scope */}
                           {inspectionType === 'five_year' && (
