@@ -331,7 +331,6 @@ export function ElementCard({
               id={`not-applicable-${element.id}`}
               checked={element.not_applicable}
               onCheckedChange={handleNotApplicableChange}
-              disabled={isLoading}
             />
             <Label
               htmlFor={`not-applicable-${element.id}`}
@@ -402,8 +401,7 @@ export function ElementCard({
                       val === 'none' ? null : (val as ConditionRating)
                     )
                   }
-                  disabled={isLoading}
-                >
+                    >
                   <SelectTrigger id={`condition-${element.id}`}>
                     <SelectValue placeholder="Wybierz ocenę" />
                   </SelectTrigger>
@@ -446,8 +444,7 @@ export function ElementCard({
                         val === 'none' ? null : (val as 'spelnia' | 'nie_spelnia')
                       )
                     }
-                    disabled={isLoading}
-                  >
+                        >
                     <SelectTrigger id={`usage-${element.id}`}>
                       <SelectValue placeholder="Wybierz przydatność" />
                     </SelectTrigger>
@@ -498,8 +495,7 @@ export function ElementCard({
                   placeholder="Opis stanu technicznego, wyniki oględzin, stwierdzone uszkodzenia..."
                   value={element.notes || ''}
                   onChange={(e) => handleFieldChange('notes', e.target.value)}
-                  disabled={isLoading}
-                  rows={3}
+                      rows={3}
                 />
               </div>
 
@@ -546,8 +542,7 @@ export function ElementCard({
                   onChange={(e) =>
                     handleFieldChange('recommendations', e.target.value)
                   }
-                  disabled={isLoading}
-                  rows={3}
+                      rows={3}
                 />
               </div>
 
@@ -765,8 +760,7 @@ export function ElementCard({
                     onChange={(e) =>
                       handleFieldChange('photo_numbers', e.target.value)
                     }
-                    disabled={isLoading}
-                    className="text-sm"
+                          className="text-sm"
                   />
                 </div>
               </div>
@@ -786,8 +780,7 @@ export function ElementCard({
                       e.target.value || null
                     )
                   }
-                  disabled={isLoading}
-                  className="md:max-w-xs"
+                      className="md:max-w-xs"
                 />
               </div>
 
@@ -803,8 +796,7 @@ export function ElementCard({
                   onChange={(e) =>
                     handleFieldChange('detailed_description', e.target.value)
                   }
-                  disabled={isLoading}
-                  rows={4}
+                      rows={4}
                 />
               </div>
             </>
