@@ -399,6 +399,23 @@ export function TurbineInspectionForm({
     (e) => isProblematicRating(e.rating ?? undefined)
   ).length
 
+  // Per-element drag&drop state (Artur pkt 2c) - id elementu nad ktorym aktualnie przeciagamy
+  const [draggingDefId, setDraggingDefId] = useState<string | null>(null)
+
+  // Helper - dorzucenie wielu plikow obrazow do elementPhotos elementu (Artur pkt 2d multi-select)
+  function addPhotosToElement(defId: string, files: FileList | File[]) {
+    const arr = Array.from(files).filter((f) => f.type.startsWith('image/'))
+    if (arr.length === 0) return
+    const el = elements.find((e) => e.definitionId === defId)
+    if (!el) return
+    const newPhotos = arr.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      description: '',
+    }))
+    updateElement(defId, { elementPhotos: [...el.elementPhotos, ...newPhotos] })
+  }
+
   // ── Updaters ──────────────────────────────────────────────────────
 
   function updateElement(defId: string, updates: Partial<ElementCheck>) {
@@ -1397,64 +1414,106 @@ export function TurbineInspectionForm({
                             </div>
                           )}
 
-                          {/* Photo per element */}
-                          {el.rating !== null && (
-                            <div className="space-y-2">
+                          {/* Photo per element - drag&drop + multi-select (Artur pkt 2c+2d) */}
+                          {/* Wczesniej widoczne tylko gdy el.rating !== null - usuniete, */}
+                          {/* zdjecie mozna dorzucic na kazdym etapie wypelniania. */}
+                          <div
+                            onDragEnter={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if (e.dataTransfer.types.includes('Files')) setDraggingDefId(el.definitionId)
+                            }}
+                            onDragLeave={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setDraggingDefId(null)
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setDraggingDefId(null)
+                              addPhotosToElement(el.definitionId, e.dataTransfer.files)
+                            }}
+                            className={`space-y-2 rounded-lg border-2 p-2 transition-colors ${
+                              draggingDefId === el.definitionId
+                                ? 'border-primary-500 border-dashed bg-primary-50'
+                                : 'border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
                               <label className="flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-lg border-2 border-primary-200 text-primary-700 hover:bg-primary-50 text-xs font-semibold transition-all">
                                 <Camera className="h-4 w-4" />
-                                Dodaj zdjęcie
+                                Aparat
                                 <input
                                   type="file"
                                   accept="image/*"
                                   capture="environment"
                                   className="hidden"
                                   onChange={(e) => {
-                                    const file = e.target.files?.[0]
-                                    if (!file) return
-                                    const preview = URL.createObjectURL(file)
-                                    updateElement(el.definitionId, {
-                                      elementPhotos: [...el.elementPhotos, { file, preview, description: '' }],
-                                    })
+                                    if (!e.target.files) return
+                                    addPhotosToElement(el.definitionId, e.target.files)
                                     e.target.value = ''
                                   }}
                                 />
                               </label>
-                              {el.elementPhotos.length > 0 && (
-                                <div className="flex flex-wrap gap-3">
-                                  {el.elementPhotos.map((ep, pi) => (
-                                    <div key={pi} className="w-28 space-y-1">
-                                      <div className="relative w-28 h-20 bg-graphite-100 rounded-lg overflow-hidden border border-graphite-200">
-                                        <img src={ep.preview} alt="" className="w-full h-full object-cover" />
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            URL.revokeObjectURL(ep.preview)
-                                            updateElement(el.definitionId, {
-                                              elementPhotos: el.elementPhotos.filter((_, idx) => idx !== pi),
-                                            })
-                                          }}
-                                          className="absolute top-1 right-1 bg-danger/80 hover:bg-danger-800 text-white rounded-full p-0.5 transition-colors"
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                      <Input
-                                        value={ep.description}
-                                        onChange={(e) => {
-                                          const updated = el.elementPhotos.map((x, idx) =>
-                                            idx === pi ? { ...x, description: e.target.value } : x
-                                          )
-                                          updateElement(el.definitionId, { elementPhotos: updated })
-                                        }}
-                                        placeholder="Opis..."
-                                        className="h-7 text-xs"
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              <label className="flex items-center gap-2 cursor-pointer w-fit px-3 py-2 rounded-lg border-2 border-primary-200 text-primary-700 hover:bg-primary-50 text-xs font-semibold transition-all">
+                                <Upload className="h-4 w-4" />
+                                Z dysku
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    if (!e.target.files) return
+                                    addPhotosToElement(el.definitionId, e.target.files)
+                                    e.target.value = ''
+                                  }}
+                                />
+                              </label>
+                              <span className="text-[11px] text-graphite-500 italic">
+                                lub przeciągnij pliki
+                              </span>
                             </div>
-                          )}
+                            {el.elementPhotos.length > 0 && (
+                              <div className="flex flex-wrap gap-3">
+                                {el.elementPhotos.map((ep, pi) => (
+                                  <div key={pi} className="w-28 space-y-1">
+                                    <div className="relative w-28 h-20 bg-graphite-100 rounded-lg overflow-hidden border border-graphite-200">
+                                      <img src={ep.preview} alt="" className="w-full h-full object-cover" />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          URL.revokeObjectURL(ep.preview)
+                                          updateElement(el.definitionId, {
+                                            elementPhotos: el.elementPhotos.filter((_, idx) => idx !== pi),
+                                          })
+                                        }}
+                                        className="absolute top-1 right-1 bg-danger/80 hover:bg-danger-800 text-white rounded-full p-0.5 transition-colors"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                    <Input
+                                      value={ep.description}
+                                      onChange={(e) => {
+                                        const updated = el.elementPhotos.map((x, idx) =>
+                                          idx === pi ? { ...x, description: e.target.value } : x
+                                        )
+                                        updateElement(el.definitionId, { elementPhotos: updated })
+                                      }}
+                                      placeholder="Opis..."
+                                      className="h-7 text-xs"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
 
                           {/* Notes / Recommendations — zawsze widoczne (Tomek + Artur pkt 2b) */}
                           {/* Wczesniej ukryte za isProblematicRating - pole notes pojawialo sie */}
