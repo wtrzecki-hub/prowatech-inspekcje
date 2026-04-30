@@ -24,7 +24,9 @@ import {
   AlertTriangle, MapPin, Calendar, User, ChevronRight,
   ChevronLeft, Upload, Loader2, Wrench, Plus, Trash2,
   Building2, Shield, Zap, HardHat, Navigation2, BookOpen, Search,
+  Sparkles, X,
 } from 'lucide-react'
+import { CONDITION_BULK_OPTIONS } from '@/components/inspection/bulk-status-bar'
 import {
   Dialog,
   DialogContent,
@@ -1245,6 +1247,84 @@ export function TurbineInspectionForm({
                 Zakres 5-letni aktywny
               </Badge>
             )}
+          </div>
+
+          {/* Bulk-status bar (Artur pkt 2a) - szybkie ustawienie oceny dla wszystkich
+              widocznych elementow. Nadpisuje wczesniejsze oceny po confirm(). */}
+          <div className="rounded-xl border border-graphite-200 bg-white shadow-xs p-3 mb-4">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <Sparkles className="h-4 w-4 text-graphite-500 shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-graphite-700">
+                Ustaw ocenę dla wszystkich elementów
+              </span>
+              <span className="ml-auto text-xs text-graphite-500 tabular-nums">
+                {completedCount}/{visibleElements.length} ocenionych
+              </span>
+            </div>
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: `repeat(auto-fit, minmax(140px, 1fr))` }}
+            >
+              {CONDITION_BULK_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    if (
+                      completedCount > 0 &&
+                      !window.confirm(
+                        `Ustawić "${opt.label}" dla wszystkich ${visibleElements.length} elementów? Spowoduje to nadpisanie ${completedCount} ocenionych elementów.`,
+                      )
+                    ) {
+                      return
+                    }
+                    setElements((prev) =>
+                      prev.map((el) => {
+                        const inVisible =
+                          inspectionType === 'five_year'
+                            ? el.appliesToFiveYear
+                            : el.appliesToAnnual
+                        if (!inVisible) return el
+                        return { ...el, rating: opt.value as ConditionRating }
+                      }),
+                    )
+                  }}
+                  className={`min-h-[52px] rounded-lg ${opt.bg} ${opt.hoverBg} ${opt.text} font-semibold text-sm border border-transparent transition active:scale-[0.98] px-3`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={completedCount === 0}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `Wyczyścić oceny ${completedCount} elementów? Tej operacji nie można cofnąć.`,
+                    )
+                  ) {
+                    return
+                  }
+                  setElements((prev) =>
+                    prev.map((el) => {
+                      const inVisible =
+                        inspectionType === 'five_year'
+                          ? el.appliesToFiveYear
+                          : el.appliesToAnnual
+                      if (!inVisible) return el
+                      return { ...el, rating: null }
+                    }),
+                  )
+                }}
+                className="min-h-[52px] rounded-lg bg-graphite-100 hover:bg-graphite-200 text-graphite-700 font-semibold text-sm border border-transparent transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-1.5 px-3"
+              >
+                <X className="h-4 w-4" />
+                Wyczyść
+              </button>
+            </div>
+            <p className="text-[11px] text-graphite-500 mt-2 leading-snug">
+              Szybkie wstępne uzupełnienie. Po kliknięciu możesz zmienić ocenę poszczególnych elementów ręcznie.
+            </p>
           </div>
 
           <ScrollArea>
