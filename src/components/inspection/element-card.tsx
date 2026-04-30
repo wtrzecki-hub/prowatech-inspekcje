@@ -922,7 +922,7 @@ export function ElementCard({
             </Select>
           </div>
 
-          <ScrollArea className="flex-1 mt-3 pr-1 min-h-0">
+          <ScrollArea className="mt-3 pr-1 h-[55vh]">
             <div className="space-y-1">
               {libLoading ? (
                 <div className="flex items-center justify-center py-12 text-sm text-graphite-500">
