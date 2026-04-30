@@ -136,6 +136,7 @@ export function ElementCard({
   const [uploadingFiles, setUploadingFiles] = useState<
     { name: string; status: UploadStatus | 'done' | 'error'; error?: string }[]
   >([])
+  const [isDragging, setIsDragging] = useState(false)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -245,6 +246,29 @@ export function ElementCard({
       console.error('[ElementCard] delete photo failed:', err)
       alert('Nie udało się usunąć zdjęcia.')
     }
+  }
+
+  // Drag-drop dla zdjec elementu (Tomasz pkt 1) — strefa drop na karcie sekcji Zdjecia.
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer.types.includes('Files')) setIsDragging(true)
+  }
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    if (!inspectionId) return
+    void handleFilesSelected(e.dataTransfer.files)
   }
 
   const isFiveYear = inspectionType === 'five_year'
@@ -494,7 +518,17 @@ export function ElementCard({
                    Numer zdjęcia auto-derived z listy. Pole „Nr fot." poniżej
                    zachowane jako edytowalne (user może nadpisać dla protokołu).
                    ===================================================== */}
-              <div className="space-y-3 rounded-xl border border-graphite-200 bg-white p-3">
+              <div
+                onDragEnter={inspectionId ? handleDragEnter : undefined}
+                onDragLeave={inspectionId ? handleDragLeave : undefined}
+                onDragOver={inspectionId ? handleDragOver : undefined}
+                onDrop={inspectionId ? handleDrop : undefined}
+                className={`space-y-3 rounded-xl border-2 ${
+                  isDragging
+                    ? 'border-primary-500 border-dashed bg-primary-50'
+                    : 'border-graphite-200 bg-white'
+                } p-3 transition-colors`}
+              >
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <Label className="font-medium">
                     Zdjęcia tego elementu
@@ -592,8 +626,8 @@ export function ElementCard({
                   </div>
                 ) : uploadingFiles.length === 0 ? (
                   <p className="text-xs text-graphite-500 italic py-2">
-                    Brak zdjęć tego elementu. Kliknij „Aparat" (na tablecie =
-                    natywna kamera) lub „Z dysku" żeby dodać.
+                    Brak zdjęć tego elementu. Przeciągnij pliki tutaj, kliknij
+                    „Aparat" (na tablecie = natywna kamera) lub „Z dysku" żeby dodać.
                   </p>
                 ) : null}
 
