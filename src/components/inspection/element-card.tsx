@@ -191,7 +191,7 @@ export function ElementCard({
     const hasNotes = (element.notes || '').trim()
     const hasRec = (element.recommendations || '').trim()
     if ((hasNotes && desc) || (hasRec && rec)) {
-      if (!confirm('Wybranie wpisu zastąpi obecną treść w polach „Opis stanu" i/lub „Zalecenia". Kontynuować?')) {
+      if (!confirm('Wybranie wpisu zastąpi obecną treść w polach „Opis i ustalenia z kontroli" i/lub „Zalecenia". Kontynuować?')) {
         return
       }
     }
@@ -553,7 +553,7 @@ export function ElementCard({
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <Label htmlFor={`notes-${element.id}`} className="font-medium">
-                    Opis stanu technicznego
+                    Opis i ustalenia z kontroli
                   </Label>
                   <Button
                     type="button"
@@ -568,7 +568,7 @@ export function ElementCard({
                 </div>
                 <Textarea
                   id={`notes-${element.id}`}
-                  placeholder="Opis stanu technicznego, wyniki oględzin, stwierdzone uszkodzenia..."
+                  placeholder="Opisz stan elementu, stwierdzone nieprawidłowości, wyniki oględzin..."
                   value={element.notes || ''}
                   onChange={(e) => handleFieldChange('notes', e.target.value)}
                   rows={3}
@@ -895,7 +895,7 @@ export function ElementCard({
               Biblioteka usterek
             </DialogTitle>
             <p className="text-xs text-graphite-500 pt-1">
-              Wybór wpisu wstawia opis wizualny do pola „Opis stanu" i zalecenie naprawcze do pola „Zalecenia / uwagi".
+              Wybór wpisu wstawia opis wizualny do pola „Opis i ustalenia z kontroli" i zalecenie naprawcze do pola „Zalecenia / uwagi".
             </p>
           </DialogHeader>
 

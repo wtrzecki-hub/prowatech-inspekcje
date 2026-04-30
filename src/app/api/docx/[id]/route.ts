@@ -1512,7 +1512,7 @@ export async function GET(
           tableHeader: true,
           children: [
             headerCell('ELEMENT / MATERIAŁ', colsAN[0]),
-            headerCell('OPIS STANU TECHNICZNEGO', colsAN[1]),
+            headerCell('OPIS I USTALENIA Z KONTROLI', colsAN[1]),
             headerCell('OCENA', colsAN[2]),
             headerCell('ZALECENIA / UWAGI', colsAN[3]),
             headerCell('NR FOT.', colsAN[4]),

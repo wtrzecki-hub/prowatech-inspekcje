@@ -1155,7 +1155,7 @@ export async function GET(
         head: [
           [
             'Element',
-            'Opis stanu technicznego',
+            'Opis i ustalenia z kontroli',
             'Ocena',
             'Zalecenia',
             'Nr fot.',

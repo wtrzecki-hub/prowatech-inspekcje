@@ -1532,11 +1532,11 @@ export function TurbineInspectionForm({
                                   }}
                                   className="flex items-center gap-1.5 text-xs text-primary-700 hover:text-primary-800 font-medium"
                                 >
-                                  <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (uwagi)
+                                  <BookOpen className="h-3.5 w-3.5" /> Wybierz z biblioteki (opis)
                                 </button>
                               )}
                               <Textarea
-                                placeholder="Opis stanu / uwagi..."
+                                placeholder="Opis i ustalenia z kontroli..."
                                 value={el.notes}
                                 onChange={(e) =>
                                   updateElement(el.definitionId, { notes: e.target.value })
