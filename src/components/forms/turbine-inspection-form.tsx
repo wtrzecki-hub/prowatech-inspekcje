@@ -86,6 +86,8 @@ interface ElementCheck {
   elementNumber: number
   sectionCode: string
   namePl: string
+  appliesToAnnual: boolean
+  appliesToFiveYear: boolean
   rating: ConditionRating
   wearPercentage: number | null
   notes: string
@@ -144,6 +146,8 @@ export interface ElementDefinition {
   section_code: string
   name_pl: string
   name_short: string
+  applies_to_annual: boolean
+  applies_to_five_year: boolean
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -309,6 +313,8 @@ export function TurbineInspectionForm({
       elementNumber: def.element_number,
       sectionCode: def.section_code,
       namePl: def.name_pl,
+      appliesToAnnual: def.applies_to_annual,
+      appliesToFiveYear: def.applies_to_five_year,
       rating: null,
       wearPercentage: null,
       notes: '',
@@ -317,6 +323,14 @@ export function TurbineInspectionForm({
       detailedDescription: '',
       elementPhotos: [],
     }))
+  )
+
+  // Filtr widocznosci elementow na podstawie typu inspekcji (PB art. 62 ust. 1)
+  // - roczna (pkt 1): elementy budowlane bez instalacji elektrycznej i piorunochronnej
+  // - 5-letnia (pkt 2): wszystkie elementy + pomiary elektryczne
+  // State zachowuje wszystkie elementy zeby user nie tracil danych przy zmianie typu.
+  const visibleElements = elements.filter((el) =>
+    inspectionType === 'five_year' ? el.appliesToFiveYear : el.appliesToAnnual
   )
 
   // ── Tab 3: Serwis ─────────────────────────────────────────────────
@@ -384,8 +398,9 @@ export function TurbineInspectionForm({
     t.location_address?.toLowerCase().includes(turbineSearch.toLowerCase())
   )
   const selectedTurbine = turbines.find((t) => t.id === selectedTurbineId)
-  const completedCount  = elements.filter((e) => e.rating !== null).length
-  const issueCount      = elements.filter(
+  // Liczniki opieraja sie tylko na elementach widocznych dla biezacego typu inspekcji
+  const completedCount  = visibleElements.filter((e) => e.rating !== null).length
+  const issueCount      = visibleElements.filter(
     (e) => isProblematicRating(e.rating ?? undefined)
   ).length
 
@@ -554,8 +569,8 @@ export function TurbineInspectionForm({
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
 
-      // Calculate worst rating
-      const rated = elements.filter((e) => e.rating !== null)
+      // Calculate worst rating - tylko z elementow widocznych dla typu inspekcji
+      const rated = visibleElements.filter((e) => e.rating !== null)
       // Kolejność od najgorszej do najlepszej; legacy wartości na końcu (najpierw PIIB).
       const ratingOrder: ConditionRating[] = [
         'awaryjny',
@@ -602,8 +617,8 @@ export function TurbineInspectionForm({
       if (inspError) throw inspError
       const inspectionId = inspection.id
 
-      // 2. Inspection elements
-      const elementRows = elements
+      // 2. Inspection elements - tylko widoczne dla typu inspekcji + ocenione
+      const elementRows = visibleElements
         .filter((el) => el.rating !== null)
         .map((el) => ({
           inspection_id: inspectionId,
@@ -728,7 +743,7 @@ export function TurbineInspectionForm({
             <span className="hidden sm:inline ml-1.5">Ocena</span>
             {completedCount > 0 && (
               <Badge variant="secondary" className="ml-1 text-xs hidden sm:flex">
-                {completedCount}/{elements.length}
+                {completedCount}/{visibleElements.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -1239,7 +1254,7 @@ export function TurbineInspectionForm({
           <div className="flex gap-3 mb-4 flex-wrap">
             <Badge variant="outline" className="h-10 px-4 text-sm gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              {completedCount}/{elements.length} oceniono
+              {completedCount}/{visibleElements.length} oceniono
             </Badge>
             {issueCount > 0 && (
               <Badge className="h-10 px-4 text-sm gap-2 bg-danger-100 text-danger-800 border-danger-100">
@@ -1257,7 +1272,7 @@ export function TurbineInspectionForm({
             <div className="space-y-3 pb-4">
               {(() => {
                 let lastSection = ''
-                return elements.map((el) => {
+                return visibleElements.map((el) => {
                   const showSection = el.sectionCode !== lastSection
                   lastSection = el.sectionCode
                   const SectionIcon = SECTION_ICONS[el.sectionCode] ?? Building2

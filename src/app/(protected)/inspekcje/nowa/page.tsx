@@ -47,7 +47,7 @@ function NewInspectionContent() {
         .order('turbine_code'),
       supabase
         .from('inspection_element_definitions')
-        .select('id, element_number, section_code, name_pl, name_short')
+        .select('id, element_number, section_code, name_pl, name_short, applies_to_annual, applies_to_five_year')
         .eq('is_active', true)
         .order('sort_order'),
       supabase.auth.getSession(),
