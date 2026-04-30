@@ -3,8 +3,10 @@
 import { useRef, useState } from 'react'
 import {
   Camera,
+  Check,
   ChevronDown,
   ChevronUp,
+  ClipboardCopy,
   FolderOpen,
   Loader2,
   Trash2,
@@ -116,6 +118,11 @@ interface ElementCardProps {
    * przeładować listę zdjęć (pojedyncze SELECT z DB).
    */
   onPhotosChanged?: () => void
+  /**
+   * Kopiuje zalecenie z tego elementu do pola "Wnioski" (overall_assessment)
+   * w widoku inspekcji. Parent appenduje tekst z prefixem `[Element N — Nazwa]:`.
+   */
+  onCopyToConclusions?: (text: string) => void
 }
 
 export function ElementCard({
@@ -126,10 +133,12 @@ export function ElementCard({
   maxPhotoNumber = 0,
   onUpdate,
   onPhotosChanged,
+  onCopyToConclusions,
 }: ElementCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isScopeExpanded, setIsScopeExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Upload state
@@ -496,9 +505,40 @@ export function ElementCard({
 
               {/* Zalecenia */}
               <div className="space-y-2">
-                <Label htmlFor={`recommendations-${element.id}`} className="font-medium">
-                  Zalecenia / uwagi
-                </Label>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <Label htmlFor={`recommendations-${element.id}`} className="font-medium">
+                    Zalecenia / uwagi
+                  </Label>
+                  {onCopyToConclusions && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const text = (element.recommendations || '').trim()
+                        if (!text) return
+                        const prefix = `[Element ${element.element_number} — ${element.definition.name_pl}]`
+                        onCopyToConclusions(`${prefix}: ${text}`)
+                        setCopyFeedback(true)
+                        setTimeout(() => setCopyFeedback(false), 1800)
+                      }}
+                      disabled={!(element.recommendations || '').trim() || isLoading}
+                      className="h-7 px-2 text-xs gap-1.5"
+                    >
+                      {copyFeedback ? (
+                        <>
+                          <Check size={12} className="text-success-700" />
+                          Skopiowano
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardCopy size={12} />
+                          Kopiuj do Wniosków
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
                 <Textarea
                   id={`recommendations-${element.id}`}
                   placeholder="Zalecenia dotyczące naprawy lub konserwacji..."

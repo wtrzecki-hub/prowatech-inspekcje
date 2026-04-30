@@ -492,6 +492,15 @@ export default function InspectionDetailPage() {
     }, 500)
   }
 
+  // Appenduje tekst zalecenia (juz z prefixem `[Element N — Nazwa]: ...`) do
+  // pola "Ocena ogólna stanu technicznego" w tabie Wnioski. Wywolywane przez
+  // przycisk "Kopiuj do Wnioskow" w ElementCard (Artur pkt 3c).
+  const handleCopyRecommendationToConclusions = (text: string) => {
+    const current = (inspection?.overall_assessment || '').trimEnd()
+    const next = current ? `${current}\n\n${text}` : text
+    handleInspectionChange('overall_assessment', next)
+  }
+
   const filteredElements = showOnlyNotes
     ? elements.filter((el) => el.notes && el.notes.trim())
     : elements
@@ -712,6 +721,7 @@ export default function InspectionDetailPage() {
                   maxPhotoNumber={maxPhotoNumber}
                   onUpdate={(data) => handleElementUpdate(element.id, data)}
                   onPhotosChanged={() => void refreshPhotos()}
+                  onCopyToConclusions={handleCopyRecommendationToConclusions}
                 />
               ))
             })()}
