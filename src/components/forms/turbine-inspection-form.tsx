@@ -2134,7 +2134,11 @@ export function TurbineInspectionForm({
                           const el = elements.find((e) => e.definitionId === elementLibTarget.definitionId)
                           if (!el) return
                           const field = elementLibTarget.field
-                          const text = field === 'notes' ? item.name_pl : item.recommendation_template || item.name_pl
+                          // Artur pkt 3b: zarowno dla notes jak i recommendations wklejamy pelny
+                          // name_pl (zawiera juz kod K/NB/NG w nawiasie). Wczesniej dla
+                          // recommendations szlo recommendation_template ktore to sam kod ("NB"),
+                          // przez co inspektor dostawal w polu tylko 2-literowy skrot.
+                          const text = item.name_pl
                           const prev = el[field]
                           updateElement(elementLibTarget.definitionId, {
                             [field]: prev ? `${prev}\n${text}` : text,
