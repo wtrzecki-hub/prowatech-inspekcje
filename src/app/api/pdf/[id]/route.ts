@@ -350,6 +350,31 @@ export async function GET(
       .select('*')
       .eq('inspection_id', inspectionId)
 
+    const { data: measurementDevicesRaw } = await supabase
+      .from('inspection_measurement_devices')
+      .select(
+        'measurement_devices ( model, serial_number, manufacturer )'
+      )
+      .eq('inspection_id', inspectionId)
+    const measurementDevices: {
+      model: string
+      serial_number: string
+      manufacturer: string | null
+    }[] = (measurementDevicesRaw || [])
+      .map((row: { measurement_devices: unknown }) => {
+        const dev = Array.isArray(row.measurement_devices)
+          ? row.measurement_devices[0]
+          : row.measurement_devices
+        return dev as
+          | { model: string; serial_number: string; manufacturer: string | null }
+          | null
+      })
+      .filter((d): d is {
+        model: string
+        serial_number: string
+        manufacturer: string | null
+      } => !!d)
+
     const { data: serviceInfoData } = await supabase
       .from('service_info')
       .select('*')
@@ -1386,6 +1411,20 @@ export async function GET(
       if (insp.electrical_measurement_protocol_url) {
         addBody(
           'Pełny protokół pomiarów stanowi załącznik do niniejszej kontroli (PDF).'
+        )
+      }
+
+      // Identyfikacja użytych przyrządów (Artur uwagi pkt 6).
+      if (measurementDevices.length > 0) {
+        addSubHeading('Identyfikacja użytych przyrządów')
+        addAutoTable(
+          ['Model', 'Numer seryjny', 'Producent'],
+          measurementDevices.map((d) => [
+            d.model,
+            d.serial_number,
+            d.manufacturer || '—',
+          ]),
+          [70, 50, 60]
         )
       }
 

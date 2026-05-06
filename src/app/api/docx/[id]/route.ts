@@ -611,6 +611,31 @@ export async function GET(
       .select('*')
       .eq('inspection_id', inspectionId)
 
+    const { data: measurementDevicesRaw } = await supabase
+      .from('inspection_measurement_devices')
+      .select(
+        'measurement_devices ( model, serial_number, manufacturer )'
+      )
+      .eq('inspection_id', inspectionId)
+    const measurementDevices: {
+      model: string
+      serial_number: string
+      manufacturer: string | null
+    }[] = (measurementDevicesRaw || [])
+      .map((row: { measurement_devices: unknown }) => {
+        const dev = Array.isArray(row.measurement_devices)
+          ? row.measurement_devices[0]
+          : row.measurement_devices
+        return dev as
+          | { model: string; serial_number: string; manufacturer: string | null }
+          | null
+      })
+      .filter((d): d is {
+        model: string
+        serial_number: string
+        manufacturer: string | null
+      } => !!d)
+
     const { data: serviceInfoData } = await supabase
       .from('service_info')
       .select('*')
@@ -1838,6 +1863,39 @@ export async function GET(
             )
           )
         }
+      }
+
+      // Identyfikacja użytych przyrządów (Artur uwagi pkt 6).
+      if (measurementDevices.length > 0) {
+        electricalSection.push(subHeading('Identyfikacja użytych przyrządów'))
+        const deviceCols = [4500, 2500, 2400]
+        const deviceRows: TableRow[] = [
+          new TableRow({
+            tableHeader: true,
+            children: [
+              headerCell('Model', deviceCols[0]),
+              headerCell('Numer seryjny', deviceCols[1]),
+              headerCell('Producent', deviceCols[2]),
+            ],
+          }),
+        ]
+        for (const d of measurementDevices) {
+          deviceRows.push(
+            new TableRow({
+              children: [
+                dataCell(d.model, deviceCols[0]),
+                dataCell(d.serial_number, deviceCols[1]),
+                dataCell(d.manufacturer || '—', deviceCols[2]),
+              ],
+            })
+          )
+        }
+        electricalSection.push(
+          new Table({
+            width: { size: USABLE_WIDTH, type: WidthType.DXA },
+            rows: deviceRows,
+          })
+        )
       }
 
       const measurements = electricalMeasurements || []

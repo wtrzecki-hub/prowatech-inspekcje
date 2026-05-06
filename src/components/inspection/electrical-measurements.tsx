@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -82,6 +83,13 @@ const VERDICT_OPTIONS: { value: NonNullable<MeasurementSummary['electrical_measu
   { value: 'nie_dopuszcza', label: 'Nie dopuszcza do dalszej eksploatacji' },
 ]
 
+interface MeasurementDevice {
+  id: string
+  model: string
+  serial_number: string
+  manufacturer: string | null
+}
+
 interface ElectricalMeasurementsProps {
   inspectionId: string
 }
@@ -103,6 +111,12 @@ export function ElectricalMeasurements({
   const summaryDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const pdfInputRef = useRef<HTMLInputElement | null>(null)
 
+  // Sprzęt użyty do pomiarów (Artur uwagi pkt 6) — multi-select z bazy.
+  const [allDevices, setAllDevices] = useState<MeasurementDevice[]>([])
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<Set<string>>(
+    new Set()
+  )
+
   // Legacy: punkty pomiarowe (tabela `electrical_measurements`). Schowane pod
   // expanderem — zostawione dla starych draftów + edge-case ręcznego wpisu.
   const [measurements, setMeasurements] = useState<ElectricalMeasurement[]>([])
@@ -123,27 +137,41 @@ export function ElectricalMeasurements({
   const loadAll = async () => {
     try {
       const sb = supabase()
-      const [{ data: insp, error: inspErr }, { data: pts, error: ptsErr }] =
-        await Promise.all([
-          sb
-            .from('inspections')
-            .select(
-              `electrical_measurement_date, electrical_next_measurement_date,
-               electrical_measurement_protocol_number,
-               electrical_measurement_verdict,
-               electrical_measurement_verdict_notes,
-               electrical_measurement_final_assessment,
-               electrical_measurement_notes,
-               electrical_measurement_protocol_url`
-            )
-            .eq('id', inspectionId)
-            .single(),
-          sb
-            .from('electrical_measurements')
-            .select('*')
-            .eq('inspection_id', inspectionId)
-            .order('created_at', { ascending: true }),
-        ])
+      const [
+        { data: insp, error: inspErr },
+        { data: pts, error: ptsErr },
+        { data: devices, error: devErr },
+        { data: linkedDevices, error: linkErr },
+      ] = await Promise.all([
+        sb
+          .from('inspections')
+          .select(
+            `electrical_measurement_date, electrical_next_measurement_date,
+             electrical_measurement_protocol_number,
+             electrical_measurement_verdict,
+             electrical_measurement_verdict_notes,
+             electrical_measurement_final_assessment,
+             electrical_measurement_notes,
+             electrical_measurement_protocol_url`
+          )
+          .eq('id', inspectionId)
+          .single(),
+        sb
+          .from('electrical_measurements')
+          .select('*')
+          .eq('inspection_id', inspectionId)
+          .order('created_at', { ascending: true }),
+        sb
+          .from('measurement_devices')
+          .select('id, model, serial_number, manufacturer')
+          .eq('is_active', true)
+          .eq('is_deleted', false)
+          .order('model', { ascending: true }),
+        sb
+          .from('inspection_measurement_devices')
+          .select('device_id')
+          .eq('inspection_id', inspectionId),
+      ])
 
       if (inspErr) console.error('Błąd ładowania podsumowania pomiarów:', inspErr)
       if (insp) setSummary({ ...EMPTY_SUMMARY, ...insp })
@@ -157,10 +185,58 @@ export function ElectricalMeasurements({
           instrument_info: pts[0].instrument_info || '',
         })
       }
+
+      if (devErr) console.error('Błąd ładowania sprzętu pomiarowego:', devErr)
+      if (devices) setAllDevices(devices as MeasurementDevice[])
+
+      if (linkErr) console.error('Błąd ładowania powiązanego sprzętu:', linkErr)
+      if (linkedDevices) {
+        setSelectedDeviceIds(
+          new Set(linkedDevices.map((r) => r.device_id as string))
+        )
+      }
     } catch (err) {
       console.error('Błąd ładowania pomiarów elektrycznych:', err)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const toggleDevice = async (deviceId: string) => {
+    const sb = supabase()
+    const isSelected = selectedDeviceIds.has(deviceId)
+
+    // Optimistic UI update
+    setSelectedDeviceIds((prev) => {
+      const next = new Set(prev)
+      if (isSelected) next.delete(deviceId)
+      else next.add(deviceId)
+      return next
+    })
+
+    try {
+      if (isSelected) {
+        const { error } = await sb
+          .from('inspection_measurement_devices')
+          .delete()
+          .eq('inspection_id', inspectionId)
+          .eq('device_id', deviceId)
+        if (error) throw error
+      } else {
+        const { error } = await sb
+          .from('inspection_measurement_devices')
+          .insert({ inspection_id: inspectionId, device_id: deviceId })
+        if (error) throw error
+      }
+    } catch (err) {
+      console.error('Błąd zapisu powiązania sprzętu:', err)
+      // Revert on error
+      setSelectedDeviceIds((prev) => {
+        const next = new Set(prev)
+        if (isSelected) next.add(deviceId)
+        else next.delete(deviceId)
+        return next
+      })
     }
   }
 
@@ -487,6 +563,54 @@ export function ElectricalMeasurements({
               placeholder="Dodatkowe uwagi inspektora dotyczące oględzin instalacji elektrycznej…"
               rows={3}
             />
+          </div>
+
+          {/* ── Sprzęt użyty do pomiarów (Artur uwagi pkt 6) ── */}
+          <div className="space-y-2 pt-2 border-t border-graphite-100">
+            <Label className="font-medium">
+              Sprzęt użyty do pomiarów
+            </Label>
+            {allDevices.length === 0 ? (
+              <p className="text-xs text-graphite-500">
+                Brak sprzętu w bazie. Skontaktuj się z administratorem żeby dodać urządzenie.
+              </p>
+            ) : (
+              <div className="space-y-1 rounded-lg border border-graphite-200 bg-graphite-50/50 p-3">
+                {allDevices.map((d) => {
+                  const checked = selectedDeviceIds.has(d.id)
+                  return (
+                    <label
+                      key={d.id}
+                      className="flex items-start gap-3 px-2 py-1.5 rounded hover:bg-white cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => void toggleDevice(d.id)}
+                        className="mt-0.5"
+                      />
+                      <div className="text-sm leading-tight">
+                        <span className="font-medium text-graphite-900">{d.model}</span>
+                        <span className="text-graphite-500 font-mono ml-2">
+                          s/n: {d.serial_number}
+                        </span>
+                        {d.manufacturer && (
+                          <span className="block text-xs text-graphite-500">
+                            {d.manufacturer}
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+            {selectedDeviceIds.size > 0 && (
+              <p className="text-xs text-graphite-500">
+                Wybrano: {selectedDeviceIds.size}{' '}
+                {selectedDeviceIds.size === 1 ? 'urządzenie' : 'urządzeń'}.
+                Zostanie wypisane w sekcji „Identyfikacja użytych przyrządów" protokołu.
+              </p>
+            )}
           </div>
 
           {/* ── Załącznik: protokół Sonel PDF ── */}
