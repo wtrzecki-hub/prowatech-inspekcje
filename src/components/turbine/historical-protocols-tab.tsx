@@ -189,14 +189,16 @@ export default function HistoricalProtocolsTab({
     // Pozostałe pola wypełniamy z parsera tylko jeśli są puste.
     setForm((prev) => {
       if (prev.mode === 'create') {
+        // Zachowujemy ręcznie wybrany typ/rok jeśli user już je ustawił
+        // przed wgraniem pliku. Parser uzupełnia tylko puste pola.
         return {
           ...prev,
           file,
-          year: parsed.year ? String(parsed.year) : '',
-          inspectionType: parsed.inspectionType ?? 'annual',
-          protocolNumber: parsed.protocolNumber ?? '',
-          inspectionDate: parsed.inspectionDate ?? '',
-          notes: parsed.location ? `Z nazwy: ${parsed.location}` : '',
+          year: prev.year || (parsed.year ? String(parsed.year) : ''),
+          inspectionType: prev.inspectionType || parsed.inspectionType || 'annual',
+          protocolNumber: prev.protocolNumber.trim() || parsed.protocolNumber || '',
+          inspectionDate: prev.inspectionDate || parsed.inspectionDate || '',
+          notes: prev.notes.trim() || (parsed.location ? `Z nazwy: ${parsed.location}` : ''),
           parsed,
         }
       }
@@ -567,6 +569,48 @@ export default function HistoricalProtocolsTab({
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Year + Type — zawsze widoczne, żeby user wybrał typ przed
+                wgraniem pliku (PDF z Sonela parser nie rozpozna, więc bez
+                widocznego toggle ZAWSZE w trybie create wpis trafiał do
+                'Roczna' niezauważenie). */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="year" className="text-xs">
+                  Rok kontroli *
+                </Label>
+                <Input
+                  id="year"
+                  type="number"
+                  min={2010}
+                  max={2050}
+                  value={form.year}
+                  onChange={(e) => setForm({ ...form, year: e.target.value })}
+                  className="font-mono"
+                  disabled={uploading || form.mode !== 'create'}
+                  placeholder="np. 2025"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Typ protokołu *</Label>
+                <div className="grid grid-cols-3 gap-2 mt-1.5">
+                  {(['annual', 'five_year', 'electrical_measurement'] as InspectionType[]).map(
+                    (t) => (
+                      <Button
+                        key={t}
+                        type="button"
+                        variant={form.inspectionType === t ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setForm({ ...form, inspectionType: t })}
+                        disabled={uploading || form.mode !== 'create'}
+                      >
+                        {INSPECTION_TYPE_LABEL[t]}
+                      </Button>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Drag-drop area */}
             {!form.file ? (
               <div
@@ -611,7 +655,15 @@ export default function HistoricalProtocolsTab({
                   size="icon"
                   onClick={() => {
                     if (fileInputRef.current) fileInputRef.current.value = ''
-                    setForm({ ...EMPTY_UPLOAD_FORM })
+                    // Zachowujemy wybrany typ/rok — user mógł je ustawić świadomie
+                    setForm((prev) => ({
+                      ...prev,
+                      file: null,
+                      protocolNumber: '',
+                      inspectionDate: '',
+                      notes: '',
+                      parsed: null,
+                    }))
                   }}
                   disabled={uploading}
                 >
@@ -626,52 +678,15 @@ export default function HistoricalProtocolsTab({
                 {form.parsed && form.parsed.protocolNumber && (
                   <div className="text-xs text-success-800 bg-success-50 border border-success-100 rounded-lg px-3 py-2">
                     Auto-uzupełniono z nazwy pliku: numer{' '}
-                    <span className="font-mono">{form.parsed.protocolNumber}</span>, rok{' '}
-                    <span className="font-mono">{form.parsed.year}</span>, typ{' '}
-                    <span className="font-mono">
-                      {form.parsed.inspectionType === 'annual' ? 'roczna' : '5-letnia'}
-                    </span>
+                    <span className="font-mono">{form.parsed.protocolNumber}</span>
+                    {form.parsed.year && (
+                      <>
+                        , rok <span className="font-mono">{form.parsed.year}</span>
+                      </>
+                    )}
                     .
                   </div>
                 )}
-
-                {/* Year + Type */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="year" className="text-xs">
-                      Rok kontroli *
-                    </Label>
-                    <Input
-                      id="year"
-                      type="number"
-                      min={2010}
-                      max={2050}
-                      value={form.year}
-                      onChange={(e) => setForm({ ...form, year: e.target.value })}
-                      className="font-mono"
-                      disabled={uploading || form.mode !== 'create'}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Typ protokołu *</Label>
-                    <div className="grid grid-cols-3 gap-2 mt-1.5">
-                      {(['annual', 'five_year', 'electrical_measurement'] as InspectionType[]).map(
-                        (t) => (
-                          <Button
-                            key={t}
-                            type="button"
-                            variant={form.inspectionType === t ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setForm({ ...form, inspectionType: t })}
-                            disabled={uploading || form.mode !== 'create'}
-                          >
-                            {INSPECTION_TYPE_LABEL[t]}
-                          </Button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                </div>
 
                 {/* Numer + Data */}
                 <div className="grid grid-cols-2 gap-3">
