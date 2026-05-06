@@ -170,7 +170,16 @@ function buildDefaultObjectRegistryNumber(t: TurbineForDefaults): string | null 
 function buildDefaultObjectName(t: TurbineForDefaults): string | null {
   const manuf = trim(t.manufacturer)
   const model = trim(t.model)
-  const suffix = [manuf, model].filter(Boolean).join(' ')
+  // Czasem `model` zaczyna się od nazwy producenta (np. „GE 2.5xl" przy
+  // manufacturer „GE") — bez tego sklejka dawałaby „GE GE 2.5xl". Pomijamy
+  // producenta jeśli model już zaczyna się od jego nazwy (case-insensitive,
+  // tylko jako pełny token, żeby „Vestas V52" + „Vestas" działało, ale
+  // „Enercon E66" + „En" nie strigerowało).
+  const modelStartsWithManuf =
+    manuf && model && new RegExp(`^${manuf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(model)
+  const suffix = modelStartsWithManuf
+    ? model
+    : [manuf, model].filter(Boolean).join(' ')
   return suffix
     ? `Elektrownia wiatrowa — turbina wiatrowa ${suffix}`
     : 'Elektrownia wiatrowa — turbina wiatrowa'
