@@ -268,7 +268,9 @@ async function loadDocumentsAutoFill(
 }> {
   const out: Record<string, string> = {}
 
-  // Poprzednia roczna i 5-letnia inspekcja tej turbiny.
+  // Poprzednia roczna i 5-letnia inspekcja tej turbiny — najpierw nowe
+  // inspekcje (status completed/signed), potem fallback do tabeli
+  // `historical_protocols` z archiwum (zwykle pokrywa przed wdrożeniem appki).
   const { data: prevs } = await sb
     .from('inspections')
     .select('id, inspection_date, inspection_type, protocol_number, status')
@@ -285,8 +287,51 @@ async function loadDocumentsAutoFill(
     protocol_number: string | null
   }
   const prevList = (prevs || []) as PrevRow[]
-  const prevAnnual = prevList.find((p) => p.inspection_type === 'annual')
-  const prevFiveYear = prevList.find((p) => p.inspection_type === 'five_year')
+  let prevAnnual = prevList.find((p) => p.inspection_type === 'annual')
+  let prevFiveYear = prevList.find((p) => p.inspection_type === 'five_year')
+
+  // Fallback do archiwum: jeśli któreś (annual / five_year) nie znaleziono
+  // w nowych inspekcjach, dociągamy z `historical_protocols`.
+  const needHistoricalAnnual = !prevAnnual
+  const needHistoricalFiveYear = !prevFiveYear
+  if (needHistoricalAnnual || needHistoricalFiveYear) {
+    const { data: histRows } = await sb
+      .from('historical_protocols')
+      .select('id, inspection_date, inspection_type, protocol_number, year')
+      .eq('turbine_id', turbineId)
+      .order('inspection_date', { ascending: false, nullsFirst: false })
+      .order('year', { ascending: false })
+
+    type HistRow = {
+      id: string
+      inspection_date: string | null
+      inspection_type: string | null
+      protocol_number: string | null
+    }
+    const histList = (histRows || []) as HistRow[]
+    if (needHistoricalAnnual) {
+      const h = histList.find((r) => r.inspection_type === 'annual')
+      if (h) {
+        prevAnnual = {
+          id: h.id,
+          inspection_date: h.inspection_date,
+          inspection_type: 'annual',
+          protocol_number: h.protocol_number,
+        }
+      }
+    }
+    if (needHistoricalFiveYear) {
+      const h = histList.find((r) => r.inspection_type === 'five_year')
+      if (h) {
+        prevFiveYear = {
+          id: h.id,
+          inspection_date: h.inspection_date,
+          inspection_type: 'five_year',
+          protocol_number: h.protocol_number,
+        }
+      }
+    }
+  }
 
   if (prevAnnual) {
     const parts: string[] = ['Okazano']
