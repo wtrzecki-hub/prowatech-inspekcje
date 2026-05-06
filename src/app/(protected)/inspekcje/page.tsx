@@ -42,6 +42,9 @@ interface Inspection {
   overall_condition_rating: 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny' | null
   turbines: {
     turbine_code: string
+    /** Oznaczenie EW nadane przez zarządcę (np. „EW Bieganowo"). Preferowane
+     *  do wyświetlania zamiast technicznego turbine_code. */
+    ew_designation: string | null
     wind_farms: {
       name: string
       clients: {
@@ -132,7 +135,7 @@ export default function InspectionsPage() {
         inspection_type,
         status,
         overall_condition_rating,
-        turbines(turbine_code, wind_farms(name, clients(name)))
+        turbines(turbine_code, ew_designation, wind_farms(name, clients(name)))
       `,
         { count: 'exact' }
       )
@@ -165,6 +168,7 @@ export default function InspectionsPage() {
         filtered = filtered.filter(i =>
           i.protocol_number?.toLowerCase().includes(s) ||
           i.turbines?.turbine_code?.toLowerCase().includes(s) ||
+          i.turbines?.ew_designation?.toLowerCase().includes(s) ||
           i.turbines?.wind_farms?.name?.toLowerCase().includes(s) ||
           i.turbines?.wind_farms?.clients?.name?.toLowerCase().includes(s)
         )
@@ -319,7 +323,7 @@ export default function InspectionsPage() {
                     </TableCell>
                     <TableCell className="text-[13px]">
                       <span className="font-mono font-medium text-graphite-800">
-                        {inspection.turbines?.turbine_code || '-'}
+                        {inspection.turbines?.ew_designation || inspection.turbines?.turbine_code || '-'}
                       </span>
                     </TableCell>
                     <TableCell className="text-graphite-500 text-[13px]">{inspection.turbines?.wind_farms?.name || '-'}</TableCell>
@@ -392,7 +396,7 @@ export default function InspectionsPage() {
                         </div>
                         <div>
                           <p className="text-xs text-graphite-500">Turbina</p>
-                          <p className="font-mono font-medium text-graphite-800">{inspection.turbines?.turbine_code || '-'}</p>
+                          <p className="font-mono font-medium text-graphite-800">{inspection.turbines?.ew_designation || inspection.turbines?.turbine_code || '-'}</p>
                         </div>
                       </div>
 

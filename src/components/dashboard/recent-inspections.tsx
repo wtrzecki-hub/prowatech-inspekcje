@@ -25,6 +25,8 @@ interface Inspection {
   status: string;
   turbines: {
     turbine_code: string;
+    /** Oznaczenie EW nadane przez zarządcę — preferowane do wyświetlania. */
+    ew_designation: string | null;
     wind_farms: {
       name: string;
       clients: {
@@ -51,7 +53,7 @@ export function RecentInspections() {
             protocol_number,
             inspection_date,
             status,
-            turbines(turbine_code, wind_farms(name, clients(name)))
+            turbines(turbine_code, ew_designation, wind_farms(name, clients(name)))
           `
           )
           .not("is_deleted", "is", true)
@@ -60,7 +62,7 @@ export function RecentInspections() {
 
         if (error) throw error;
 
-        setInspections(data || []);
+        setInspections((data || []) as unknown as Inspection[]);
       } catch (error) {
         console.error("Error fetching inspections:", error);
       } finally {
@@ -162,7 +164,7 @@ export function RecentInspections() {
                     </TableCell>
                     <TableCell className="text-[13px]">
                       <span className="font-mono font-medium text-graphite-800">
-                        {inspection.turbines?.turbine_code || "-"}
+                        {inspection.turbines?.ew_designation || inspection.turbines?.turbine_code || "-"}
                       </span>
                       {inspection.turbines?.wind_farms?.name && (
                         <span className="text-graphite-500 ml-1">
