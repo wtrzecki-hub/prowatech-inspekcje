@@ -26,7 +26,12 @@ import {
   Building2, Shield, Zap, HardHat, Navigation2, BookOpen, Search,
   Sparkles, X,
 } from 'lucide-react'
-import { CONDITION_BULK_OPTIONS } from '@/components/inspection/bulk-status-bar'
+import {
+  CONDITION_BULK_OPTIONS,
+  USAGE_BULK_OPTIONS,
+} from '@/components/inspection/bulk-status-bar'
+import { USAGE_SUITABILITY } from '@/lib/constants'
+import { uploadInspectionPhoto } from '@/lib/storage/upload-inspection-photo'
 import {
   Dialog,
   DialogContent,
@@ -84,6 +89,8 @@ interface ElementCheck {
   appliesToAnnual: boolean
   appliesToFiveYear: boolean
   rating: ConditionRating
+  /** Przydatność do użytkowania — pole 5-letnie (PIIB sekcja III). */
+  usageSuitability: 'spelnia' | 'nie_spelnia' | null
   wearPercentage: number | null
   notes: string
   recommendations: string
@@ -310,6 +317,7 @@ export function TurbineInspectionForm({
       appliesToAnnual: def.applies_to_annual,
       appliesToFiveYear: def.applies_to_five_year,
       rating: null,
+      usageSuitability: null,
       wearPercentage: null,
       notes: '',
       recommendations: '',
@@ -616,13 +624,25 @@ export function TurbineInspectionForm({
       if (inspError) throw inspError
       const inspectionId = inspection.id
 
-      // 2. Inspection elements - tylko widoczne dla typu inspekcji + ocenione
+      // 2. Inspection elements — wszystkie widoczne pozycje (nawet bez oceny),
+      //    żeby zdjęcia per element miały do czego się przyczepić (FK do
+      //    `inspection_elements.id`). Pomijamy tylko te całkiem puste.
+      const isFiveYear = inspectionType === 'five_year'
       const elementRows = visibleElements
-        .filter((el) => el.rating !== null)
+        .filter((el) =>
+          el.rating !== null ||
+          (isFiveYear && el.usageSuitability !== null) ||
+          el.notes.trim() !== '' ||
+          el.recommendations.trim() !== '' ||
+          el.detailedDescription.trim() !== '' ||
+          el.photoNumbers.trim() !== '' ||
+          el.elementPhotos.length > 0,
+        )
         .map((el) => ({
           inspection_id: inspectionId,
           element_definition_id: el.definitionId,
           condition_rating: el.rating,
+          usage_suitability: isFiveYear ? el.usageSuitability : null,
           wear_percentage: el.wearPercentage,
           notes: el.notes || null,
           recommendations: el.recommendations || null,
@@ -630,9 +650,17 @@ export function TurbineInspectionForm({
           detailed_description: el.detailedDescription || null,
         }))
 
+      // Mapowanie definitionId → element_id po insercie, do uploadu zdjęć z FK.
+      const elementIdByDef: Record<string, string> = {}
       if (elementRows.length > 0) {
-        const { error } = await supabase.from('inspection_elements').upsert(elementRows, { onConflict: 'inspection_id,element_definition_id' })
+        const { data: insertedRows, error } = await supabase
+          .from('inspection_elements')
+          .upsert(elementRows, { onConflict: 'inspection_id,element_definition_id' })
+          .select('id, element_definition_id')
         if (error) throw error
+        for (const row of insertedRows ?? []) {
+          elementIdByDef[row.element_definition_id as string] = row.id as string
+        }
       }
 
       // 3. Service info
@@ -681,7 +709,8 @@ export function TurbineInspectionForm({
         if (error) throw error
       }
 
-      // 6. Photos upload
+      // 6a. Globalne zdjęcia inspekcji (sekcja „Zdjęcia"). Storage: Supabase
+      //     bucket `turbine-photos` (legacy ścieżka — zachowane dla kompatybilności).
       for (let i = 0; i < photos.length; i++) {
         const { file, description } = photos[i]
         const ext = file.name.split('.').pop() || 'jpeg'
@@ -700,6 +729,32 @@ export function TurbineInspectionForm({
             file_url: urlData.publicUrl,
             created_by: session?.user.id,
           })
+        }
+      }
+
+      // 6b. Zdjęcia per element (Artur uwagi 5L pkt 2 — wcześniej przepadały
+      //     przy zapisie nowej inspekcji). Storage: R2 via uploadInspectionPhoto.
+      let nextPhotoNumber = photos.length + 1
+      for (const el of visibleElements) {
+        if (el.elementPhotos.length === 0) continue
+        const elementId = elementIdByDef[el.definitionId]
+        if (!elementId) continue
+        for (const ep of el.elementPhotos) {
+          try {
+            await uploadInspectionPhoto({
+              file: ep.file,
+              inspectionId,
+              photoNumber: nextPhotoNumber,
+              elementId,
+              description: ep.description || null,
+            })
+            nextPhotoNumber += 1
+          } catch (err) {
+            console.error(
+              `[turbine-inspection-form] element photo upload failed (${el.namePl}):`,
+              err,
+            )
+          }
         }
       }
 
@@ -1344,6 +1399,80 @@ export function TurbineInspectionForm({
             </p>
           </div>
 
+          {/* Bulk-status bar dla przydatności do użytkowania — tylko 5-letnia. */}
+          {inspectionType === 'five_year' && (() => {
+            const usageRated = visibleElements.filter((el) => el.usageSuitability !== null).length
+            return (
+              <div className="rounded-xl border border-graphite-200 bg-white shadow-xs p-3 mb-4">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <Sparkles className="h-4 w-4 text-graphite-500 shrink-0" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-graphite-700">
+                    Ustaw przydatność do użytkowania dla wszystkich
+                  </span>
+                  <span className="ml-auto text-xs text-graphite-500 tabular-nums">
+                    {usageRated}/{visibleElements.length} ocenionych
+                  </span>
+                </div>
+                <div
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: `repeat(auto-fit, minmax(140px, 1fr))` }}
+                >
+                  {USAGE_BULK_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        if (
+                          usageRated > 0 &&
+                          !window.confirm(
+                            `Ustawić "${opt.label}" dla wszystkich ${visibleElements.length} elementów? Spowoduje to nadpisanie ${usageRated} ocenionych.`,
+                          )
+                        ) {
+                          return
+                        }
+                        setElements((prev) =>
+                          prev.map((el) =>
+                            el.appliesToFiveYear
+                              ? { ...el, usageSuitability: opt.value as 'spelnia' | 'nie_spelnia' }
+                              : el,
+                          ),
+                        )
+                      }}
+                      className={`min-h-[52px] rounded-lg ${opt.bg} ${opt.hoverBg} ${opt.text} font-semibold text-sm border border-transparent transition active:scale-[0.98] px-3`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={usageRated === 0}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Wyczyścić przydatność dla ${usageRated} elementów? Tej operacji nie można cofnąć.`,
+                        )
+                      ) {
+                        return
+                      }
+                      setElements((prev) =>
+                        prev.map((el) =>
+                          el.appliesToFiveYear ? { ...el, usageSuitability: null } : el,
+                        ),
+                      )
+                    }}
+                    className="min-h-[52px] rounded-lg bg-graphite-100 hover:bg-graphite-200 text-graphite-700 font-semibold text-sm border border-transparent transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-1.5 px-3"
+                  >
+                    <X className="h-4 w-4" />
+                    Wyczyść
+                  </button>
+                </div>
+                <p className="text-[11px] text-graphite-500 mt-2 leading-snug">
+                  Pole 5-letnie wg art. 62 ust. 1 pkt 2 PB. Po kliknięciu możesz zmienić wartość poszczególnych elementów ręcznie.
+                </p>
+              </div>
+            )
+          })()}
+
           <ScrollArea>
             <div className="space-y-3 pb-4">
               {(() => {
@@ -1395,6 +1524,36 @@ export function TurbineInspectionForm({
                               </button>
                             ))}
                           </div>
+
+                          {/* Przydatność do użytkowania — pole 5-letnie (PIIB sekcja III). */}
+                          {inspectionType === 'five_year' && (
+                            <div className="space-y-1">
+                              <Label className="text-sm">Przydatność do użytkowania</Label>
+                              <Select
+                                value={el.usageSuitability || 'none'}
+                                onValueChange={(val) =>
+                                  updateElement(el.definitionId, {
+                                    usageSuitability:
+                                      val === 'none'
+                                        ? null
+                                        : (val as 'spelnia' | 'nie_spelnia'),
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-11">
+                                  <SelectValue placeholder="Wybierz przydatność" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">— nie określono —</SelectItem>
+                                  {USAGE_SUITABILITY.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
 
                           {/* Nr zdjęcia (PIIB: kolumna NR FOT. w tabeli ustaleń III).
                               Slider % zużycia usunięty 2026-04-25 (legacy, nieużywane w PIIB). */}
