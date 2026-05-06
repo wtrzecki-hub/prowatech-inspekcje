@@ -568,18 +568,44 @@ export default function InspectionDetailPage() {
             </h1>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Nr protokołu</p>
-                <p className="font-mono font-medium text-graphite-900 text-[13px]">
-                  {inspection.protocol_number || 'Brak'}
-                </p>
+                <Label
+                  htmlFor="header-protocol-number"
+                  className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400"
+                >
+                  Nr protokołu
+                </Label>
+                <Input
+                  id="header-protocol-number"
+                  value={inspection.protocol_number || ''}
+                  onChange={(e) =>
+                    handleInspectionChange(
+                      'protocol_number',
+                      e.target.value || null,
+                    )
+                  }
+                  placeholder="np. 003/P/2026"
+                  className="font-mono font-medium h-8 text-[13px] mt-1"
+                />
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Data kontroli</p>
-                <p className="font-mono font-medium text-graphite-900 text-[13px]">
-                  {format(new Date(inspection.inspection_date), 'dd.MM.yyyy', {
-                    locale: pl,
-                  })}
-                </p>
+                <Label
+                  htmlFor="header-inspection-date"
+                  className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400"
+                >
+                  Data kontroli
+                </Label>
+                <Input
+                  id="header-inspection-date"
+                  type="date"
+                  value={inspection.inspection_date?.slice(0, 10) || ''}
+                  onChange={(e) =>
+                    handleInspectionChange(
+                      'inspection_date',
+                      e.target.value || null,
+                    )
+                  }
+                  className="font-mono font-medium h-8 text-[13px] mt-1"
+                />
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Turbina</p>
