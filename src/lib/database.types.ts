@@ -4,7 +4,7 @@ export type Json =
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      basic_requirements_art5: {
+        Row: {
+          created_at: string | null
+          id: string
+          inspection_id: string
+          is_met: string | null
+          remarks: string | null
+          requirement_code: string
+          requirement_label: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          inspection_id: string
+          is_met?: string | null
+          remarks?: string | null
+          requirement_code: string
+          requirement_label: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          inspection_id?: string
+          is_met?: string | null
+          remarks?: string | null
+          requirement_code?: string
+          requirement_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "basic_requirements_art5_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "basic_requirements_art5_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_users: {
         Row: {
           client_id: string
@@ -101,11 +170,15 @@ export type Database = {
       }
       defect_library: {
         Row: {
+          applies_to_annual: boolean | null
+          applies_to_five_year: boolean | null
           category: string
           code: string
           created_at: string
           description_template: string | null
+          element_number: number | null
           element_section: string | null
+          element_section_code: string | null
           id: string
           is_active: boolean
           name_pl: string
@@ -115,34 +188,100 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          applies_to_annual?: boolean | null
+          applies_to_five_year?: boolean | null
           category: string
           code: string
           created_at?: string
           description_template?: string | null
+          element_number?: number | null
           element_section?: string | null
+          element_section_code?: string | null
           id?: string
           is_active?: boolean
           name_pl: string
           recommendation_template?: string | null
-          typical_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          typical_rating?:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           typical_urgency?: Database["public"]["Enums"]["urgency_level"] | null
           updated_at?: string
         }
         Update: {
+          applies_to_annual?: boolean | null
+          applies_to_five_year?: boolean | null
           category?: string
           code?: string
           created_at?: string
           description_template?: string | null
+          element_number?: number | null
           element_section?: string | null
+          element_section_code?: string | null
           id?: string
           is_active?: boolean
           name_pl?: string
           recommendation_template?: string | null
-          typical_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          typical_rating?:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           typical_urgency?: Database["public"]["Enums"]["urgency_level"] | null
           updated_at?: string
         }
         Relationships: []
+      }
+      electrical_measurement_protocols: {
+        Row: {
+          attached_to_kob: boolean | null
+          created_at: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+          measured_by: string | null
+          measurement_date: string | null
+          notes: string | null
+          protocol_name: string
+          protocol_number: string | null
+        }
+        Insert: {
+          attached_to_kob?: boolean | null
+          created_at?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+          measured_by?: string | null
+          measurement_date?: string | null
+          notes?: string | null
+          protocol_name: string
+          protocol_number?: string | null
+        }
+        Update: {
+          attached_to_kob?: boolean | null
+          created_at?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+          measured_by?: string | null
+          measurement_date?: string | null
+          notes?: string | null
+          protocol_name?: string
+          protocol_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "electrical_measurement_protocols_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "electrical_measurement_protocols_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       electrical_measurements: {
         Row: {
@@ -225,6 +364,48 @@ export type Database = {
           },
         ]
       }
+      emergency_state_items: {
+        Row: {
+          created_at: string | null
+          element_name: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+          urgent_repair_scope: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          element_name?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+          urgent_repair_scope?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          element_name?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+          urgent_repair_scope?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emergency_state_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emergency_state_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       historical_protocols: {
         Row: {
           file_size_bytes: number | null
@@ -233,8 +414,8 @@ export type Database = {
           inspection_type: string
           notes: string | null
           protocol_number: string | null
-          protocol_pdf_r2_key: string
-          protocol_pdf_url: string
+          protocol_pdf_r2_key: string | null
+          protocol_pdf_url: string | null
           source_filename: string | null
           turbine_id: string
           updated_at: string
@@ -249,8 +430,8 @@ export type Database = {
           inspection_type: string
           notes?: string | null
           protocol_number?: string | null
-          protocol_pdf_r2_key: string
-          protocol_pdf_url: string
+          protocol_pdf_r2_key?: string | null
+          protocol_pdf_url?: string | null
           source_filename?: string | null
           turbine_id: string
           updated_at?: string
@@ -265,8 +446,8 @@ export type Database = {
           inspection_type?: string
           notes?: string | null
           protocol_number?: string | null
-          protocol_pdf_r2_key?: string
-          protocol_pdf_url?: string
+          protocol_pdf_r2_key?: string | null
+          protocol_pdf_url?: string | null
           source_filename?: string | null
           turbine_id?: string
           updated_at?: string
@@ -280,6 +461,51 @@ export type Database = {
             columns: ["turbine_id"]
             isOneToOne: false
             referencedRelation: "turbines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_attachments: {
+        Row: {
+          created_at: string | null
+          description: string
+          file_url: string | null
+          google_drive_file_id: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          file_url?: string | null
+          google_drive_file_id?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          file_url?: string | null
+          google_drive_file_id?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_attachments_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_attachments_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
             referencedColumns: ["id"]
           },
         ]
@@ -331,7 +557,9 @@ export type Database = {
       }
       inspection_elements: {
         Row: {
-          condition_rating: Database["public"]["Enums"]["condition_rating"] | null
+          condition_rating:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           created_at: string
           detailed_description: string | null
           element_definition_id: string
@@ -347,7 +575,9 @@ export type Database = {
           wear_percentage: number | null
         }
         Insert: {
-          condition_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          condition_rating?:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           created_at?: string
           detailed_description?: string | null
           element_definition_id: string
@@ -363,7 +593,9 @@ export type Database = {
           wear_percentage?: number | null
         }
         Update: {
-          condition_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          condition_rating?:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           created_at?: string
           detailed_description?: string | null
           element_definition_id?: string
@@ -552,7 +784,9 @@ export type Database = {
           object_photo_url: string | null
           object_registry_number: string | null
           overall_assessment: string | null
-          overall_condition_rating: Database["public"]["Enums"]["condition_rating"] | null
+          overall_condition_rating:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           owner_name: string | null
           owner_representative_name: string | null
           owner_signature_date: string | null
@@ -597,7 +831,9 @@ export type Database = {
           object_photo_url?: string | null
           object_registry_number?: string | null
           overall_assessment?: string | null
-          overall_condition_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          overall_condition_rating?:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           owner_name?: string | null
           owner_representative_name?: string | null
           owner_signature_date?: string | null
@@ -642,7 +878,9 @@ export type Database = {
           object_photo_url?: string | null
           object_registry_number?: string | null
           overall_assessment?: string | null
-          overall_condition_rating?: Database["public"]["Enums"]["condition_rating"] | null
+          overall_condition_rating?:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           owner_name?: string | null
           owner_representative_name?: string | null
           owner_signature_date?: string | null
@@ -754,6 +992,7 @@ export type Database = {
           gwo_certificate_number?: string | null
           gwo_expiry_date?: string | null
           gwo_fire_awareness_expiry?: string | null
+          gwo_first_aid_expiry?: string | null
           gwo_manual_handling_expiry?: string | null
           gwo_scan_url?: string | null
           gwo_working_at_heights_expiry?: string | null
@@ -787,6 +1026,51 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      previous_recommendations: {
+        Row: {
+          completion_status: string | null
+          created_at: string | null
+          id: string
+          inspection_id: string
+          item_number: number
+          recommendation_text: string | null
+          remarks: string | null
+        }
+        Insert: {
+          completion_status?: string | null
+          created_at?: string | null
+          id?: string
+          inspection_id: string
+          item_number: number
+          recommendation_text?: string | null
+          remarks?: string | null
+        }
+        Update: {
+          completion_status?: string | null
+          created_at?: string | null
+          id?: string
+          inspection_id?: string
+          item_number?: number
+          recommendation_text?: string | null
+          remarks?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "previous_recommendations_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "previous_recommendations_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
             referencedColumns: ["id"]
           },
         ]
@@ -900,6 +1184,63 @@ export type Database = {
           },
         ]
       }
+      repair_scope_items: {
+        Row: {
+          completion_date: string | null
+          completion_notes: string | null
+          created_at: string | null
+          deadline_date: string | null
+          deadline_text: string | null
+          id: string
+          inspection_id: string
+          is_completed: boolean | null
+          item_number: number
+          scope_description: string
+          updated_at: string | null
+        }
+        Insert: {
+          completion_date?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          deadline_date?: string | null
+          deadline_text?: string | null
+          id?: string
+          inspection_id: string
+          is_completed?: boolean | null
+          item_number: number
+          scope_description: string
+          updated_at?: string | null
+        }
+        Update: {
+          completion_date?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          deadline_date?: string | null
+          deadline_text?: string | null
+          id?: string
+          inspection_id?: string
+          is_completed?: boolean | null
+          item_number?: number
+          scope_description?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_scope_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_scope_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_checklist: {
         Row: {
           id: string
@@ -949,6 +1290,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          include_in_protocol: boolean
           inspection_id: string
           last_service_date: string | null
           last_service_protocol_number: string | null
@@ -962,6 +1304,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          include_in_protocol?: boolean
           inspection_id: string
           last_service_date?: string | null
           last_service_protocol_number?: string | null
@@ -975,6 +1318,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          include_in_protocol?: boolean
           inspection_id?: string
           last_service_date?: string | null
           last_service_protocol_number?: string | null
@@ -1002,252 +1346,6 @@ export type Database = {
           },
         ]
       }
-      previous_recommendations: {
-        Row: {
-          completion_status: string | null
-          created_at: string | null
-          id: string
-          inspection_id: string
-          item_number: number
-          recommendation_text: string | null
-          remarks: string | null
-        }
-        Insert: {
-          completion_status?: string | null
-          created_at?: string | null
-          id?: string
-          inspection_id: string
-          item_number: number
-          recommendation_text?: string | null
-          remarks?: string | null
-        }
-        Update: {
-          completion_status?: string | null
-          created_at?: string | null
-          id?: string
-          inspection_id?: string
-          item_number?: number
-          recommendation_text?: string | null
-          remarks?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "previous_recommendations_inspection_id_fkey"
-            columns: ["inspection_id"]
-            isOneToOne: false
-            referencedRelation: "inspections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      emergency_state_items: {
-        Row: {
-          created_at: string | null
-          element_name: string | null
-          id: string
-          inspection_id: string
-          item_number: number
-          urgent_repair_scope: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          element_name?: string | null
-          id?: string
-          inspection_id: string
-          item_number: number
-          urgent_repair_scope?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          element_name?: string | null
-          id?: string
-          inspection_id?: string
-          item_number?: number
-          urgent_repair_scope?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "emergency_state_items_inspection_id_fkey"
-            columns: ["inspection_id"]
-            isOneToOne: false
-            referencedRelation: "inspections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      repair_scope_items: {
-        Row: {
-          completion_date: string | null
-          completion_notes: string | null
-          created_at: string | null
-          deadline_date: string | null
-          deadline_text: string | null
-          id: string
-          inspection_id: string
-          is_completed: boolean | null
-          item_number: number
-          scope_description: string
-          updated_at: string | null
-        }
-        Insert: {
-          completion_date?: string | null
-          completion_notes?: string | null
-          created_at?: string | null
-          deadline_date?: string | null
-          deadline_text?: string | null
-          id?: string
-          inspection_id: string
-          is_completed?: boolean | null
-          item_number: number
-          scope_description: string
-          updated_at?: string | null
-        }
-        Update: {
-          completion_date?: string | null
-          completion_notes?: string | null
-          created_at?: string | null
-          deadline_date?: string | null
-          deadline_text?: string | null
-          id?: string
-          inspection_id?: string
-          is_completed?: boolean | null
-          item_number?: number
-          scope_description?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "repair_scope_items_inspection_id_fkey"
-            columns: ["inspection_id"]
-            isOneToOne: false
-            referencedRelation: "inspections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      basic_requirements_art5: {
-        Row: {
-          created_at: string | null
-          id: string
-          inspection_id: string
-          is_met: string | null
-          remarks: string | null
-          requirement_code: string
-          requirement_label: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          inspection_id: string
-          is_met?: string | null
-          remarks?: string | null
-          requirement_code: string
-          requirement_label: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          inspection_id?: string
-          is_met?: string | null
-          remarks?: string | null
-          requirement_code?: string
-          requirement_label?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "basic_requirements_art5_inspection_id_fkey"
-            columns: ["inspection_id"]
-            isOneToOne: false
-            referencedRelation: "inspections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inspection_attachments: {
-        Row: {
-          created_at: string | null
-          description: string
-          file_url: string | null
-          google_drive_file_id: string | null
-          id: string
-          inspection_id: string
-          item_number: number
-        }
-        Insert: {
-          created_at?: string | null
-          description: string
-          file_url?: string | null
-          google_drive_file_id?: string | null
-          id?: string
-          inspection_id: string
-          item_number: number
-        }
-        Update: {
-          created_at?: string | null
-          description?: string
-          file_url?: string | null
-          google_drive_file_id?: string | null
-          id?: string
-          inspection_id?: string
-          item_number?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inspection_attachments_inspection_id_fkey"
-            columns: ["inspection_id"]
-            isOneToOne: false
-            referencedRelation: "inspections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      electrical_measurement_protocols: {
-        Row: {
-          attached_to_kob: boolean | null
-          created_at: string | null
-          id: string
-          inspection_id: string
-          item_number: number
-          measured_by: string | null
-          measurement_date: string | null
-          notes: string | null
-          protocol_name: string
-          protocol_number: string | null
-        }
-        Insert: {
-          attached_to_kob?: boolean | null
-          created_at?: string | null
-          id?: string
-          inspection_id: string
-          item_number: number
-          measured_by?: string | null
-          measurement_date?: string | null
-          notes?: string | null
-          protocol_name: string
-          protocol_number?: string | null
-        }
-        Update: {
-          attached_to_kob?: boolean | null
-          created_at?: string | null
-          id?: string
-          inspection_id?: string
-          item_number?: number
-          measured_by?: string | null
-          measurement_date?: string | null
-          notes?: string | null
-          protocol_name?: string
-          protocol_number?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "electrical_measurement_protocols_inspection_id_fkey"
-            columns: ["inspection_id"]
-            isOneToOne: false
-            referencedRelation: "inspections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       turbines: {
         Row: {
           access_road_length_m: number | null
@@ -1255,6 +1353,7 @@ export type Database = {
           building_permit_date: string | null
           building_permit_number: string | null
           cadastral_parcel: string | null
+          commissioning_year: number | null
           construction_completion_date: string | null
           created_at: string
           created_by: string | null
@@ -1262,10 +1361,12 @@ export type Database = {
           google_drive_folder_url: string | null
           has_as_built_documentation: boolean | null
           has_building_log_book: boolean | null
+          has_measurement_station: boolean
           hub_height_m: number | null
           id: string
           inspection_notes: string | null
           is_deleted: boolean
+          last_five_year_inspection_date: string | null
           last_inspection_date: string | null
           last_inspection_protocol: string | null
           latitude: number | null
@@ -1279,6 +1380,7 @@ export type Database = {
           model: string | null
           mv_cable_length_m: number | null
           mv_cable_type: string | null
+          next_five_year_inspection_date: string | null
           next_inspection_date: string | null
           notes: string | null
           operator_name: string | null
@@ -1291,6 +1393,7 @@ export type Database = {
           rotor_diameter_m: number | null
           serial_number: string | null
           switchgear_station_number: string | null
+          tower_construction_type: string | null
           tower_height_m: number | null
           turbine_code: string
           updated_at: string
@@ -1302,6 +1405,7 @@ export type Database = {
           building_permit_date?: string | null
           building_permit_number?: string | null
           cadastral_parcel?: string | null
+          commissioning_year?: number | null
           construction_completion_date?: string | null
           created_at?: string
           created_by?: string | null
@@ -1309,10 +1413,12 @@ export type Database = {
           google_drive_folder_url?: string | null
           has_as_built_documentation?: boolean | null
           has_building_log_book?: boolean | null
+          has_measurement_station?: boolean
           hub_height_m?: number | null
           id?: string
           inspection_notes?: string | null
           is_deleted?: boolean
+          last_five_year_inspection_date?: string | null
           last_inspection_date?: string | null
           last_inspection_protocol?: string | null
           latitude?: number | null
@@ -1326,6 +1432,7 @@ export type Database = {
           model?: string | null
           mv_cable_length_m?: number | null
           mv_cable_type?: string | null
+          next_five_year_inspection_date?: string | null
           next_inspection_date?: string | null
           notes?: string | null
           operator_name?: string | null
@@ -1338,6 +1445,7 @@ export type Database = {
           rotor_diameter_m?: number | null
           serial_number?: string | null
           switchgear_station_number?: string | null
+          tower_construction_type?: string | null
           tower_height_m?: number | null
           turbine_code: string
           updated_at?: string
@@ -1349,6 +1457,7 @@ export type Database = {
           building_permit_date?: string | null
           building_permit_number?: string | null
           cadastral_parcel?: string | null
+          commissioning_year?: number | null
           construction_completion_date?: string | null
           created_at?: string
           created_by?: string | null
@@ -1356,10 +1465,12 @@ export type Database = {
           google_drive_folder_url?: string | null
           has_as_built_documentation?: boolean | null
           has_building_log_book?: boolean | null
+          has_measurement_station?: boolean
           hub_height_m?: number | null
           id?: string
           inspection_notes?: string | null
           is_deleted?: boolean
+          last_five_year_inspection_date?: string | null
           last_inspection_date?: string | null
           last_inspection_protocol?: string | null
           latitude?: number | null
@@ -1373,6 +1484,7 @@ export type Database = {
           model?: string | null
           mv_cable_length_m?: number | null
           mv_cable_type?: string | null
+          next_five_year_inspection_date?: string | null
           next_inspection_date?: string | null
           notes?: string | null
           operator_name?: string | null
@@ -1385,6 +1497,7 @@ export type Database = {
           rotor_diameter_m?: number | null
           serial_number?: string | null
           switchgear_station_number?: string | null
+          tower_construction_type?: string | null
           tower_height_m?: number | null
           turbine_code?: string
           updated_at?: string
@@ -1409,11 +1522,11 @@ export type Database = {
       }
       wind_farms: {
         Row: {
+          area_label: string | null
           client_id: string
           commissioning_date: string | null
           created_at: string
           created_by: string | null
-          ew_designation: string | null
           google_drive_folder_url: string | null
           id: string
           is_deleted: boolean
@@ -1430,11 +1543,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          area_label?: string | null
           client_id: string
           commissioning_date?: string | null
           created_at?: string
           created_by?: string | null
-          ew_designation?: string | null
           google_drive_folder_url?: string | null
           id?: string
           is_deleted?: boolean
@@ -1451,11 +1564,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          area_label?: string | null
           client_id?: string
           commissioning_date?: string | null
           created_at?: string
           created_by?: string | null
-          ew_designation?: string | null
           google_drive_folder_url?: string | null
           id?: string
           is_deleted?: boolean
@@ -1500,7 +1613,9 @@ export type Database = {
           manufacturer: string | null
           model: string | null
           open_repairs: number | null
-          overall_condition_rating: Database["public"]["Enums"]["condition_rating"] | null
+          overall_condition_rating:
+            | Database["public"]["Enums"]["condition_rating"]
+            | null
           photo_count: number | null
           protocol_number: string | null
           status: Database["public"]["Enums"]["inspection_status"] | null
@@ -1565,10 +1680,26 @@ export type Database = {
       }
     }
     Enums: {
-      condition_rating: "dobry" | "zadowalajacy" | "sredni" | "zly" | "awaryjny" | "dostateczny" | "niedostateczny"
-      inspection_status: "draft" | "in_progress" | "review" | "completed" | "signed"
+      condition_rating:
+        | "dobry"
+        | "zadowalajacy"
+        | "sredni"
+        | "zly"
+        | "awaryjny"
+        | "dostateczny"
+        | "niedostateczny"
+      inspection_status:
+        | "draft"
+        | "in_progress"
+        | "review"
+        | "completed"
+        | "signed"
       inspection_type: "annual" | "five_year"
-      inspector_specialty: "konstrukcyjna" | "elektryczna" | "sanitarna" | "inna"
+      inspector_specialty:
+        | "konstrukcyjna"
+        | "elektryczna"
+        | "sanitarna"
+        | "inna"
       repair_type: "NG" | "NB" | "K"
       urgency_level: "I" | "II" | "III" | "IV"
       user_role: "admin" | "inspector" | "client_user" | "viewer"
@@ -1699,10 +1830,29 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      condition_rating: ["dobry", "zadowalajacy", "sredni", "zly", "awaryjny", "dostateczny", "niedostateczny"],
-      inspection_status: ["draft", "in_progress", "review", "completed", "signed"],
+      condition_rating: [
+        "dobry",
+        "zadowalajacy",
+        "sredni",
+        "zly",
+        "awaryjny",
+        "dostateczny",
+        "niedostateczny",
+      ],
+      inspection_status: [
+        "draft",
+        "in_progress",
+        "review",
+        "completed",
+        "signed",
+      ],
       inspection_type: ["annual", "five_year"],
-      inspector_specialty: ["konstrukcyjna", "elektryczna", "sanitarna", "inna"],
+      inspector_specialty: [
+        "konstrukcyjna",
+        "elektryczna",
+        "sanitarna",
+        "inna",
+      ],
       repair_type: ["NG", "NB", "K"],
       urgency_level: ["I", "II", "III", "IV"],
       user_role: ["admin", "inspector", "client_user", "viewer"],

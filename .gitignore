@@ -51,3 +51,9 @@ upload_photos.mjs
 # Icon generation scripts
 generate-icons.mjs
 generate-icons.ps1
+
+# Service account credentials (Google Drive API itp.)
+.credentials/
+
+# Output skryptu migracji historycznych protokołów
+scripts/output/

@@ -68,6 +68,10 @@ interface DefectLibraryItem {
   code: string
   category: string
   element_section: string | null
+  element_section_code: string | null
+  element_number: number | null
+  applies_to_annual: boolean | null
+  applies_to_five_year: boolean | null
   name_pl: string
   description_template: string | null
   recommendation_template: string | null
@@ -92,6 +96,7 @@ interface InspectionElement {
 interface ElementDefinition {
   id: string
   name_pl: string
+  section_code: string | null
   scope_annual: string | null
   scope_five_year_additional: string | null
   // PIIB (od 2026-04-25):
@@ -170,20 +175,39 @@ export function ElementCard({
   const [libLoading, setLibLoading] = useState(false)
 
   useEffect(() => {
+    // Reset cache gdy zmienia sie element lub typ inspekcji - inny zakres widocznych usterek
+    setLibrary([])
+  }, [element.definition.section_code, inspectionType])
+
+  useEffect(() => {
     if (!showLibrary || library.length > 0 || libLoading) return
     setLibLoading(true)
     const supabase = createClient()
-    supabase
+    let query = supabase
       .from('defect_library')
-      .select('id, code, category, element_section, name_pl, description_template, recommendation_template, typical_urgency')
+      .select('id, code, category, element_section, element_section_code, element_number, applies_to_annual, applies_to_five_year, name_pl, description_template, recommendation_template, typical_urgency')
       .eq('is_active', true)
+
+    // Filtr per typ inspekcji - widoczne tylko wpisy zgodne z zakresem
+    if (inspectionType === 'five_year') {
+      query = query.eq('applies_to_five_year', true)
+    } else {
+      query = query.eq('applies_to_annual', true)
+    }
+
+    // Filtr per element - wpisy pasujace do aktualnego elementu inspekcji
+    if (element.definition.section_code) {
+      query = query.eq('element_section_code', element.definition.section_code)
+    }
+
+    query
       .order('code')
       .then(({ data, error }) => {
         if (error) console.error('[ElementCard] fetch library failed:', error)
         else setLibrary((data || []) as DefectLibraryItem[])
         setLibLoading(false)
       })
-  }, [showLibrary, library.length, libLoading])
+  }, [showLibrary, library.length, libLoading, inspectionType, element.definition.section_code])
 
   const handlePickFromLibrary = (item: DefectLibraryItem) => {
     const desc = item.description_template?.trim() || null

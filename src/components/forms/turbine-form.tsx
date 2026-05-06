@@ -18,6 +18,7 @@ interface TurbineFormProps {
     tower_height_m: number
     rotor_diameter_m: number
     serial_number: string
+    has_measurement_station?: boolean
   }
   onSuccess?: () => void
 }
@@ -47,6 +48,7 @@ export function TurbineForm({
       tower_height_m: parseInt(formData.get('tower_height_m') as string),
       rotor_diameter_m: parseInt(formData.get('rotor_diameter_m') as string),
       serial_number: formData.get('serial_number'),
+      has_measurement_station: formData.get('has_measurement_station') === 'on',
       wind_farm_id: windFarmId,
     }
 
@@ -176,6 +178,26 @@ export function TurbineForm({
           defaultValue={initialData?.serial_number || ''}
           placeholder="SWW-123456789"
         />
+      </div>
+
+      <div className="flex items-start gap-2 pt-2">
+        <input
+          id="has_measurement_station"
+          name="has_measurement_station"
+          type="checkbox"
+          defaultChecked={initialData?.has_measurement_station ?? false}
+          className="mt-1 h-4 w-4 rounded border-graphite-300 text-primary-600 focus:ring-primary-500"
+        />
+        <div className="flex-1">
+          <Label htmlFor="has_measurement_station" className="cursor-pointer">
+            Stacja kontenerowa pomiarowa (przyłącze SN)
+          </Label>
+          <p className="text-xs text-graphite-500 mt-1">
+            Zaznacz, jeśli turbina jest przyłączona do sieci średniego napięcia
+            (SN) i posiada własną stację kontenerową pomiarową. W protokole
+            inspekcji pojawi się dodatkowa pozycja 17 (Stacja pomiarowa).
+          </p>
+        </div>
       </div>
 
       <Button type="submit" disabled={loading} className="w-full">

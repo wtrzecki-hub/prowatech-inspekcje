@@ -108,6 +108,7 @@ interface InspectionElement {
 interface ElementDefinition {
   id: string
   name_pl: string
+  section_code: string | null
   scope_annual: string | null
   scope_five_year_additional: string | null
   // PIIB (od 2026-04-25):
@@ -255,6 +256,7 @@ export default function InspectionDetailPage() {
           definition:element_definition_id (
             id,
             element_number,
+            section_code,
             name_pl,
             scope_annual,
             scope_five_year_additional,
@@ -287,6 +289,7 @@ export default function InspectionDetailPage() {
             definition: {
               id: el.definition?.id ?? '',
               name_pl: el.definition?.name_pl ?? '',
+              section_code: el.definition?.section_code ?? null,
               scope_annual: el.definition?.scope_annual ?? null,
               scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
               applicable_standards: el.definition?.applicable_standards ?? null,
@@ -382,6 +385,7 @@ export default function InspectionDetailPage() {
         definition:element_definition_id (
           id,
           element_number,
+          section_code,
           name_pl,
           scope_annual,
           scope_five_year_additional,
@@ -408,6 +412,7 @@ export default function InspectionDetailPage() {
           definition: {
             id: el.definition?.id ?? '',
             name_pl: el.definition?.name_pl ?? '',
+            section_code: el.definition?.section_code ?? null,
             scope_annual: el.definition?.scope_annual ?? null,
             scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
             applicable_standards: el.definition?.applicable_standards ?? null,
@@ -420,19 +425,24 @@ export default function InspectionDetailPage() {
   const createElementsFromDefinitions = async (inspectionId: string) => {
     const supabase = createClient()
 
-    // Pobierz typ inspekcji żeby wybrać właściwe definicje (annual / five_year)
+    // Pobierz typ inspekcji + flagę turbiny czy ma stację kontenerową pomiarową
+    // (poz. 17 jest opcjonalna — pojawia się tylko jeśli turbina ma SN).
     const { data: inspMeta } = await supabase
       .from('inspections')
-      .select('inspection_type')
+      .select('inspection_type, turbines(has_measurement_station)')
       .eq('id', inspectionId)
-      .single()
+      .single<{
+        inspection_type: 'annual' | 'five_year'
+        turbines: { has_measurement_station: boolean | null } | null
+      }>()
 
     const isFiveYear = inspMeta?.inspection_type === 'five_year'
+    const hasStation = inspMeta?.turbines?.has_measurement_station === true
 
     // Filtr: aktywne (PIIB) definicje pasujące do typu inspekcji
     let query = supabase
       .from('inspection_element_definitions')
-      .select('id')
+      .select('id, section_code')
       .eq('is_active', true)
 
     query = isFiveYear ? query.eq('applies_to_five_year', true) : query.eq('applies_to_annual', true)
@@ -440,14 +450,16 @@ export default function InspectionDetailPage() {
     const { data: definitions } = await query
 
     if (definitions) {
-      const elementsToCreate = definitions.map((def) => ({
-        inspection_id: inspectionId,
-        element_definition_id: def.id,
-        condition_rating: null,
-        wear_percentage: null,
-        notes: null,
-        is_not_applicable: false,
-      }))
+      const elementsToCreate = definitions
+        .filter((def) => def.section_code !== 'stacja_pomiarowa' || hasStation)
+        .map((def) => ({
+          inspection_id: inspectionId,
+          element_definition_id: def.id,
+          condition_rating: null,
+          wear_percentage: null,
+          notes: null,
+          is_not_applicable: false,
+        }))
       await supabase.from('inspection_elements').insert(elementsToCreate)
     }
   }

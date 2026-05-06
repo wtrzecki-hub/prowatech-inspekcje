@@ -53,6 +53,7 @@ interface Turbine {
   rotor_diameter_m: number
   hub_height_m: number
   serial_number: string
+  has_measurement_station: boolean
   location_address: string
   cadastral_parcel: string
   latitude: number | null
@@ -934,6 +935,7 @@ function TurbineHero({
                 tower_height_m: turbine.tower_height_m,
                 rotor_diameter_m: turbine.rotor_diameter_m,
                 serial_number: turbine.serial_number,
+                has_measurement_station: turbine.has_measurement_station ?? false,
               }}
               onSuccess={() => {
                 setIsEditOpen(false)
