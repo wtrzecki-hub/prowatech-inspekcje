@@ -390,6 +390,26 @@ async function loadDocumentsAutoFill(
     emDate = pem?.electrical_measurement_date ?? null
   }
 
+  // Fallback do archiwum: protokoły pomiarów elektrycznych zalegują w
+  // `historical_protocols` z typem `electrical_measurement`.
+  if (!emProto && !emDate) {
+    const { data: histEm } = await sb
+      .from('historical_protocols')
+      .select('protocol_number, inspection_date, year')
+      .eq('turbine_id', turbineId)
+      .eq('inspection_type', 'electrical_measurement')
+      .order('inspection_date', { ascending: false, nullsFirst: false })
+      .order('year', { ascending: false })
+      .limit(1)
+    const h = (histEm || [])[0] as
+      | { protocol_number: string | null; inspection_date: string | null }
+      | undefined
+    if (h) {
+      emProto = h.protocol_number ?? null
+      emDate = h.inspection_date ?? null
+    }
+  }
+
   if (emProto || emDate) {
     const parts: string[] = ['Okazano']
     if (emProto) parts.push(`nr ${emProto}`)

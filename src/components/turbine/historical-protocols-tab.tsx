@@ -61,7 +61,13 @@ const SUPABASE_ANON_KEY =
 const MAX_FILE_SIZE_MB = 40
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
-type InspectionType = 'annual' | 'five_year'
+type InspectionType = 'annual' | 'five_year' | 'electrical_measurement'
+
+const INSPECTION_TYPE_LABEL: Record<InspectionType, string> = {
+  annual: 'Roczna',
+  five_year: '5-letnia',
+  electrical_measurement: 'Pomiary',
+}
 
 interface HistoricalProtocol {
   id: string
@@ -351,9 +357,7 @@ export default function HistoricalProtocolsTab({
           // (np. duplicate UNIQUE(turbine_id, year, inspection_type))
           if (insertErr.code === '23505') {
             throw new Error(
-              `Protokół dla roku ${yearNum} (${
-                form.inspectionType === 'annual' ? 'roczna' : '5-letnia'
-              }) już istnieje dla tej turbiny. Wgraj plik z wiersza istniejącego placeholdera albo edytuj wpis.`
+              `Protokół dla roku ${yearNum} (${INSPECTION_TYPE_LABEL[form.inspectionType]}) już istnieje dla tej turbiny. Wgraj plik z wiersza istniejącego placeholdera albo edytuj wpis.`
             )
           }
           throw new Error(`Zapis do bazy: ${insertErr.message}`)
@@ -544,8 +548,8 @@ export default function HistoricalProtocolsTab({
                 <>
                   Wgrywasz skan PDF do istniejącego wpisu (
                   <span className="font-mono">{form.year}</span> ·{' '}
-                  {form.inspectionType === 'annual' ? 'Roczna' : '5-letnia'}). Rok
-                  i typ są zablokowane — pozostałe pola możesz dopracować.
+                  {INSPECTION_TYPE_LABEL[form.inspectionType]}). Rok i typ są
+                  zablokowane — pozostałe pola możesz dopracować.
                 </>
               ) : form.mode === 'replace-file' ? (
                 <>
@@ -649,28 +653,22 @@ export default function HistoricalProtocolsTab({
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Typ kontroli *</Label>
-                    <div className="flex gap-2 mt-1.5">
-                      <Button
-                        type="button"
-                        variant={form.inspectionType === 'annual' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setForm({ ...form, inspectionType: 'annual' })}
-                        disabled={uploading || form.mode !== 'create'}
-                        className="flex-1"
-                      >
-                        Roczna
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={form.inspectionType === 'five_year' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setForm({ ...form, inspectionType: 'five_year' })}
-                        disabled={uploading || form.mode !== 'create'}
-                        className="flex-1"
-                      >
-                        5-letnia
-                      </Button>
+                    <Label className="text-xs">Typ protokołu *</Label>
+                    <div className="grid grid-cols-3 gap-2 mt-1.5">
+                      {(['annual', 'five_year', 'electrical_measurement'] as InspectionType[]).map(
+                        (t) => (
+                          <Button
+                            key={t}
+                            type="button"
+                            variant={form.inspectionType === t ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setForm({ ...form, inspectionType: t })}
+                            disabled={uploading || form.mode !== 'create'}
+                          >
+                            {INSPECTION_TYPE_LABEL[t]}
+                          </Button>
+                        )
+                      )}
                     </div>
                   </div>
                 </div>
@@ -823,25 +821,20 @@ export default function HistoricalProtocolsTab({
                 </div>
                 <div>
                   <Label className="text-xs">Typ *</Label>
-                  <div className="flex gap-2 mt-1.5">
-                    <Button
-                      type="button"
-                      variant={editing.inspection_type === 'annual' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setEditing({ ...editing, inspection_type: 'annual' })}
-                      className="flex-1"
-                    >
-                      Roczna
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={editing.inspection_type === 'five_year' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setEditing({ ...editing, inspection_type: 'five_year' })}
-                      className="flex-1"
-                    >
-                      5-letnia
-                    </Button>
+                  <div className="grid grid-cols-3 gap-2 mt-1.5">
+                    {(['annual', 'five_year', 'electrical_measurement'] as InspectionType[]).map(
+                      (t) => (
+                        <Button
+                          key={t}
+                          type="button"
+                          variant={editing.inspection_type === t ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setEditing({ ...editing, inspection_type: t })}
+                        >
+                          {INSPECTION_TYPE_LABEL[t]}
+                        </Button>
+                      )
+                    )}
                   </div>
                 </div>
               </div>
@@ -907,7 +900,7 @@ export default function HistoricalProtocolsTab({
                     </div>
                     <div>
                       <strong>Typ:</strong>{' '}
-                      {deleteConfirm.inspection_type === 'annual' ? 'Roczna' : '5-letnia'}
+                      {INSPECTION_TYPE_LABEL[deleteConfirm.inspection_type]}
                     </div>
                     {deleteConfirm.protocol_number && (
                       <div>
@@ -964,10 +957,12 @@ function ProtocolRow({
           className={
             protocol.inspection_type === 'five_year'
               ? 'bg-info-100 text-info-800 hover:bg-info-100'
-              : 'bg-graphite-100 text-graphite-800 hover:bg-graphite-100'
+              : protocol.inspection_type === 'electrical_measurement'
+                ? 'bg-warning-100 text-warning-800 hover:bg-warning-100'
+                : 'bg-graphite-100 text-graphite-800 hover:bg-graphite-100'
           }
         >
-          {protocol.inspection_type === 'annual' ? 'Roczna' : '5-letnia'}
+          {INSPECTION_TYPE_LABEL[protocol.inspection_type]}
         </Badge>
       </div>
       <div className="col-span-3 font-mono text-xs text-graphite-700">

@@ -191,7 +191,7 @@ export interface BuildKeyParams {
   /** Rok protokołu historycznego */
   year?: number;
   /** Typ kontroli historycznej */
-  inspectionType?: "annual" | "five_year";
+  inspectionType?: "annual" | "five_year" | "electrical_measurement";
 }
 
 /**

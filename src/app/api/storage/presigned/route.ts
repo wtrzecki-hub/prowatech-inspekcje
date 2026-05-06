@@ -18,7 +18,7 @@
  *     slot?: 1 | 2 | 3,         // dla turbine-photo
  *     docType?: string,         // dla inspector-doc, np. "udt" / "uprawnienia" / "gwo"
  *     year?: number,            // dla historical-protocol
- *     inspectionType?: "annual" | "five_year"  // dla historical-protocol
+ *     inspectionType?: "annual" | "five_year" | "electrical_measurement"  // dla historical-protocol
  *   }
  *
  * Response 200:
@@ -210,9 +210,16 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      if (body.inspectionType !== "annual" && body.inspectionType !== "five_year") {
+      if (
+        body.inspectionType !== "annual" &&
+        body.inspectionType !== "five_year" &&
+        body.inspectionType !== "electrical_measurement"
+      ) {
         return NextResponse.json(
-          { error: "inspectionType must be 'annual' or 'five_year'" },
+          {
+            error:
+              "inspectionType must be 'annual', 'five_year' or 'electrical_measurement'",
+          },
           { status: 400 }
         );
       }
