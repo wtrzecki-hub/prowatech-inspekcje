@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
@@ -47,7 +47,15 @@ import {
   INSPECTION_TYPES,
   CONDITION_RATINGS,
 } from '@/lib/constants'
-import { AlertCircle, Download, FileText } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  FileText,
+  Loader2,
+  Save,
+} from 'lucide-react'
 
 type ConditionRating = 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny'
 type InspectionStatus = 'draft' | 'in_progress' | 'review' | 'completed' | 'signed'
@@ -126,6 +134,7 @@ interface Inspector {
 
 export default function InspectionDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
 
   const [inspection, setInspection] = useState<Inspection | null>(null)
@@ -135,6 +144,7 @@ export default function InspectionDetailPage() {
   const [saving, setSaving] = useState(false)
   const [showOnlyNotes, setShowOnlyNotes] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [manualSaving, setManualSaving] = useState<'idle' | 'saving' | 'done'>('idle')
 
   // Zdjęcia inspekcji — ładowane raz, dystrybuowane do ElementCardów per
   // element_id. Refresh przez `refreshPhotos` po upload/delete.
@@ -518,6 +528,35 @@ export default function InspectionDetailPage() {
     handleInspectionChange('overall_assessment', next)
   }
 
+  /**
+   * Manualny zapis: czyści debouncery rodzica + odczekuje 1000 ms żeby
+   * debouncery dzieci (PreviousRecommendations / RepairScope / Metryczka /
+   * ElectricalMeasurements / AttachmentsList — wszystkie 500–800 ms) zdążyły
+   * zapisać. Zwraca dopiero po dograniu.
+   *
+   * Auto-save robi już to samo w tle, ale przyciski „Zapisz" / „Zapisz
+   * i zamknij" dają inspektorowi pewność że nic nie pominął przed wyjściem
+   * lub przekazaniem protokołu.
+   */
+  const flushAndSave = async () => {
+    setManualSaving('saving')
+    if (inspectionSaveTimer.current) clearTimeout(inspectionSaveTimer.current)
+    if (elementSaveTimer.current) clearTimeout(elementSaveTimer.current)
+    // Czekamy 1000 ms — dłużej niż najdłuższy child debounce (800 ms).
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  const handleManualSave = async () => {
+    await flushAndSave()
+    setManualSaving('done')
+    setTimeout(() => setManualSaving('idle'), 1500)
+  }
+
+  const handleSaveAndExit = async () => {
+    await flushAndSave()
+    router.push('/inspekcje')
+  }
+
   const filteredElements = showOnlyNotes
     ? elements.filter((el) => el.notes && el.notes.trim())
     : elements
@@ -619,7 +658,39 @@ export default function InspectionDetailPage() {
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              className="gap-2 border-graphite-200"
+              onClick={() => void handleManualSave()}
+              disabled={manualSaving === 'saving'}
+            >
+              {manualSaving === 'saving' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Zapisuję…
+                </>
+              ) : manualSaving === 'done' ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-success-700" />
+                  Zapisano
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Zapisz
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2 border-graphite-200"
+              onClick={() => void handleSaveAndExit()}
+              disabled={manualSaving === 'saving'}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Zapisz i zamknij
+            </Button>
             <Button
               className="gap-2"
               onClick={() =>
