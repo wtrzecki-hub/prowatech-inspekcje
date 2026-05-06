@@ -13,6 +13,10 @@ import {
   RATING_LABELS,
   type RatingKey,
 } from '@/lib/design/protocol-tokens'
+import {
+  buildProtocolFilename,
+  contentDispositionAttachment,
+} from '@/lib/protocol-filename'
 
 // =============================================================================
 // PROTOKÓŁ KONTROLI OKRESOWEJ - PDF (układ PIIB)
@@ -1665,10 +1669,27 @@ export async function GET(
 
     const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
 
+    const filename = buildProtocolFilename(
+      {
+        protocol_number: insp.protocol_number,
+        inspection_type: insp.inspection_type,
+        inspection_date: insp.inspection_date,
+      },
+      turbine
+        ? {
+            turbine_code: turbine.turbine_code,
+            ew_designation: turbine.ew_designation,
+            location_address: turbine.location_address,
+          }
+        : null,
+      'pdf',
+      inspectionId,
+    )
+
     return new Response(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="protokol-PIIB-${(insp.protocol_number || inspectionId).replace(/[\/\\:*?"<>|]/g, '_')}.pdf"`,
+        'Content-Disposition': contentDispositionAttachment(filename),
         'Content-Length': pdfBuffer.length.toString(),
       },
     })

@@ -34,6 +34,10 @@ import {
   RATING_LABELS,
   type RatingKey,
 } from '@/lib/design/protocol-tokens'
+import {
+  buildProtocolFilename,
+  contentDispositionAttachment,
+} from '@/lib/protocol-filename'
 
 // =============================================================================
 // PROTOKÓŁ KONTROLI OKRESOWEJ — DOCX (układ PIIB)
@@ -2446,11 +2450,28 @@ export async function GET(
     const uint8 = await Packer.toBuffer(doc)
     const nodeBuffer = Buffer.from(uint8)
 
+    const filename = buildProtocolFilename(
+      {
+        protocol_number: insp.protocol_number,
+        inspection_type: insp.inspection_type,
+        inspection_date: insp.inspection_date,
+      },
+      turbine
+        ? {
+            turbine_code: turbine.turbine_code,
+            ew_designation: turbine.ew_designation,
+            location_address: turbine.location_address,
+          }
+        : null,
+      'docx',
+      inspectionId,
+    )
+
     return new Response(nodeBuffer, {
       headers: {
         'Content-Type':
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="protokol-PIIB-${(insp.protocol_number || inspectionId).replace(/[\/\\:*?"<>|]/g, '_')}.docx"`,
+        'Content-Disposition': contentDispositionAttachment(filename),
         'Content-Length': nodeBuffer.length.toString(),
       },
     })

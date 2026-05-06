@@ -1,0 +1,99 @@
+/**
+ * Buduje nazwę pliku protokołu PDF/DOCX zgodną z konwencją archiwum
+ * Prowatech, np.:
+ *   `003_P_2026 Protokół_kontroli_5-letniej WTG EW03 Żeńsko 04-05-2026.pdf`
+ *   `58_T_2025 Protokół_kontroli_rocznej WTG EW01 Bieganowo 16-04-2025.pdf`
+ *
+ * Komponenty:
+ *   - numer protokołu (z `inspections.protocol_number`), `/` zamienione na `_`
+ *   - „Protokół_kontroli_rocznej" lub „Protokół_kontroli_5-letniej"
+ *   - „WTG " + `ew_designation` (preferowane) albo `turbine_code`
+ *   - miejscowość (`turbines.location_address`)
+ *   - data kontroli w formacie dd-mm-yyyy
+ *
+ * Brakujące komponenty są pomijane (np. inspekcja bez `protocol_number`).
+ * Niedozwolone znaki w nazwach plików są zamieniane na `_`.
+ */
+export interface InspectionForFilename {
+  protocol_number?: string | null
+  inspection_type?: 'annual' | 'five_year' | string | null
+  inspection_date?: string | null
+}
+
+export interface TurbineForFilename {
+  turbine_code?: string | null
+  ew_designation?: string | null
+  location_address?: string | null
+}
+
+const trim = (v: string | null | undefined) => v?.trim() || ''
+
+function formatDateDmy(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return ''
+  return `${m[3]}-${m[2]}-${m[1]}`
+}
+
+/**
+ * Sanityzuje fragment nazwy pliku — usuwa znaki niedozwolone na Windows/macOS/Linux,
+ * zwija wielokrotne białe znaki. Diakrytyki polskie zachowane (kodowane w
+ * `Content-Disposition` przez `filename*=UTF-8''`).
+ */
+function sanitizeSegment(s: string): string {
+  return s
+    .replace(/[/\\:*?"<>|]/g, '_')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function buildProtocolFilename(
+  inspection: InspectionForFilename,
+  turbine: TurbineForFilename | null | undefined,
+  ext: 'pdf' | 'docx',
+  /** Fallback gdy brak `protocol_number` — np. `id` inspekcji do unikalności. */
+  fallbackId?: string,
+): string {
+  const parts: string[] = []
+
+  // 1. Numer protokołu (z `/` → `_`) lub fallbackId
+  const protoNo = trim(inspection.protocol_number)
+  if (protoNo) {
+    parts.push(protoNo.replace(/\//g, '_'))
+  } else if (fallbackId) {
+    parts.push(fallbackId)
+  }
+
+  // 2. Typ kontroli
+  const typeLabel =
+    inspection.inspection_type === 'five_year' ? '5-letniej' : 'rocznej'
+  parts.push(`Protokół_kontroli_${typeLabel}`)
+
+  // 3. WTG + identyfikator turbiny
+  const turbineId = trim(turbine?.ew_designation) || trim(turbine?.turbine_code)
+  if (turbineId) {
+    parts.push(`WTG ${turbineId}`)
+  }
+
+  // 4. Miejscowość
+  const loc = trim(turbine?.location_address)
+  if (loc) parts.push(loc)
+
+  // 5. Data
+  const dateStr = formatDateDmy(inspection.inspection_date)
+  if (dateStr) parts.push(dateStr)
+
+  const name = sanitizeSegment(parts.filter(Boolean).join(' '))
+  return `${name}.${ext}`
+}
+
+/**
+ * Buduje nagłówek `Content-Disposition` bezpieczny dla diakrytyk PL.
+ * RFC 5987 — fallback ASCII (zamieniony nie-ASCII na `_`) + `filename*=UTF-8''<urlencoded>`
+ * dla nowoczesnych przeglądarek.
+ */
+export function contentDispositionAttachment(filename: string): string {
+  const asciiFallback = filename.replace(/[^\x20-\x7E]/g, '_')
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
