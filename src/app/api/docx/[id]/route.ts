@@ -636,6 +636,33 @@ export async function GET(
         manufacturer: string | null
       } => !!d)
 
+    const { data: measurementPerformersRaw } = await supabase
+      .from('inspection_measurement_performers')
+      .select(
+        'inspectors ( full_name, license_number, chamber_membership )'
+      )
+      .eq('inspection_id', inspectionId)
+    const measurementPerformers: {
+      full_name: string
+      license_number: string | null
+      chamber_membership: string | null
+    }[] = (measurementPerformersRaw || [])
+      .map((row: { inspectors: unknown }) => {
+        const p = Array.isArray(row.inspectors) ? row.inspectors[0] : row.inspectors
+        return p as
+          | {
+              full_name: string
+              license_number: string | null
+              chamber_membership: string | null
+            }
+          | null
+      })
+      .filter((p): p is {
+        full_name: string
+        license_number: string | null
+        chamber_membership: string | null
+      } => !!p)
+
     const { data: serviceInfoData } = await supabase
       .from('service_info')
       .select('*')
@@ -1894,6 +1921,43 @@ export async function GET(
           new Table({
             width: { size: USABLE_WIDTH, type: WidthType.DXA },
             rows: deviceRows,
+          })
+        )
+      }
+
+      // Osoby wykonujące pomiary (Artur uwagi pkt 6 cd).
+      if (measurementPerformers.length > 0) {
+        electricalSection.push(subHeading('Osoby wykonujące pomiary'))
+        const perfCols = [4000, 2700, 2700]
+        const perfRows: TableRow[] = [
+          new TableRow({
+            tableHeader: true,
+            children: [
+              headerCell('Imię i nazwisko', perfCols[0]),
+              headerCell('Numer uprawnień', perfCols[1]),
+              headerCell('Izba', perfCols[2]),
+            ],
+          }),
+        ]
+        for (const p of measurementPerformers) {
+          const license =
+            p.license_number && p.license_number !== '-'
+              ? p.license_number
+              : '—'
+          perfRows.push(
+            new TableRow({
+              children: [
+                dataCell(p.full_name, perfCols[0]),
+                dataCell(license, perfCols[1]),
+                dataCell(p.chamber_membership || '—', perfCols[2]),
+              ],
+            })
+          )
+        }
+        electricalSection.push(
+          new Table({
+            width: { size: USABLE_WIDTH, type: WidthType.DXA },
+            rows: perfRows,
           })
         )
       }

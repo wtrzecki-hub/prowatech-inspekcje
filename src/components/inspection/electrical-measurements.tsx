@@ -90,6 +90,13 @@ interface MeasurementDevice {
   manufacturer: string | null
 }
 
+interface MeasurementPerformer {
+  id: string
+  full_name: string
+  license_number: string | null
+  chamber_membership: string | null
+}
+
 interface ElectricalMeasurementsProps {
   inspectionId: string
 }
@@ -114,6 +121,12 @@ export function ElectricalMeasurements({
   // Sprzęt użyty do pomiarów (Artur uwagi pkt 6) — multi-select z bazy.
   const [allDevices, setAllDevices] = useState<MeasurementDevice[]>([])
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Set<string>>(
+    new Set()
+  )
+
+  // Osoby wykonujące pomiary — inspektorzy elektryczni.
+  const [allPerformers, setAllPerformers] = useState<MeasurementPerformer[]>([])
+  const [selectedPerformerIds, setSelectedPerformerIds] = useState<Set<string>>(
     new Set()
   )
 
@@ -142,6 +155,8 @@ export function ElectricalMeasurements({
         { data: pts, error: ptsErr },
         { data: devices, error: devErr },
         { data: linkedDevices, error: linkErr },
+        { data: performers, error: perfErr },
+        { data: linkedPerformers, error: linkPerfErr },
       ] = await Promise.all([
         sb
           .from('inspections')
@@ -171,6 +186,17 @@ export function ElectricalMeasurements({
           .from('inspection_measurement_devices')
           .select('device_id')
           .eq('inspection_id', inspectionId),
+        sb
+          .from('inspectors')
+          .select('id, full_name, license_number, chamber_membership')
+          .eq('specialty', 'elektryczna')
+          .eq('is_active', true)
+          .eq('is_deleted', false)
+          .order('full_name', { ascending: true }),
+        sb
+          .from('inspection_measurement_performers')
+          .select('inspector_id')
+          .eq('inspection_id', inspectionId),
       ])
 
       if (inspErr) console.error('Błąd ładowania podsumowania pomiarów:', inspErr)
@@ -193,6 +219,17 @@ export function ElectricalMeasurements({
       if (linkedDevices) {
         setSelectedDeviceIds(
           new Set(linkedDevices.map((r) => r.device_id as string))
+        )
+      }
+
+      if (perfErr) console.error('Błąd ładowania pomiarowców:', perfErr)
+      if (performers) setAllPerformers(performers as MeasurementPerformer[])
+
+      if (linkPerfErr)
+        console.error('Błąd ładowania powiązanych pomiarowców:', linkPerfErr)
+      if (linkedPerformers) {
+        setSelectedPerformerIds(
+          new Set(linkedPerformers.map((r) => r.inspector_id as string))
         )
       }
     } catch (err) {
@@ -235,6 +272,42 @@ export function ElectricalMeasurements({
         const next = new Set(prev)
         if (isSelected) next.add(deviceId)
         else next.delete(deviceId)
+        return next
+      })
+    }
+  }
+
+  const togglePerformer = async (inspectorId: string) => {
+    const sb = supabase()
+    const isSelected = selectedPerformerIds.has(inspectorId)
+
+    setSelectedPerformerIds((prev) => {
+      const next = new Set(prev)
+      if (isSelected) next.delete(inspectorId)
+      else next.add(inspectorId)
+      return next
+    })
+
+    try {
+      if (isSelected) {
+        const { error } = await sb
+          .from('inspection_measurement_performers')
+          .delete()
+          .eq('inspection_id', inspectionId)
+          .eq('inspector_id', inspectorId)
+        if (error) throw error
+      } else {
+        const { error } = await sb
+          .from('inspection_measurement_performers')
+          .insert({ inspection_id: inspectionId, inspector_id: inspectorId })
+        if (error) throw error
+      }
+    } catch (err) {
+      console.error('Błąd zapisu powiązania pomiarowca:', err)
+      setSelectedPerformerIds((prev) => {
+        const next = new Set(prev)
+        if (isSelected) next.add(inspectorId)
+        else next.delete(inspectorId)
         return next
       })
     }
@@ -609,6 +682,60 @@ export function ElectricalMeasurements({
                 Wybrano: {selectedDeviceIds.size}{' '}
                 {selectedDeviceIds.size === 1 ? 'urządzenie' : 'urządzeń'}.
                 Zostanie wypisane w sekcji „Identyfikacja użytych przyrządów" protokołu.
+              </p>
+            )}
+          </div>
+
+          {/* ── Osoby wykonujące pomiary (Artur uwagi pkt 6 cd) ── */}
+          <div className="space-y-2 pt-2 border-t border-graphite-100">
+            <Label className="font-medium">Osoby wykonujące pomiary</Label>
+            {allPerformers.length === 0 ? (
+              <p className="text-xs text-graphite-500">
+                Brak inspektorów elektrycznych w bazie. Dodaj ich na stronie{' '}
+                <a href="/inspektorzy" className="text-primary-700 hover:underline">
+                  /inspektorzy
+                </a>
+                .
+              </p>
+            ) : (
+              <div className="space-y-1 rounded-lg border border-graphite-200 bg-graphite-50/50 p-3">
+                {allPerformers.map((p) => {
+                  const checked = selectedPerformerIds.has(p.id)
+                  return (
+                    <label
+                      key={p.id}
+                      className="flex items-start gap-3 px-2 py-1.5 rounded hover:bg-white cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => void togglePerformer(p.id)}
+                        className="mt-0.5"
+                      />
+                      <div className="text-sm leading-tight">
+                        <span className="font-medium text-graphite-900">
+                          {p.full_name}
+                        </span>
+                        {p.license_number && p.license_number !== '-' && (
+                          <span className="text-graphite-500 font-mono ml-2">
+                            {p.license_number}
+                          </span>
+                        )}
+                        {p.chamber_membership && (
+                          <span className="block text-xs text-graphite-500">
+                            {p.chamber_membership}
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+            {selectedPerformerIds.size > 0 && (
+              <p className="text-xs text-graphite-500">
+                Wybrano: {selectedPerformerIds.size}{' '}
+                {selectedPerformerIds.size === 1 ? 'osoba' : 'osób'}.
+                Zostanie wypisane w sekcji „Osoby wykonujące pomiary" protokołu.
               </p>
             )}
           </div>

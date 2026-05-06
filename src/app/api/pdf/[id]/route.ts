@@ -375,6 +375,33 @@ export async function GET(
         manufacturer: string | null
       } => !!d)
 
+    const { data: measurementPerformersRaw } = await supabase
+      .from('inspection_measurement_performers')
+      .select(
+        'inspectors ( full_name, license_number, chamber_membership )'
+      )
+      .eq('inspection_id', inspectionId)
+    const measurementPerformers: {
+      full_name: string
+      license_number: string | null
+      chamber_membership: string | null
+    }[] = (measurementPerformersRaw || [])
+      .map((row: { inspectors: unknown }) => {
+        const p = Array.isArray(row.inspectors) ? row.inspectors[0] : row.inspectors
+        return p as
+          | {
+              full_name: string
+              license_number: string | null
+              chamber_membership: string | null
+            }
+          | null
+      })
+      .filter((p): p is {
+        full_name: string
+        license_number: string | null
+        chamber_membership: string | null
+      } => !!p)
+
     const { data: serviceInfoData } = await supabase
       .from('service_info')
       .select('*')
@@ -1425,6 +1452,22 @@ export async function GET(
             d.manufacturer || '—',
           ]),
           [70, 50, 60]
+        )
+      }
+
+      // Osoby wykonujące pomiary (Artur uwagi pkt 6 cd).
+      if (measurementPerformers.length > 0) {
+        addSubHeading('Osoby wykonujące pomiary')
+        addAutoTable(
+          ['Imię i nazwisko', 'Numer uprawnień', 'Izba'],
+          measurementPerformers.map((p) => [
+            p.full_name,
+            p.license_number && p.license_number !== '-'
+              ? p.license_number
+              : '—',
+            p.chamber_membership || '—',
+          ]),
+          [60, 60, 60]
         )
       }
 
