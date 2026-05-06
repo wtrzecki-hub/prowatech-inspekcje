@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, Check, Plus, Trash2 } from 'lucide-react'
+import { Calendar, Check, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -43,14 +43,26 @@ const SUPABASE_URL = 'https://lhxhsprqoecepojrxepf.supabase.co'
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeGhzcHJxb2VjZXBvanJ4ZXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTE0NTksImV4cCI6MjA5MDYyNzQ1OX0.sb8WzlwpPAl4tj6CQgIH34PAQRklUmLeDFOMOS2kUi0'
 
+interface ImportInfo {
+  /** Ile pozycji zaimportowano w ostatniej operacji. */
+  count: number
+  /** Skąd: 'elements' = z `inspection_elements.recommendations`,
+   *  'legacy' = z `repair_recommendations.scope_description` (stary
+   *  formularz nowej inspekcji). */
+  source: 'elements' | 'legacy' | 'mixed'
+}
+
 export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
   const [items, setItems] = useState<RepairScopeItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [importInfo, setImportInfo] = useState<ImportInfo | null>(null)
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
+  const autoImportTriedRef = useRef(false)
 
   useEffect(() => {
-    void loadItems()
+    void loadItemsAndMaybeAutoImport()
     return () => {
       Object.values(debounceTimers.current).forEach((t) => clearTimeout(t))
     }
@@ -58,6 +70,32 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
   }, [inspectionId])
 
   const supabase = () => createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  const loadItemsAndMaybeAutoImport = async () => {
+    try {
+      const { data, error } = await supabase()
+        .from('repair_scope_items')
+        .select('*')
+        .eq('inspection_id', inspectionId)
+        .order('item_number', { ascending: true })
+
+      if (error) throw error
+      const loaded = (data || []) as RepairScopeItem[]
+      setItems(loaded)
+
+      // Auto-import: pierwszy mount, brak wpisów. Cisza — jeśli znajdzie,
+      // wstawia + ustawia banner; jeśli nie znajdzie, zostawia listę pustą
+      // bez alertu (user widzi placeholder „Brak pozycji").
+      if (!autoImportTriedRef.current && loaded.length === 0) {
+        autoImportTriedRef.current = true
+        await runImport({ silent: true })
+      }
+    } catch (err) {
+      console.error('Błąd ładowania zakresu robót:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const loadItems = async () => {
     try {
@@ -68,11 +106,150 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
         .order('item_number', { ascending: true })
 
       if (error) throw error
-      setItems(data || [])
+      setItems((data || []) as RepairScopeItem[])
     } catch (err) {
       console.error('Błąd ładowania zakresu robót:', err)
+    }
+  }
+
+  /**
+   * Zbiera niepuste zalecenia z 2 źródeł i wstawia jako nowe pozycje:
+   *   1. inspection_elements.recommendations — pole „Zalecenia" w karcie
+   *      każdego elementu (sekcja Ocena).
+   *   2. repair_recommendations.scope_description — legacy tabela ze
+   *      starego formularza nowej inspekcji.
+   *
+   * Pomija duplikaty (ten sam tekst już istnieje w repair_scope_items).
+   * Zwraca metadata; alert tylko jeśli `silent=false` i nic nie znaleziono.
+   */
+  const runImport = async (
+    options: { silent?: boolean } = {},
+  ): Promise<ImportInfo | null> => {
+    setIsImporting(true)
+    try {
+      const sb = supabase()
+
+      // 1. Z elementów inspekcji (sekcja „Zalecenia" w karcie elementu).
+      const { data: elementsData } = await sb
+        .from('inspection_elements')
+        .select(
+          `recommendations,
+           definition:element_definition_id ( element_number, name_pl )`
+        )
+        .eq('inspection_id', inspectionId)
+
+      type ElRow = {
+        recommendations: string | null
+        definition: { element_number: number | null; name_pl: string | null } | null
+      }
+      const fromElements: string[] = []
+      for (const row of (elementsData || []) as unknown as ElRow[]) {
+        const rec = row.recommendations?.trim()
+        if (!rec) continue
+        const num = row.definition?.element_number
+        const namePl = row.definition?.name_pl
+        const prefix =
+          num != null && namePl
+            ? `[${num}. ${namePl}] `
+            : namePl
+              ? `[${namePl}] `
+              : ''
+        // Każda linia w polu = osobna pozycja (jeśli user listuje punktami).
+        const lines = rec
+          .split(/\r?\n+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+        for (const line of lines) {
+          fromElements.push(prefix + line)
+        }
+      }
+
+      // 2. Legacy repair_recommendations (stary formularz).
+      const { data: legacyData } = await sb
+        .from('repair_recommendations')
+        .select('scope_description, element_name')
+        .eq('inspection_id', inspectionId)
+
+      const fromLegacy: string[] = []
+      for (const row of (legacyData || []) as Array<{
+        scope_description: string | null
+        element_name: string | null
+      }>) {
+        const desc = row.scope_description?.trim()
+        if (!desc) continue
+        const prefix = row.element_name?.trim() ? `[${row.element_name.trim()}] ` : ''
+        fromLegacy.push(prefix + desc)
+      }
+
+      // Łączymy + de-duplikat (po samym tekście).
+      const seen = new Set<string>()
+      const candidates: string[] = []
+      for (const t of [...fromElements, ...fromLegacy]) {
+        const norm = t.trim()
+        if (!norm) continue
+        if (seen.has(norm)) continue
+        seen.add(norm)
+        candidates.push(norm)
+      }
+
+      // Pomiń te które już są w repair_scope_items (po opisie).
+      const { data: existing } = await sb
+        .from('repair_scope_items')
+        .select('scope_description')
+        .eq('inspection_id', inspectionId)
+      const existingSet = new Set(
+        ((existing || []) as Array<{ scope_description: string }>).map((e) =>
+          (e.scope_description || '').trim(),
+        ),
+      )
+      const fresh = candidates.filter((c) => !existingSet.has(c))
+
+      if (fresh.length === 0) {
+        if (!options.silent) {
+          alert(
+            'Brak nowych zaleceń do zaimportowania. Sprawdź czy w sekcji Ocena (karty elementów) są wypełnione pola „Zalecenia".'
+          )
+        }
+        return null
+      }
+
+      // INSERT
+      const baseNumber =
+        items.length > 0 ? Math.max(...items.map((i) => i.item_number)) : 0
+      const toInsert = fresh.map((text, idx) => ({
+        inspection_id: inspectionId,
+        item_number: baseNumber + idx + 1,
+        scope_description: text,
+        deadline_text: null,
+        deadline_date: null,
+        is_completed: false,
+      }))
+      const { data: inserted, error: insErr } = await sb
+        .from('repair_scope_items')
+        .insert(toInsert)
+        .select()
+      if (insErr) throw insErr
+
+      const newItems = (inserted || []) as RepairScopeItem[]
+      setItems((prev) => [...prev, ...newItems])
+
+      const source: ImportInfo['source'] =
+        fromElements.length > 0 && fromLegacy.length > 0
+          ? 'mixed'
+          : fromElements.length > 0
+            ? 'elements'
+            : 'legacy'
+      const info: ImportInfo = { count: newItems.length, source }
+      setImportInfo(info)
+      return info
+    } catch (err) {
+      console.error('Błąd importu zaleceń:', err)
+      if (!options.silent) {
+        alert('Nie udało się zaimportować zaleceń. Spróbuj ponownie.')
+      }
+      return null
     } finally {
-      setIsLoading(false)
+      setIsImporting(false)
     }
   }
 
@@ -197,11 +374,37 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Banner informacyjny po auto-imporcie */}
+        {importInfo && importInfo.count > 0 && (
+          <div className="rounded-lg border border-info-100 bg-info-50/60 px-3 py-2 text-sm text-info-800 flex items-start gap-2">
+            <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-info-700" />
+            <div className="flex-1">
+              Zaimportowano <strong>{importInfo.count}</strong>{' '}
+              {importInfo.count === 1 ? 'pozycję' : 'pozycji'}
+              {importInfo.source === 'elements' && ' z pól „Zalecenia" w kartach elementów'}
+              {importInfo.source === 'legacy' && ' z legacy zaleceń (NG/NB/K)'}
+              {importInfo.source === 'mixed' && ' z elementów inspekcji i legacy zaleceń'}
+              . Możesz je teraz doedytować, dodać terminy lub usunąć.
+            </div>
+            <button
+              type="button"
+              onClick={() => setImportInfo(null)}
+              className="text-info-600 hover:text-info-900 text-xs"
+              title="Ukryj"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {items.length === 0 ? (
-          <p className="text-sm text-graphite-500">
-            Brak pozycji. Dodaj wymagane prace remontowe wynikające z kontroli
-            (kolejność wg priorytetu).
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm text-graphite-500">
+              Brak pozycji. Dodaj wymagane prace remontowe ręcznie albo
+              zaimportuj z pól „Zalecenia" w kartach elementów / legacy zaleceń
+              tej inspekcji.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-3">
             {items.map((item) => (
@@ -303,10 +506,34 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
           </ul>
         )}
 
-        <Button onClick={handleAdd} disabled={isSaving} size="sm">
-          <Plus size={16} className="mr-1" />
-          Dodaj pozycję
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handleAdd} disabled={isSaving} size="sm">
+            <Plus size={16} className="mr-1" />
+            Dodaj pozycję
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void runImport({ silent: false })}
+            disabled={isImporting}
+            title="Pobierz zalecenia z pól Zalecenia w kartach elementów oraz z legacy"
+          >
+            {isImporting ? (
+              <>
+                <RefreshCw size={16} className="mr-1 animate-spin" />
+                Importowanie…
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} className="mr-1" />
+                {items.length === 0
+                  ? 'Importuj zalecenia z elementów / legacy'
+                  : 'Doimportuj nowe zalecenia'}
+              </>
+            )}
+          </Button>
+        </div>
 
         {isSaving && (
           <p className="text-xs text-graphite-400 text-right">Zapisywanie…</p>
@@ -315,3 +542,4 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
     </Card>
   )
 }
+

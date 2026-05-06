@@ -105,13 +105,15 @@ export function PreviousRecommendationsTable({
 
       // Auto-import: pierwszy mount, brak wpisów, mamy turbineId. Cisza, bez
       // przycisku — inspektor po prostu widzi listę gotową do uzupełnienia.
+      // silent=true: gdy brak poprzednich zaleceń — nie pokazujemy alertu
+      // (irytujący komunikat na każdym wejściu w zakładkę).
       if (
         !autoImportTriedRef.current &&
         loaded.length === 0 &&
         turbineId
       ) {
         autoImportTriedRef.current = true
-        await runAutoImport()
+        await runAutoImport({ silent: true })
       }
     } catch (err) {
       console.error('Błąd ładowania zaleceń poprzedniej kontroli:', err)

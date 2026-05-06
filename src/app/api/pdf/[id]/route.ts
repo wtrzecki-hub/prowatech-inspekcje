@@ -231,13 +231,96 @@ export async function GET(
       .eq('inspection_id', inspectionId)
       .order('item_number')
 
-    const { data: repairScope } = await supabase
+    let { data: repairScope } = await supabase
       .from('repair_scope_items')
       .select(
         'item_number, scope_description, deadline_text, deadline_date, is_completed, completion_date'
       )
       .eq('inspection_id', inspectionId)
       .order('item_number')
+
+    // Fallback: gdy `repair_scope_items` puste, składamy zakres robót z legacy
+    // `repair_recommendations` + `inspection_elements.recommendations`. Patrz
+    // analogiczna logika w api/docx/[id]/route.ts.
+    if (!repairScope || repairScope.length === 0) {
+      const fallback: Array<{
+        item_number: number
+        scope_description: string
+        deadline_text: string | null
+        deadline_date: string | null
+        is_completed: boolean
+        completion_date: string | null
+      }> = []
+      const seen = new Set<string>()
+      let nextNo = 1
+
+      const { data: legacyRepairs } = await supabase
+        .from('repair_recommendations')
+        .select('scope_description, element_name')
+        .eq('inspection_id', inspectionId)
+      for (const r of (legacyRepairs || []) as Array<{
+        scope_description: string | null
+        element_name: string | null
+      }>) {
+        const desc = r.scope_description?.trim()
+        if (!desc) continue
+        const prefix = r.element_name?.trim() ? `[${r.element_name.trim()}] ` : ''
+        const text = prefix + desc
+        if (seen.has(text)) continue
+        seen.add(text)
+        fallback.push({
+          item_number: nextNo++,
+          scope_description: text,
+          deadline_text: null,
+          deadline_date: null,
+          is_completed: false,
+          completion_date: null,
+        })
+      }
+
+      const { data: elementsRecs } = await supabase
+        .from('inspection_elements')
+        .select(
+          `recommendations,
+           definition:element_definition_id ( element_number, name_pl )`
+        )
+        .eq('inspection_id', inspectionId)
+      for (const row of (elementsRecs || []) as unknown as Array<{
+        recommendations: string | null
+        definition: { element_number: number | null; name_pl: string | null } | null
+      }>) {
+        const rec = row.recommendations?.trim()
+        if (!rec) continue
+        const num = row.definition?.element_number
+        const namePl = row.definition?.name_pl
+        const prefix =
+          num != null && namePl
+            ? `[${num}. ${namePl}] `
+            : namePl
+              ? `[${namePl}] `
+              : ''
+        for (const line of rec
+          .split(/\r?\n+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)) {
+          const text = prefix + line
+          if (seen.has(text)) continue
+          seen.add(text)
+          fallback.push({
+            item_number: nextNo++,
+            scope_description: text,
+            deadline_text: null,
+            deadline_date: null,
+            is_completed: false,
+            completion_date: null,
+          })
+        }
+      }
+
+      if (fallback.length > 0) {
+        repairScope = fallback
+      }
+    }
 
     const { data: art5Items } = await supabase
       .from('basic_requirements_art5')
