@@ -149,6 +149,10 @@ export async function GET(
         object_address, object_registry_number, object_name, object_photo_url,
         owner_name, manager_name, contractor_info, additional_participants,
         documents_reviewed, general_findings_intro, kob_entries_summary,
+        electrical_measurement_date, electrical_next_measurement_date,
+        electrical_measurement_protocol_number, electrical_measurement_verdict,
+        electrical_measurement_verdict_notes, electrical_measurement_final_assessment,
+        electrical_measurement_notes, electrical_measurement_protocol_url,
         turbines (
           id, turbine_code, ew_designation, model, manufacturer, rated_power_mw, serial_number,
           location_address, tower_height_m, hub_height_m, rotor_diameter_m,
@@ -1204,6 +1208,65 @@ export async function GET(
         'Pomiary wykonano zgodnie z art. 62 ust. 1 pkt 2 PB oraz wymaganiami PN-HD 60364 i PN-EN 62305.'
       )
 
+      // Podsumowanie pomiarów (Artur uwagi 5L pkt 3 — wariant B). Pojawia się
+      // tylko gdy któreś z kluczowych pól jest wypełnione.
+      const verdictLabelPdf: Record<string, string> = {
+        dopuszcza: 'Dopuszcza do dalszej eksploatacji',
+        warunkowo: 'Warunkowo dopuszcza',
+        nie_dopuszcza: 'Nie dopuszcza do dalszej eksploatacji',
+      }
+      const summaryRows: Array<[string, string]> = []
+      if (insp.electrical_measurement_protocol_number) {
+        summaryRows.push([
+          'Nr protokołu z pomiaru',
+          insp.electrical_measurement_protocol_number,
+        ])
+      }
+      if (insp.electrical_measurement_date) {
+        summaryRows.push([
+          'Data pomiaru',
+          formatDate(insp.electrical_measurement_date),
+        ])
+      }
+      if (insp.electrical_next_measurement_date) {
+        summaryRows.push([
+          'Data kolejnego pomiaru',
+          formatDate(insp.electrical_next_measurement_date),
+        ])
+      }
+      if (insp.electrical_measurement_verdict) {
+        const verdict =
+          verdictLabelPdf[insp.electrical_measurement_verdict] ||
+          insp.electrical_measurement_verdict
+        const withNotes = insp.electrical_measurement_verdict_notes
+          ? `${verdict} — ${insp.electrical_measurement_verdict_notes}`
+          : verdict
+        summaryRows.push(['Orzeczenie', withNotes])
+      }
+      if (insp.electrical_measurement_final_assessment) {
+        summaryRows.push([
+          'Ocena końcowa',
+          insp.electrical_measurement_final_assessment,
+        ])
+      }
+      if (insp.electrical_measurement_notes) {
+        summaryRows.push([
+          'Uwagi do oględzin i oceny',
+          insp.electrical_measurement_notes,
+        ])
+      }
+      if (summaryRows.length > 0) {
+        addSubHeading('Podsumowanie pomiarów')
+        addKeyValueTable(
+          summaryRows.map(([label, value]) => ({ label, value }))
+        )
+      }
+      if (insp.electrical_measurement_protocol_url) {
+        addBody(
+          'Pełny protokół pomiarów stanowi załącznik do niniejszej kontroli (PDF).'
+        )
+      }
+
       if (electricalMeasurements && electricalMeasurements.length > 0) {
         addSubHeading('A. Pomiary punktów kontrolnych')
         const emBody = (electricalMeasurements as any[]).map((m: any) => {
@@ -1428,9 +1491,33 @@ export async function GET(
     }
 
     addSubHeading('Załączniki do protokołu')
-    const attachBody =
+    // Auto-dorzucamy protokół pomiarów PDF (z `inspections.electrical_measurement_protocol_url`)
+    // jako kolejny załącznik, żeby user nie musiał go ręcznie wpisywać.
+    const attachItems: Array<{ item_number: number; description: string }> =
       attachments && attachments.length > 0
-        ? attachments.map((a: any) => [String(a.item_number), a.description])
+        ? attachments.map((a: any) => ({
+            item_number: a.item_number,
+            description: a.description || '',
+          }))
+        : []
+    if (insp.electrical_measurement_protocol_url) {
+      const protoNo = insp.electrical_measurement_protocol_number
+        ? ` nr ${insp.electrical_measurement_protocol_number}`
+        : ''
+      const protoDate = insp.electrical_measurement_date
+        ? ` z dnia ${formatDate(insp.electrical_measurement_date)}`
+        : ''
+      attachItems.unshift({
+        item_number: 0,
+        description: `Protokół pomiarów elektrycznych${protoNo}${protoDate} (PDF)`,
+      })
+      attachItems.forEach((a, i) => {
+        a.item_number = i + 1
+      })
+    }
+    const attachBody =
+      attachItems.length > 0
+        ? attachItems.map((a) => [String(a.item_number), a.description])
         : [1, 2, 3, 4, 5, 6].map((n) => [String(n), ''])
     addAutoTable(['Lp.', 'Załącznik do protokołu'], attachBody, [10, 170])
 

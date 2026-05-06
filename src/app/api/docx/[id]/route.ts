@@ -366,6 +366,14 @@ export async function GET(
         documents_reviewed,
         general_findings_intro,
         kob_entries_summary,
+        electrical_measurement_date,
+        electrical_next_measurement_date,
+        electrical_measurement_protocol_number,
+        electrical_measurement_verdict,
+        electrical_measurement_verdict_notes,
+        electrical_measurement_final_assessment,
+        electrical_measurement_notes,
+        electrical_measurement_protocol_url,
         turbines (
           id,
           turbine_code,
@@ -1627,6 +1635,87 @@ export async function GET(
         )
       )
 
+      // Podsumowanie pomiarów (Artur uwagi 5L pkt 3 — wariant B). Pojawia się
+      // tylko gdy któreś z kluczowych pól jest wypełnione.
+      const verdictLabelDocx: Record<string, string> = {
+        dopuszcza: 'Dopuszcza do dalszej eksploatacji',
+        warunkowo: 'Warunkowo dopuszcza',
+        nie_dopuszcza: 'Nie dopuszcza do dalszej eksploatacji',
+      }
+      const hasSummary =
+        insp.electrical_measurement_date ||
+        insp.electrical_next_measurement_date ||
+        insp.electrical_measurement_protocol_number ||
+        insp.electrical_measurement_verdict ||
+        insp.electrical_measurement_final_assessment ||
+        insp.electrical_measurement_notes ||
+        insp.electrical_measurement_protocol_url
+      if (hasSummary) {
+        electricalSection.push(subHeading('Podsumowanie pomiarów'))
+        const summaryRows: TableRow[] = []
+        if (insp.electrical_measurement_protocol_number) {
+          summaryRows.push(
+            metaRow(
+              'Nr protokołu z pomiaru:',
+              insp.electrical_measurement_protocol_number as string
+            )
+          )
+        }
+        if (insp.electrical_measurement_date) {
+          summaryRows.push(
+            metaRow('Data pomiaru:', formatDate(insp.electrical_measurement_date))
+          )
+        }
+        if (insp.electrical_next_measurement_date) {
+          summaryRows.push(
+            metaRow(
+              'Data kolejnego pomiaru:',
+              formatDate(insp.electrical_next_measurement_date)
+            )
+          )
+        }
+        if (insp.electrical_measurement_verdict) {
+          const verdict =
+            verdictLabelDocx[insp.electrical_measurement_verdict as string] ||
+            (insp.electrical_measurement_verdict as string)
+          const withNotes = insp.electrical_measurement_verdict_notes
+            ? `${verdict} — ${insp.electrical_measurement_verdict_notes as string}`
+            : verdict
+          summaryRows.push(metaRow('Orzeczenie:', withNotes))
+        }
+        if (insp.electrical_measurement_final_assessment) {
+          summaryRows.push(
+            metaRow(
+              'Ocena końcowa:',
+              insp.electrical_measurement_final_assessment as string
+            )
+          )
+        }
+        if (insp.electrical_measurement_notes) {
+          summaryRows.push(
+            metaRow(
+              'Uwagi do oględzin i oceny:',
+              insp.electrical_measurement_notes as string
+            )
+          )
+        }
+        if (summaryRows.length > 0) {
+          electricalSection.push(
+            new Table({
+              width: { size: USABLE_WIDTH, type: WidthType.DXA },
+              rows: summaryRows,
+            })
+          )
+        }
+        if (insp.electrical_measurement_protocol_url) {
+          electricalSection.push(
+            bodyParagraph(
+              'Pełny protokół pomiarów stanowi załącznik do niniejszej kontroli (PDF).'
+            )
+          )
+        }
+      }
+
       const measurements = electricalMeasurements || []
       if (measurements.length > 0) {
         electricalSection.push(subHeading('A. Pomiary punktów kontrolnych'))
@@ -1939,6 +2028,34 @@ export async function GET(
     })
 
     // ─── ZAŁĄCZNIKI ─────────────────────────────────────────────────────────
+    // Auto-dorzucamy protokół pomiarów PDF (z `inspections.electrical_measurement_protocol_url`)
+    // jako pierwszy / kolejny załącznik, żeby user nie musiał go ręcznie wpisywać.
+    const baseAttachments: Array<{ item_number: number; description: string }> =
+      (attachments && attachments.length > 0)
+        ? (attachments as Array<{ item_number: number; description: string }>).map(
+            (a) => ({ item_number: a.item_number, description: a.description || '' })
+          )
+        : []
+    if (insp.electrical_measurement_protocol_url) {
+      const protoNo = insp.electrical_measurement_protocol_number
+        ? ` nr ${insp.electrical_measurement_protocol_number as string}`
+        : ''
+      const protoDate = insp.electrical_measurement_date
+        ? ` z dnia ${formatDate(insp.electrical_measurement_date)}`
+        : ''
+      baseAttachments.unshift({
+        item_number: 0,
+        description: `Protokół pomiarów elektrycznych${protoNo}${protoDate} (PDF)`,
+      })
+      // Renumeracja po dodaniu na początku.
+      baseAttachments.forEach((a, i) => {
+        a.item_number = i + 1
+      })
+    }
+    const attachmentsList =
+      baseAttachments.length > 0
+        ? baseAttachments
+        : [1, 2, 3, 4, 5, 6].map((n) => ({ item_number: n, description: '' }))
     const attachCols = [
       Math.floor(USABLE_WIDTH * 0.06),
       USABLE_WIDTH - Math.floor(USABLE_WIDTH * 0.06),
@@ -1951,11 +2068,8 @@ export async function GET(
           headerCell('Załącznik do protokołu', attachCols[1]),
         ],
       }),
-      ...((attachments && attachments.length > 0)
-        ? attachments
-        : [1, 2, 3, 4, 5, 6].map((n) => ({ item_number: n, description: '' }))
-      ).map(
-        (a: any) =>
+      ...attachmentsList.map(
+        (a) =>
           new TableRow({
             children: [
               dataCell(String(a.item_number), attachCols[0]),

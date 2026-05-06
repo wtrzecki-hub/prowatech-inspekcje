@@ -173,6 +173,7 @@ export async function fileExists(key: string): Promise<boolean> {
 
 export type StorageContext =
   | "inspection-photo"
+  | "inspection-attachment"
   | "turbine-photo"
   | "inspector-doc"
   | "historical-protocol";
@@ -211,6 +212,15 @@ export function buildKey(params: BuildKeyParams): string {
         throw new Error("inspectionId required for context=inspection-photo");
       }
       return `inspections/${params.inspectionId}/photos/${ts}_${rand}.${ext}`;
+    }
+
+    case "inspection-attachment": {
+      if (!params.inspectionId) {
+        throw new Error(
+          "inspectionId required for context=inspection-attachment"
+        );
+      }
+      return `inspections/${params.inspectionId}/attachments/${ts}_${rand}.${ext}`;
     }
 
     case "turbine-photo": {

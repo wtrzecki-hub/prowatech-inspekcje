@@ -48,6 +48,7 @@ export const dynamic = "force-dynamic";
 
 const VALID_CONTEXTS: StorageContext[] = [
   "inspection-photo",
+  "inspection-attachment",
   "turbine-photo",
   "inspector-doc",
   "historical-protocol",
@@ -156,6 +157,14 @@ export async function POST(request: NextRequest) {
       if (!body.inspectionId) {
         return NextResponse.json(
           { error: "inspectionId required for context=inspection-photo" },
+          { status: 400 }
+        );
+      }
+      buildParams.inspectionId = body.inspectionId;
+    } else if (context === "inspection-attachment") {
+      if (!body.inspectionId) {
+        return NextResponse.json(
+          { error: "inspectionId required for context=inspection-attachment" },
           { status: 400 }
         );
       }
