@@ -71,6 +71,9 @@ interface Inspection {
   turbine: {
     id: string
     turbine_code: string
+    /** Oznaczenie EW nadane przez zarządcę (np. „EW Bieganowo") — preferowane
+     *  do wyświetlania w nagłówku zamiast technicznego turbine_code. */
+    ew_designation: string | null
     model: string | null
     manufacturer: string | null
     rated_power_mw: number | null
@@ -199,6 +202,7 @@ export default function InspectionDetailPage() {
           turbine:turbine_id (
             id,
             turbine_code,
+            ew_designation,
             model,
             manufacturer,
             rated_power_mw,
@@ -222,6 +226,7 @@ export default function InspectionDetailPage() {
         turbine: {
           id: raw.turbine?.id,
           turbine_code: raw.turbine?.turbine_code,
+          ew_designation: raw.turbine?.ew_designation ?? null,
           model: raw.turbine?.model,
           manufacturer: raw.turbine?.manufacturer,
           rated_power_mw: raw.turbine?.rated_power_mw,
@@ -544,7 +549,9 @@ export default function InspectionDetailPage() {
         <div className="flex justify-between items-start gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-graphite-900 mb-2">
-              <span className="font-mono">{inspection.turbine?.turbine_code}</span>
+              <span className="font-mono">
+                {inspection.turbine?.ew_designation || inspection.turbine?.turbine_code}
+              </span>
               {' — '}{inspection.wind_farm?.name}
             </h1>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">

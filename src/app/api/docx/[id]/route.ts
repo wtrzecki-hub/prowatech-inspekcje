@@ -1012,6 +1012,8 @@ export async function GET(
     })
 
     // ─── PODSTAWOWE DANE OBIEKTU ───────────────────────────────────────────
+    // Wiersze techniczne. Wymiary turbiny (wysokość wieży, hub, średnica rotora)
+    // są celowo pominięte — nie wchodzą do protokołu kontroli.
     const techTable = new Table({
       width: { size: USABLE_WIDTH, type: WidthType.DXA },
       rows: [
@@ -1023,18 +1025,6 @@ export async function GET(
         metaRow(
           'Moc znamionowa [MW]',
           turbine?.rated_power_mw ? `${turbine.rated_power_mw}` : ''
-        ),
-        metaRow(
-          'Wysokość wieży H [m]',
-          turbine?.tower_height_m ? `${turbine.tower_height_m}` : ''
-        ),
-        metaRow(
-          'Wysokość do osi piasty [m]',
-          turbine?.hub_height_m ? `${turbine.hub_height_m}` : ''
-        ),
-        metaRow(
-          'Średnica rotora D [m]',
-          turbine?.rotor_diameter_m ? `${turbine.rotor_diameter_m}` : ''
         ),
         metaRow('Nr seryjny turbiny', turbine?.serial_number || ''),
         metaRow(

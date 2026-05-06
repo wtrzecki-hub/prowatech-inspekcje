@@ -787,18 +787,8 @@ export async function GET(
         label: 'Moc znamionowa [MW]',
         value: turbine?.rated_power_mw ? `${turbine.rated_power_mw}` : '',
       },
-      {
-        label: 'Wysokość wieży H [m]',
-        value: turbine?.tower_height_m ? `${turbine.tower_height_m}` : '',
-      },
-      {
-        label: 'Wysokość do osi piasty [m]',
-        value: turbine?.hub_height_m ? `${turbine.hub_height_m}` : '',
-      },
-      {
-        label: 'Średnica rotora D [m]',
-        value: turbine?.rotor_diameter_m ? `${turbine.rotor_diameter_m}` : '',
-      },
+      // Wymiary turbiny (wysokość wieży, hub, średnica rotora) celowo pominięte —
+      // nie wchodzą do protokołu kontroli.
       { label: 'Nr seryjny turbiny', value: turbine?.serial_number || '' },
       {
         label: 'Rok zakończenia budowy',

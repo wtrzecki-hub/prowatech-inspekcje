@@ -119,6 +119,67 @@ const EMPTY_TURBINE_PHOTOS: TurbinePhotos = {
   photo_url_3: null,
 }
 
+/**
+ * Kształt rzędu z `turbines` używany do auto-uzupełniania pól metryczki.
+ * Supabase zwraca relacje `wind_farms` / `clients` pojedynczo (po `.single()`),
+ * ale typy generyczne traktują je jako obiekt — typujemy tu wąsko.
+ */
+interface TurbineForDefaults {
+  id: string
+  photo_url: string | null
+  photo_url_2: string | null
+  photo_url_3: string | null
+  turbine_code: string | null
+  ew_designation: string | null
+  manufacturer: string | null
+  model: string | null
+  location_address: string | null
+  cadastral_parcel: string | null
+  wind_farms: {
+    location_gmina: string | null
+    location_powiat: string | null
+    location_voivodeship: string | null
+    clients: { name: string | null } | null
+  } | null
+}
+
+const trim = (v: string | null | undefined) => v?.trim() || null
+
+function buildDefaultObjectAddress(t: TurbineForDefaults): string | null {
+  const parts: string[] = []
+  const loc = trim(t.location_address)
+  if (loc) parts.push(loc)
+
+  const wf = t.wind_farms
+  const adminParts: string[] = []
+  if (trim(wf?.location_gmina)) adminParts.push(`gmina ${trim(wf!.location_gmina)}`)
+  if (trim(wf?.location_powiat)) adminParts.push(`powiat ${trim(wf!.location_powiat)}`)
+  if (trim(wf?.location_voivodeship)) adminParts.push(`woj. ${trim(wf!.location_voivodeship)}`)
+  if (adminParts.length) parts.push(adminParts.join(', '))
+
+  const cad = trim(t.cadastral_parcel)
+  if (cad) parts.push(`dz. ewid. ${cad}`)
+
+  return parts.length > 0 ? parts.join('; ') : null
+}
+
+function buildDefaultObjectRegistryNumber(t: TurbineForDefaults): string | null {
+  return trim(t.ew_designation) || trim(t.turbine_code)
+}
+
+function buildDefaultObjectName(t: TurbineForDefaults): string | null {
+  const manuf = trim(t.manufacturer)
+  const model = trim(t.model)
+  const suffix = [manuf, model].filter(Boolean).join(' ')
+  return suffix
+    ? `Elektrownia wiatrowa — turbina wiatrowa ${suffix}`
+    : 'Elektrownia wiatrowa — turbina wiatrowa'
+}
+
+function buildDefaultOwnerName(t: TurbineForDefaults): string | null {
+  return trim(t.wind_farms?.clients?.name)
+}
+
 export function InspectionMetadataPiib({
   inspectionId,
   inspectionType = 'annual',
@@ -157,32 +218,79 @@ export function InspectionMetadataPiib({
         .single()
 
       if (error) throw error
-      if (data) {
-        setMeta({
-          ...EMPTY_METADATA,
-          ...data,
-          documents_reviewed:
-            (data.documents_reviewed as DocumentsReviewed) || null,
-        })
+      if (!data) return
 
-        // Auto-pull 3 zdjęć z karty turbiny
-        const tId = (data as { turbine_id?: string | null }).turbine_id ?? null
-        if (tId) {
-          const { data: turbineData, error: tErr } = await sb
-            .from('turbines')
-            .select('id, photo_url, photo_url_2, photo_url_3')
-            .eq('id', tId)
-            .single()
-          if (!tErr && turbineData) {
-            setTurbinePhotos({
-              turbineId: turbineData.id,
-              photo_url: turbineData.photo_url,
-              photo_url_2: turbineData.photo_url_2,
-              photo_url_3: turbineData.photo_url_3,
-            })
+      const loaded: InspectionMetadata = {
+        ...EMPTY_METADATA,
+        ...data,
+        documents_reviewed:
+          (data.documents_reviewed as DocumentsReviewed) || null,
+      }
+
+      // Auto-pull danych z karty turbiny (zdjęcia + adres/właściciel/itp.)
+      const tId = (data as { turbine_id?: string | null }).turbine_id ?? null
+      if (tId) {
+        const { data: turbineData, error: tErr } = await sb
+          .from('turbines')
+          .select(
+            `id, photo_url, photo_url_2, photo_url_3,
+             turbine_code, ew_designation, manufacturer, model,
+             location_address, cadastral_parcel,
+             wind_farms (
+               location_gmina, location_powiat, location_voivodeship,
+               clients ( name )
+             )`
+          )
+          .eq('id', tId)
+          .single()
+
+        if (!tErr && turbineData) {
+          // Supabase generuje typy, w których relacje (`wind_farms`, `clients`)
+          // są tablicami nawet po `.single()`. Faktycznie mamy obiekt — castujemy.
+          const t = turbineData as unknown as TurbineForDefaults
+          setTurbinePhotos({
+            turbineId: t.id,
+            photo_url: t.photo_url,
+            photo_url_2: t.photo_url_2,
+            photo_url_3: t.photo_url_3,
+          })
+
+          // Wylicz domyślne wartości pól obiektu z karty turbiny i podstaw je
+          // dla pól, które aktualnie są puste (NULL / pusty string). Edycje
+          // użytkownika nie są nadpisywane.
+          const autoFill: Partial<InspectionMetadata> = {}
+          const isEmpty = (v: string | null | undefined) => !v || !v.trim()
+
+          if (isEmpty(loaded.object_address)) {
+            const v = buildDefaultObjectAddress(t)
+            if (v) autoFill.object_address = v
+          }
+          if (isEmpty(loaded.object_registry_number)) {
+            const v = buildDefaultObjectRegistryNumber(t)
+            if (v) autoFill.object_registry_number = v
+          }
+          if (isEmpty(loaded.object_name)) {
+            const v = buildDefaultObjectName(t)
+            if (v) autoFill.object_name = v
+          }
+          if (isEmpty(loaded.owner_name)) {
+            const v = buildDefaultOwnerName(t)
+            if (v) autoFill.owner_name = v
+          }
+
+          if (Object.keys(autoFill).length > 0) {
+            Object.assign(loaded, autoFill)
+            // Persist od razu, żeby nie trzeba było „ruszać" pól w UI.
+            const { error: upErr } = await sb
+              .from('inspections')
+              .update(autoFill)
+              .eq('id', inspectionId)
+            if (upErr) console.error('Błąd auto-fillu metryczki:', upErr)
           }
         }
       }
+
+      setMeta(loaded)
     } catch (err) {
       console.error('Błąd ładowania metryczki PIIB:', err)
     } finally {
