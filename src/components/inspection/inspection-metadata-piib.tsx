@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 
 /**
@@ -24,12 +31,50 @@ import { Textarea } from '@/components/ui/textarea'
  * Self-contained: ładuje stan z DB, zapisuje 800ms na blur.
  */
 
+/**
+ * Status okazania dokumentu w sekcji „Dokumenty przedstawione do wglądu".
+ * - `okazano`: dokument przedstawiony i ważny
+ * - `nie_okazano`: dokument nie został przedstawiony / brak
+ * - `null`: nie określono (default)
+ */
+type DocumentStatus = 'okazano' | 'nie_okazano' | null
+
+/**
+ * Wpis dla pojedynczego rodzaju dokumentu. `info` zawiera tekst dokumentu
+ * (np. „Protokół nr 165/T/2025 z 14.05.2025") — auto-uzupełniany z bazy
+ * jeśli istnieją dane z poprzedniej kontroli, edytowalny ręcznie.
+ *
+ * BACKWARD COMPAT: starsze inspekcje mogą mieć `documents_reviewed.X` jako
+ * goły string. `asEntry()` normalizuje do tego kształtu.
+ */
+interface DocumentEntry {
+  status: DocumentStatus
+  info: string | null
+}
+
+type DocumentValue = DocumentEntry | string | null | undefined
+
 interface DocumentsReviewed {
-  previous_annual?: string
-  previous_5y?: string
-  electrical_measurements?: string
-  service?: string
+  previous_annual?: DocumentValue
+  previous_5y?: DocumentValue
+  electrical_measurements?: DocumentValue
+  service?: DocumentValue
   other?: string
+}
+
+/** Normalizuje wartość do `DocumentEntry`. Stringi (legacy) → `info`. */
+function asEntry(v: DocumentValue): DocumentEntry {
+  if (!v) return { status: null, info: null }
+  if (typeof v === 'string') return { status: null, info: v }
+  return {
+    status: v.status ?? null,
+    info: v.info ?? null,
+  }
+}
+
+/** Czy entry ma sens zapisywać (cokolwiek wypełnione). */
+function entryIsEmpty(e: DocumentEntry): boolean {
+  return e.status === null && (!e.info || !e.info.trim())
 }
 
 interface InspectionMetadata {
@@ -189,6 +234,168 @@ function buildDefaultOwnerName(t: TurbineForDefaults): string | null {
   return trim(t.wind_farms?.clients?.name)
 }
 
+/**
+ * Format daty ISO → `dd.mm.yyyy` (PL). Bez biblioteki `date-fns` żeby nie
+ * powiększać bundla tej karty (i tak ładujemy ją w terenie).
+ */
+function fmtDatePL(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return iso
+  return `${m[3]}.${m[2]}.${m[1]}`
+}
+
+/**
+ * Składa propozycję `info` dla 4 typów dokumentów na podstawie zawartości bazy:
+ *  - previous_annual: ostatnia zakończona/podpisana inspekcja roczna tej turbiny
+ *  - previous_5y: ostatnia zakończona/podpisana inspekcja 5-letnia tej turbiny
+ *  - electrical_measurements: pole electrical_measurement_protocol_number /
+ *    electrical_measurement_date z bieżącej lub poprzedniej 5-letniej
+ *  - service: service_info.last_service_protocol_number / last_service_date
+ *    z bieżącej inspekcji (najczęściej user już to ma w sekcji Serwis)
+ *
+ * Zwraca tylko klucze, które udało się ustalić — nie nadpisuje pustych.
+ */
+async function loadDocumentsAutoFill(
+  sb: ReturnType<typeof createBrowserClient>,
+  turbineId: string,
+  currentInspectionId: string,
+): Promise<{
+  previous_annual?: string
+  previous_5y?: string
+  electrical_measurements?: string
+  service?: string
+}> {
+  const out: Record<string, string> = {}
+
+  // Poprzednia roczna i 5-letnia inspekcja tej turbiny.
+  const { data: prevs } = await sb
+    .from('inspections')
+    .select('id, inspection_date, inspection_type, protocol_number, status')
+    .eq('turbine_id', turbineId)
+    .neq('id', currentInspectionId)
+    .in('status', ['completed', 'signed'])
+    .not('is_deleted', 'is', true)
+    .order('inspection_date', { ascending: false })
+
+  type PrevRow = {
+    id: string
+    inspection_date: string | null
+    inspection_type: 'annual' | 'five_year' | null
+    protocol_number: string | null
+  }
+  const prevList = (prevs || []) as PrevRow[]
+  const prevAnnual = prevList.find((p) => p.inspection_type === 'annual')
+  const prevFiveYear = prevList.find((p) => p.inspection_type === 'five_year')
+
+  if (prevAnnual) {
+    const parts: string[] = ['Okazano']
+    if (prevAnnual.protocol_number)
+      parts.push(`nr ${prevAnnual.protocol_number}`)
+    const d = fmtDatePL(prevAnnual.inspection_date)
+    if (d) parts.push(`z dnia ${d}`)
+    out.previous_annual = parts.join(', ')
+  }
+
+  if (prevFiveYear) {
+    const parts: string[] = ['Okazano']
+    if (prevFiveYear.protocol_number)
+      parts.push(`nr ${prevFiveYear.protocol_number}`)
+    const d = fmtDatePL(prevFiveYear.inspection_date)
+    if (d) parts.push(`z dnia ${d}`)
+    out.previous_5y = parts.join(', ')
+  }
+
+  // Pomiary elektryczne — najpierw bieżąca inspekcja (jeśli ma podsumowanie
+  // pomiarów wpisane), potem poprzednia 5-letnia jako fallback.
+  const { data: currentInsp } = await sb
+    .from('inspections')
+    .select(
+      'electrical_measurement_protocol_number, electrical_measurement_date'
+    )
+    .eq('id', currentInspectionId)
+    .maybeSingle()
+  const cur = currentInsp as
+    | {
+        electrical_measurement_protocol_number: string | null
+        electrical_measurement_date: string | null
+      }
+    | null
+
+  let emProto: string | null = null
+  let emDate: string | null = null
+  if (cur?.electrical_measurement_protocol_number || cur?.electrical_measurement_date) {
+    emProto = cur.electrical_measurement_protocol_number ?? null
+    emDate = cur.electrical_measurement_date ?? null
+  } else if (prevFiveYear) {
+    const { data: prevEm } = await sb
+      .from('inspections')
+      .select(
+        'electrical_measurement_protocol_number, electrical_measurement_date'
+      )
+      .eq('id', prevFiveYear.id)
+      .maybeSingle()
+    const pem = prevEm as
+      | {
+          electrical_measurement_protocol_number: string | null
+          electrical_measurement_date: string | null
+        }
+      | null
+    emProto = pem?.electrical_measurement_protocol_number ?? null
+    emDate = pem?.electrical_measurement_date ?? null
+  }
+
+  if (emProto || emDate) {
+    const parts: string[] = ['Okazano']
+    if (emProto) parts.push(`nr ${emProto}`)
+    const d = fmtDatePL(emDate)
+    if (d) parts.push(`z dnia ${d}`)
+    out.electrical_measurements = parts.join(', ')
+  }
+
+  // Serwis — z service_info bieżącej inspekcji (cykliczność + protokół).
+  const { data: svc } = await sb
+    .from('service_info')
+    .select(
+      'service_company, last_service_protocol_number, last_service_date, next_service_date'
+    )
+    .eq('inspection_id', currentInspectionId)
+    .maybeSingle()
+  const svcRow = svc as
+    | {
+        service_company: string | null
+        last_service_protocol_number: string | null
+        last_service_date: string | null
+        next_service_date: string | null
+      }
+    | null
+  if (
+    svcRow &&
+    (svcRow.service_company ||
+      svcRow.last_service_protocol_number ||
+      svcRow.last_service_date)
+  ) {
+    const parts: string[] = ['Okazano']
+    if (svcRow.last_service_protocol_number)
+      parts.push(`nr ${svcRow.last_service_protocol_number}`)
+    const d = fmtDatePL(svcRow.last_service_date)
+    if (d) parts.push(`z dnia ${d}`)
+    if (svcRow.service_company) parts.push(svcRow.service_company)
+    out.service = parts.join(', ')
+  }
+
+  return out
+}
+
+const DOCUMENT_STATUS_OPTIONS: Array<{
+  value: 'okazano' | 'nie_okazano' | 'none'
+  label: string
+}> = [
+  { value: 'none', label: '— nie określono —' },
+  { value: 'okazano', label: 'Okazano' },
+  { value: 'nie_okazano', label: 'Nie okazano' },
+]
+
 export function InspectionMetadataPiib({
   inspectionId,
   inspectionType = 'annual',
@@ -287,6 +494,33 @@ export function InspectionMetadataPiib({
             if (v) autoFill.owner_name = v
           }
 
+          // Auto-fill `documents_reviewed.*.info` z poprzednich inspekcji tej
+          // turbiny + service_info bieżącej. Nie nadpisujemy ręcznie wpisanych
+          // wartości — tylko gdy `info` puste.
+          const docsAutoFill = await loadDocumentsAutoFill(sb, tId, inspectionId)
+          const currentDocs: DocumentsReviewed =
+            (loaded.documents_reviewed as DocumentsReviewed) || {}
+          const mergedDocs: DocumentsReviewed = { ...currentDocs }
+          let docsChanged = false
+
+          for (const key of [
+            'previous_annual',
+            'previous_5y',
+            'electrical_measurements',
+            'service',
+          ] as const) {
+            const proposedInfo = docsAutoFill[key]
+            if (!proposedInfo) continue
+            const existing = asEntry(currentDocs[key])
+            if (existing.info && existing.info.trim()) continue
+            mergedDocs[key] = { status: existing.status, info: proposedInfo }
+            docsChanged = true
+          }
+
+          if (docsChanged) {
+            autoFill.documents_reviewed = mergedDocs
+          }
+
           if (Object.keys(autoFill).length > 0) {
             Object.assign(loaded, autoFill)
             // Persist od razu, żeby nie trzeba było „ruszać" pól w UI.
@@ -334,15 +568,41 @@ export function InspectionMetadataPiib({
     queueSave({ [field]: value } as Partial<InspectionMetadata>)
   }
 
-  const handleDoc = (key: keyof DocumentsReviewed, value: string) => {
+  /**
+   * Update jednego z 4 dokumentów strukturyzowanych (previous_annual,
+   * previous_5y, electrical_measurements, service). Każdy ma `status` + `info`.
+   */
+  const handleDocEntry = (
+    key: 'previous_annual' | 'previous_5y' | 'electrical_measurements' | 'service',
+    patch: Partial<DocumentEntry>,
+  ) => {
+    const current = asEntry(meta.documents_reviewed?.[key] as DocumentValue)
+    const next: DocumentEntry = {
+      status: patch.status !== undefined ? patch.status : current.status,
+      info: patch.info !== undefined ? patch.info : current.info,
+    }
     const newDocs: DocumentsReviewed = {
       ...(meta.documents_reviewed || {}),
-      [key]: value || undefined,
+      [key]: entryIsEmpty(next) ? undefined : next,
     }
-    // Strip empty keys for clean JSON
+    saveDocs(newDocs)
+  }
+
+  /** Update pola wolnotekstowego „Inne dokumenty". */
+  const handleDocOther = (value: string) => {
+    const newDocs: DocumentsReviewed = {
+      ...(meta.documents_reviewed || {}),
+      other: value || undefined,
+    }
+    saveDocs(newDocs)
+  }
+
+  const saveDocs = (newDocs: DocumentsReviewed) => {
     const cleanDocs: DocumentsReviewed = {}
     for (const [k, v] of Object.entries(newDocs)) {
-      if (v) cleanDocs[k as keyof DocumentsReviewed] = v
+      if (v === undefined || v === null) continue
+      if (typeof v === 'string' && !v.trim()) continue
+      cleanDocs[k as keyof DocumentsReviewed] = v
     }
     queueSave({
       documents_reviewed:
@@ -642,73 +902,87 @@ export function InspectionMetadataPiib({
             Dokumenty przedstawione do wglądu
           </CardTitle>
           <p className="text-sm text-graphite-500 font-normal">
-            Czy okazano? Czy ważny? — opcjonalne notatki dla każdej pozycji.
+            Status (Okazano / Nie okazano) + informacja o dokumencie
+            (auto-uzupełniana z poprzednich inspekcji tej turbiny).
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="doc_previous_annual" className="font-medium">
-                Protokół z poprzedniej kontroli rocznej
-              </Label>
-              <Input
-                id="doc_previous_annual"
-                value={docs.previous_annual || ''}
-                onChange={(e) => handleDoc('previous_annual', e.target.value)}
-                placeholder="np. okazano, z 14.05.2025, ważny"
-              />
-            </div>
+        <CardContent className="space-y-5">
+          {(
+            [
+              {
+                key: 'previous_annual' as const,
+                label: 'Protokół z poprzedniej kontroli rocznej',
+                placeholder: 'np. nr 165/T/2025 z 14.05.2025',
+              },
+              {
+                key: 'previous_5y' as const,
+                label: 'Protokół z poprzedniej kontroli 5-letniej',
+                placeholder: 'np. nr 84/T/2021 z 03.06.2021',
+              },
+              {
+                key: 'electrical_measurements' as const,
+                label: 'Protokoły pomiarów elektrycznych i odgromowych',
+                placeholder: 'np. nr 165/T/2025 z 14.05.2025',
+              },
+              {
+                key: 'service' as const,
+                label: 'Protokoły serwisowe (producent / autoryzowany serwis)',
+                placeholder: 'np. nr SVC-2026-12 z 04.05.2026, cykliczność roczna',
+              },
+            ] as const
+          ).map(({ key, label, placeholder }) => {
+            const entry = asEntry(docs[key] as DocumentValue)
+            return (
+              <div key={key} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                <div className="md:col-span-5 space-y-1">
+                  <Label className="font-medium">{label}</Label>
+                  <Select
+                    value={entry.status ?? 'none'}
+                    onValueChange={(v) =>
+                      handleDocEntry(key, {
+                        status: v === 'none' ? null : (v as 'okazano' | 'nie_okazano'),
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DOCUMENT_STATUS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="md:col-span-7 space-y-1">
+                  <Label className="text-xs text-graphite-500">
+                    Numer protokołu / data / uwagi
+                  </Label>
+                  <Input
+                    value={entry.info || ''}
+                    onChange={(e) =>
+                      handleDocEntry(key, { info: e.target.value || null })
+                    }
+                    placeholder={placeholder}
+                  />
+                </div>
+              </div>
+            )
+          })}
 
-            <div className="space-y-1">
-              <Label htmlFor="doc_previous_5y" className="font-medium">
-                Protokół z poprzedniej kontroli 5-letniej
-              </Label>
-              <Input
-                id="doc_previous_5y"
-                value={docs.previous_5y || ''}
-                onChange={(e) => handleDoc('previous_5y', e.target.value)}
-                placeholder="np. okazano, z 03.06.2021, ważny"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="doc_electrical" className="font-medium">
-                Protokoły pomiarów elektrycznych i odgromowych
-              </Label>
-              <Input
-                id="doc_electrical"
-                value={docs.electrical_measurements || ''}
-                onChange={(e) =>
-                  handleDoc('electrical_measurements', e.target.value)
-                }
-                placeholder="np. okazano, ważne 5 lat"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="doc_service" className="font-medium">
-                Protokoły serwisowe (producent / autoryzowany serwis)
-              </Label>
-              <Input
-                id="doc_service"
-                value={docs.service || ''}
-                onChange={(e) => handleDoc('service', e.target.value)}
-                placeholder="np. okazano, cykliczność roczna"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="doc_other" className="font-medium">
-                Inne dokumenty
-              </Label>
-              <Textarea
-                id="doc_other"
-                value={docs.other || ''}
-                onChange={(e) => handleDoc('other', e.target.value)}
-                placeholder="Inne dokumenty mające znaczenie dla oceny stanu technicznego…"
-                rows={2}
-              />
-            </div>
+          <div className="space-y-1 pt-2 border-t border-graphite-100">
+            <Label htmlFor="doc_other" className="font-medium">
+              Inne dokumenty
+            </Label>
+            <Textarea
+              id="doc_other"
+              value={(typeof docs.other === 'string' ? docs.other : '') || ''}
+              onChange={(e) => handleDocOther(e.target.value)}
+              placeholder="Inne dokumenty mające znaczenie dla oceny stanu technicznego…"
+              rows={2}
+            />
           </div>
         </CardContent>
       </Card>

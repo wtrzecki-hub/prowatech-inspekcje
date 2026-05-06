@@ -360,7 +360,42 @@ export async function GET(
           .order('sort_order')
       : { data: null }
 
-    const docs = (insp.documents_reviewed as Record<string, string>) || {}
+    // Dokumenty przedstawione do wglądu — backward compat: stary format =
+    // string, nowy = `{ status, info }`. Patrz inspection-metadata-piib.tsx.
+    const rawDocs =
+      (insp.documents_reviewed as Record<
+        string,
+        | string
+        | { status?: 'okazano' | 'nie_okazano' | null; info?: string | null }
+      > | null) || {}
+    const docFmt = (
+      key:
+        | 'previous_annual'
+        | 'previous_5y'
+        | 'electrical_measurements'
+        | 'service',
+    ): string => {
+      const v = rawDocs[key]
+      if (!v) return ''
+      if (typeof v === 'string') return v
+      const status = v.status
+      const info = v.info?.trim() || ''
+      const statusLabel =
+        status === 'okazano'
+          ? 'Okazano'
+          : status === 'nie_okazano'
+            ? 'Nie okazano'
+            : ''
+      if (statusLabel && info) return `${statusLabel} — ${info}`
+      return statusLabel || info
+    }
+    const docs: Record<string, string> = {
+      previous_annual: docFmt('previous_annual'),
+      previous_5y: docFmt('previous_5y'),
+      electrical_measurements: docFmt('electrical_measurements'),
+      service: docFmt('service'),
+      other: typeof rawDocs.other === 'string' ? rawDocs.other : '',
+    }
 
     const protocolNumber = insp.protocol_number || inspectionId.slice(0, 8)
     const inspectionDate = formatDate(insp.inspection_date)

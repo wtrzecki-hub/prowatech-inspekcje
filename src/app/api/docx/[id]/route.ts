@@ -622,7 +622,43 @@ export async function GET(
       : { data: null }
 
     // Documents reviewed (JSONB)
-    const docs = (insp.documents_reviewed as Record<string, string>) || {}
+    // Dokumenty przedstawione do wglądu — od 2026-05 wpisy strukturalne
+     // (`{ status: 'okazano'|'nie_okazano'|null, info: string }`); dla starych
+     // inspekcji zachowujemy backward compat ze stringiem.
+    const rawDocs =
+      (insp.documents_reviewed as Record<
+        string,
+        | string
+        | { status?: 'okazano' | 'nie_okazano' | null; info?: string | null }
+      > | null) || {}
+    const docFmt = (
+      key:
+        | 'previous_annual'
+        | 'previous_5y'
+        | 'electrical_measurements'
+        | 'service',
+    ): string => {
+      const v = rawDocs[key]
+      if (!v) return ''
+      if (typeof v === 'string') return v
+      const status = v.status
+      const info = v.info?.trim() || ''
+      const statusLabel =
+        status === 'okazano'
+          ? 'Okazano'
+          : status === 'nie_okazano'
+            ? 'Nie okazano'
+            : ''
+      if (statusLabel && info) return `${statusLabel} — ${info}`
+      return statusLabel || info
+    }
+    const docs: Record<string, string> = {
+      previous_annual: docFmt('previous_annual'),
+      previous_5y: docFmt('previous_5y'),
+      electrical_measurements: docFmt('electrical_measurements'),
+      service: docFmt('service'),
+      other: typeof rawDocs.other === 'string' ? rawDocs.other : '',
+    }
 
     // ─── METADATA ──────────────────────────────────────────────────────────
     const protocolNumber = insp.protocol_number || inspectionId.slice(0, 8)
