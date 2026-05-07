@@ -616,25 +616,10 @@ export function ElectricalMeasurements({
             )}
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="em-final" className="font-medium">
-              Ocena końcowa
-            </Label>
-            <Textarea
-              id="em-final"
-              value={summary.electrical_measurement_final_assessment || ''}
-              onChange={(e) =>
-                updateSummary({
-                  electrical_measurement_final_assessment:
-                    e.target.value || null,
-                })
-              }
-              placeholder="Krótka ocena końcowa pomiarów elektrycznych…"
-              rows={2}
-            />
-          </div>
-
           {/* ── Oględziny: instalacji elektrycznej + odgromowej (audyt 2026-05-07) ── */}
+          {/* Kolejność (audyt korekta 2026-05-07): oględziny POPRZEDZAJĄ ocenę
+              końcową — ocena końcowa jest zbiorczą konkluzją wynikającą z obu
+              oględzin + orzeczenia. */}
           <VisualInspectionItem
             id="em-visual-electrical"
             label="Oględziny instalacji elektrycznej"
@@ -673,6 +658,24 @@ export function ElectricalMeasurements({
               updateSummary({ lightning_visual_inspection_notes: v })
             }
           />
+
+          <div className="space-y-1">
+            <Label htmlFor="em-final" className="font-medium">
+              Ocena końcowa
+            </Label>
+            <Textarea
+              id="em-final"
+              value={summary.electrical_measurement_final_assessment || ''}
+              onChange={(e) =>
+                updateSummary({
+                  electrical_measurement_final_assessment:
+                    e.target.value || null,
+                })
+              }
+              placeholder="Krótka ocena końcowa pomiarów elektrycznych…"
+              rows={2}
+            />
+          </div>
 
           <div className="space-y-1">
             <Label htmlFor="em-notes" className="font-medium">
