@@ -1718,9 +1718,12 @@ export async function GET(
     console.log(`[PDF] photoRows z file_url: ${photoRows.length}`)
 
     if (photoRows.length > 0) {
-      // Podtytuł sekcji zdjęć — analogicznie do legacy protokołów
-      addSubHeading(
-        'Dokumentacja fotograficzna wykonana podczas kontroli (elementy obiektu, posiadające usterki lub wady, przewidziane do remontu)'
+      // Podtytuł sekcji zdjęć — analogicznie do legacy protokołów.
+      // Tytuł i wyjaśnienie w 2 liniach (nie zmieszczą się w 1 wierszu na A4).
+      addSubHeading('Dokumentacja fotograficzna wykonana podczas kontroli')
+      addBody(
+        '(elementy obiektu posiadające usterki lub wady, przewidziane do remontu)',
+        { italic: true }
       )
 
       // Pre-fetch wszystkich obrazów równolegle
