@@ -746,29 +746,45 @@ export function ElectricalMeasurements({
                   )}
                 </div>
 
-                {/* Uwagi — widoczne tylko przy ocenie Negatywnej (audyt 2026-05-07) */}
-                {isNegative && (
-                  <div className="space-y-1">
-                    <Label htmlFor="em-notes" className="font-medium">
-                      Uwagi do oględzin i oceny
-                    </Label>
-                    <Textarea
-                      id="em-notes"
-                      value={summary.electrical_measurement_notes || ''}
-                      onChange={(e) =>
-                        updateSummary({
-                          electrical_measurement_notes:
-                            e.target.value || null,
-                        })
-                      }
-                      placeholder="Opis stwierdzonych nieprawidłowości / co należy zrobić aby zmienić ocenę na pozytywną…"
-                      rows={4}
-                    />
-                  </div>
-                )}
               </>
             )
           })()}
+
+          {/* Legacy: stary `electrical_measurement_notes` zachowany w DB dla
+              istniejących inspekcji. UI go nie wystawia — opisy
+              nieprawidłowości wpisuje się teraz wprost przy oględzinach,
+              przy negatywnym wyniku (electrical_visual_inspection_notes /
+              lightning_visual_inspection_notes). */}
+          {summary.electrical_measurement_notes &&
+            summary.electrical_measurement_notes.trim() && (
+              <div className="rounded-md border border-graphite-200 bg-graphite-50 p-2.5 text-xs flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-graphite-700">
+                    Stary tekst „Uwagi do oględzin i oceny" (legacy):
+                  </span>
+                  <p className="text-graphite-600 whitespace-pre-wrap mt-1">
+                    {summary.electrical_measurement_notes}
+                  </p>
+                  <p className="text-[11px] text-graphite-500 mt-1">
+                    Pole zostało usunięte — opisy wpisuj teraz wprost
+                    przy oględzinach z negatywnym wynikiem. Możesz wyczyścić
+                    stary tekst lub przekleić go gdzie pasuje.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-graphite-500 hover:text-danger h-6 px-2 shrink-0"
+                  onClick={() =>
+                    updateSummary({ electrical_measurement_notes: null })
+                  }
+                  title="Wyczyść stary tekst"
+                >
+                  ✕
+                </Button>
+              </div>
+            )}
 
           {/* ── Sprzęt użyty do pomiarów (Artur uwagi pkt 6) ── */}
           <div className="space-y-2 pt-2 border-t border-graphite-100">
