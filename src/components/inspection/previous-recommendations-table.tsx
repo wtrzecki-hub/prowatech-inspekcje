@@ -167,13 +167,16 @@ export function PreviousRecommendationsTable({
 
   /**
    * Dodaje pojedynczy wpis w sekcji danego typu (lub bez przypisania).
-   * `forType=null` dla starych ungrouped wpisów.
+   * Numer = max-w-grupie + 1 (per-sekcję, niezależnie dla 5-letniej i rocznej).
    */
   const handleAdd = async (forType: SourceType | null) => {
     setIsSaving(true)
     try {
+      const inGroup = items.filter((i) => i.source_inspection_type === forType)
       const nextNumber =
-        items.length > 0 ? Math.max(...items.map((i) => i.item_number)) + 1 : 1
+        inGroup.length > 0
+          ? Math.max(...inGroup.map((i) => i.item_number)) + 1
+          : 1
 
       const { data, error } = await supabase()
         .from('previous_recommendations')
@@ -195,6 +198,87 @@ export function PreviousRecommendationsTable({
     } finally {
       setIsSaving(false)
     }
+  }
+
+  /**
+   * Renumberuje wpisy w danej sekcji (annual / five_year / null) sekwencyjnie
+   * 1..N po rosnącym item_number. Używane po delete (zamknij dziurę) i po
+   * imporcie (zacznij od 1). Aktualizuje state lokalny po zapisie.
+   */
+  const renumberSection = async (
+    sb: ReturnType<typeof createBrowserClient>,
+    forType: SourceType | null
+  ): Promise<void> => {
+    const query = sb
+      .from('previous_recommendations')
+      .select('id, item_number')
+      .eq('inspection_id', inspectionId)
+      .order('item_number', { ascending: true })
+
+    const { data: rows, error } =
+      forType === null
+        ? await query.is('source_inspection_type', null)
+        : await query.eq('source_inspection_type', forType)
+
+    if (error) {
+      console.error('Błąd pobierania do renumeracji:', error)
+      return
+    }
+    if (!rows || rows.length === 0) return
+
+    const list = rows as Array<{ id: string; item_number: number }>
+    const updates: Array<{ id: string; to: number }> = []
+    list.forEach((row, idx) => {
+      const target = idx + 1
+      if (row.item_number !== target) {
+        updates.push({ id: row.id, to: target })
+      }
+    })
+    if (updates.length === 0) return
+
+    for (const u of updates) {
+      const { error: upErr } = await sb
+        .from('previous_recommendations')
+        .update({ item_number: u.to })
+        .eq('id', u.id)
+      if (upErr) console.error('Błąd renumeracji wpisu', u.id, upErr)
+    }
+
+    // Sync state lokalny
+    setItems((prev) => {
+      const map = new Map<string, number>()
+      list.forEach((row, idx) => map.set(row.id, idx + 1))
+      return prev.map((i) =>
+        map.has(i.id) ? { ...i, item_number: map.get(i.id)! } : i
+      )
+    })
+  }
+
+  /** Manual override numeru pozycji — gdy auto-renumber nie zachowuje
+   *  pożądanej kolejności. Bez auto-resort, użytkownik decyduje. */
+  const handleNumberChange = (id: string, raw: string) => {
+    const n = parseInt(raw, 10)
+    if (!Number.isFinite(n) || n < 1) return
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, item_number: n } : i))
+    )
+    if (debounceTimers.current[id]) {
+      clearTimeout(debounceTimers.current[id])
+    }
+    debounceTimers.current[id] = setTimeout(async () => {
+      setIsSaving(true)
+      try {
+        const { error } = await supabase()
+          .from('previous_recommendations')
+          .update({ item_number: n })
+          .eq('id', id)
+        if (error) throw error
+      } catch (err) {
+        console.error('Błąd zmiany numeru:', err)
+      } finally {
+        setIsSaving(false)
+      }
+    }, 600)
   }
 
   /**
@@ -403,10 +487,12 @@ export function PreviousRecommendationsTable({
       }
 
       // -------------------------------------------------------------------
-      // INSERT do previous_recommendations z source_inspection_type
+      // INSERT do previous_recommendations z source_inspection_type.
+      // Numerujemy w obrębie GRUPY (annual/five_year niezależnie).
       // -------------------------------------------------------------------
+      const inGroup = items.filter((i) => i.source_inspection_type === forType)
       const baseNumber =
-        items.length > 0 ? Math.max(...items.map((i) => i.item_number)) : 0
+        inGroup.length > 0 ? Math.max(...inGroup.map((i) => i.item_number)) : 0
 
       const toInsert = recommendations.map((r, idx) => ({
         inspection_id: inspectionId,
@@ -425,6 +511,9 @@ export function PreviousRecommendationsTable({
       if (insertErr) throw insertErr
       const newItems = (inserted || []) as PreviousRecommendation[]
       setItems((prev) => [...prev, ...newItems])
+
+      // Renumber sekcji po imporcie — pewność że numeracja jest 1..N.
+      await renumberSection(sb, forType)
 
       const info: AutoImportInfo = {
         count: newItems.length,
@@ -488,13 +577,19 @@ export function PreviousRecommendationsTable({
   }
 
   const handleDelete = async (id: string) => {
+    const deleted = items.find((i) => i.id === id)
     setItems((prev) => prev.filter((i) => i.id !== id))
     try {
-      const { error } = await supabase()
+      const sb = supabase()
+      const { error } = await sb
         .from('previous_recommendations')
         .delete()
         .eq('id', id)
       if (error) throw error
+      // Auto-renumber grupy żeby zamknąć dziurę po usuniętym wpisie.
+      if (deleted) {
+        await renumberSection(sb, deleted.source_inspection_type)
+      }
     } catch (err) {
       console.error('Błąd usuwania:', err)
       void loadItems()
@@ -512,12 +607,15 @@ export function PreviousRecommendationsTable({
   }
 
   // Grupowanie wpisów po source_inspection_type. NULL = legacy/ungrouped.
+  // Sortujemy per-grupa po item_number — przy manual edit numerka wpis
+  // przesuwa się w UI od razu zamiast czekać na fetch.
   const itemsByType: Record<SourceType, PreviousRecommendation[]> = {
     five_year: [],
     annual: [],
   }
   const itemsUngrouped: PreviousRecommendation[] = []
-  for (const item of items) {
+  const sortedItems = [...items].sort((a, b) => a.item_number - b.item_number)
+  for (const item of sortedItems) {
     if (item.source_inspection_type === 'five_year') {
       itemsByType.five_year.push(item)
     } else if (item.source_inspection_type === 'annual') {
@@ -541,6 +639,7 @@ export function PreviousRecommendationsTable({
         onImport={() => handleManualImport('five_year')}
         onUpdate={handleUpdate}
         onDelete={handleDelete}
+        onUpdateNumber={handleNumberChange}
         onDismissImportInfo={() =>
           setAutoImportInfo((prev) => ({ ...prev, five_year: undefined }))
         }
@@ -558,6 +657,7 @@ export function PreviousRecommendationsTable({
         onImport={() => handleManualImport('annual')}
         onUpdate={handleUpdate}
         onDelete={handleDelete}
+        onUpdateNumber={handleNumberChange}
         onDismissImportInfo={() =>
           setAutoImportInfo((prev) => ({ ...prev, annual: undefined }))
         }
@@ -580,6 +680,7 @@ export function PreviousRecommendationsTable({
               items={itemsUngrouped}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
+              onUpdateNumber={handleNumberChange}
             />
             <Button onClick={() => handleAdd(null)} disabled={isSaving} size="sm">
               <Plus size={16} className="mr-1" />
@@ -610,6 +711,7 @@ interface SourceSectionProps {
     value: string | null
   ) => void
   onDelete: (id: string) => void
+  onUpdateNumber: (id: string, raw: string) => void
   onDismissImportInfo: () => void
 }
 
@@ -625,6 +727,7 @@ function SourceSection({
   onImport,
   onUpdate,
   onDelete,
+  onUpdateNumber,
   onDismissImportInfo,
 }: SourceSectionProps) {
   const completedCount = items.filter((i) => i.completion_status === 'tak').length
@@ -760,6 +863,7 @@ function SourceSection({
             items={items}
             onUpdate={onUpdate}
             onDelete={onDelete}
+            onUpdateNumber={onUpdateNumber}
           />
         )}
 
@@ -800,9 +904,15 @@ interface RecommendationListProps {
     value: string | null
   ) => void
   onDelete: (id: string) => void
+  onUpdateNumber: (id: string, raw: string) => void
 }
 
-function RecommendationList({ items, onUpdate, onDelete }: RecommendationListProps) {
+function RecommendationList({
+  items,
+  onUpdate,
+  onDelete,
+  onUpdateNumber,
+}: RecommendationListProps) {
   return (
     <ul className="space-y-3">
       {items.map((item) => (
@@ -811,9 +921,16 @@ function RecommendationList({ items, onUpdate, onDelete }: RecommendationListPro
           className="rounded-xl border border-graphite-200 p-3 shadow-xs space-y-3 bg-white"
         >
           <div className="flex items-start gap-3">
-            <div className="shrink-0 w-8 h-8 rounded-full bg-graphite-100 flex items-center justify-center font-mono text-sm font-semibold text-graphite-700">
-              {item.item_number}
-            </div>
+            {/* Edytowalny numer pozycji — manual override gdy auto-renumber
+                nie zachowuje pożądanej kolejności. */}
+            <input
+              type="number"
+              min={1}
+              value={item.item_number}
+              onChange={(e) => onUpdateNumber(item.id, e.target.value)}
+              className="shrink-0 w-10 h-8 rounded-full bg-graphite-100 text-center font-mono text-sm font-semibold text-graphite-700 border-0 outline-none focus:ring-2 focus:ring-primary-600 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              title="Numer pozycji — kliknij aby edytować ręcznie"
+            />
             <div className="flex-1 space-y-1">
               <Label
                 htmlFor={`rec-${item.id}`}
