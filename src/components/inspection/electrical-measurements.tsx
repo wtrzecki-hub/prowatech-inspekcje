@@ -616,6 +616,49 @@ export function ElectricalMeasurements({
             )}
           </div>
 
+          {/* ── Oględziny: instalacji elektrycznej + odgromowej (audyt 2026-05-07) ── */}
+          {/* Kolejność (audyt korekta 2026-05-07): oględziny POPRZEDZAJĄ ocenę
+              końcową — ocena końcowa jest zbiorczą konkluzją wynikającą z obu
+              oględzin + orzeczenia. */}
+          <VisualInspectionItem
+            id="em-visual-electrical"
+            label="Oględziny instalacji elektrycznej"
+            result={summary.electrical_visual_inspection_result}
+            notes={summary.electrical_visual_inspection_notes}
+            onResultChange={(v) =>
+              updateSummary({
+                electrical_visual_inspection_result: v,
+                // Czyść opis, jeśli wynik wraca do pozytywnej / null.
+                electrical_visual_inspection_notes:
+                  v === 'negatywna'
+                    ? summary.electrical_visual_inspection_notes
+                    : null,
+              })
+            }
+            onNotesChange={(v) =>
+              updateSummary({ electrical_visual_inspection_notes: v })
+            }
+          />
+
+          <VisualInspectionItem
+            id="em-visual-lightning"
+            label="Oględziny instalacji odgromowej i uziomów"
+            result={summary.lightning_visual_inspection_result}
+            notes={summary.lightning_visual_inspection_notes}
+            onResultChange={(v) =>
+              updateSummary({
+                lightning_visual_inspection_result: v,
+                lightning_visual_inspection_notes:
+                  v === 'negatywna'
+                    ? summary.lightning_visual_inspection_notes
+                    : null,
+              })
+            }
+            onNotesChange={(v) =>
+              updateSummary({ lightning_visual_inspection_notes: v })
+            }
+          />
+
           <div className="space-y-1">
             <Label htmlFor="em-final" className="font-medium">
               Ocena końcowa
