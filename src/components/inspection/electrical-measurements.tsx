@@ -659,80 +659,116 @@ export function ElectricalMeasurements({
             }
           />
 
-          <div className="space-y-1">
-            <Label htmlFor="em-final" className="font-medium">
-              Ocena końcowa
-            </Label>
-            <Textarea
-              id="em-final"
-              value={summary.electrical_measurement_final_assessment || ''}
-              onChange={(e) =>
-                updateSummary({
-                  electrical_measurement_final_assessment:
-                    e.target.value || null,
-                })
-              }
-              placeholder="Krótka ocena końcowa pomiarów elektrycznych…"
-              rows={2}
-            />
-          </div>
+          {/* ── Ocena końcowa: strukturyzowana (pozytywna / negatywna) ────── */}
+          {/* Wartość w `electrical_measurement_final_assessment` zapisujemy
+              lowercase ('pozytywna' / 'negatywna'), żeby UI mogło reagować
+              na nią warunkowo (Uwagi pojawiają się tylko przy negatywnej).
+              Legacy free-text ("Negatywna", "wymaga dodatkowych pomiarów")
+              detekowane jako '__custom__' z opcją "Wyczyść". */}
+          {(() => {
+            const raw = summary.electrical_measurement_final_assessment
+            const lower = raw?.toLowerCase().trim()
+            const isStandard = lower === 'pozytywna' || lower === 'negatywna'
+            const isNegative = lower === 'negatywna'
+            const selectValue = !raw
+              ? '__none__'
+              : isStandard
+                ? lower!
+                : '__custom__'
 
-          {/* ── Oględziny: instalacji elektrycznej + odgromowej (audyt 2026-05-07) ── */}
-          <VisualInspectionItem
-            id="em-visual-electrical"
-            label="Oględziny instalacji elektrycznej"
-            result={summary.electrical_visual_inspection_result}
-            notes={summary.electrical_visual_inspection_notes}
-            onResultChange={(v) =>
-              updateSummary({
-                electrical_visual_inspection_result: v,
-                // Czyść opis, jeśli wynik wraca do pozytywnej / null.
-                electrical_visual_inspection_notes:
-                  v === 'negatywna'
-                    ? summary.electrical_visual_inspection_notes
-                    : null,
-              })
-            }
-            onNotesChange={(v) =>
-              updateSummary({ electrical_visual_inspection_notes: v })
-            }
-          />
+            return (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor="em-final" className="font-medium">
+                    Ocena końcowa
+                  </Label>
+                  <Select
+                    value={selectValue}
+                    onValueChange={(v) => {
+                      if (v === '__none__') {
+                        updateSummary({
+                          electrical_measurement_final_assessment: null,
+                          // Czyść Uwagi gdy ocena znika.
+                          electrical_measurement_notes: null,
+                        })
+                      } else if (v === '__custom__') {
+                        // No-op — zostaje stary tekst, użytkownik decyduje
+                        // czy wyczyścić przyciskiem poniżej.
+                      } else {
+                        updateSummary({
+                          electrical_measurement_final_assessment: v,
+                          // Czyść Uwagi gdy zmieniamy z negatywnej na pozytywną.
+                          electrical_measurement_notes:
+                            v === 'negatywna'
+                              ? summary.electrical_measurement_notes
+                              : null,
+                        })
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="em-final">
+                      <SelectValue placeholder="— wybierz ocenę —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— nie określono —</SelectItem>
+                      <SelectItem value="pozytywna">Pozytywna</SelectItem>
+                      <SelectItem value="negatywna">Negatywna</SelectItem>
+                      {raw && !isStandard && (
+                        <SelectItem value="__custom__">
+                          {raw} (własny wpis)
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {raw && !isStandard && (
+                    <div className="rounded-md border border-graphite-200 bg-graphite-50 p-2.5 text-xs flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-graphite-700">
+                          Stary wpis (legacy):
+                        </span>{' '}
+                        <span className="text-graphite-600">{raw}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-graphite-500 hover:text-danger h-6 px-2"
+                        onClick={() =>
+                          updateSummary({
+                            electrical_measurement_final_assessment: null,
+                          })
+                        }
+                        title="Wyczyść stary wpis"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
-          <VisualInspectionItem
-            id="em-visual-lightning"
-            label="Oględziny instalacji odgromowej i uziomów"
-            result={summary.lightning_visual_inspection_result}
-            notes={summary.lightning_visual_inspection_notes}
-            onResultChange={(v) =>
-              updateSummary({
-                lightning_visual_inspection_result: v,
-                lightning_visual_inspection_notes:
-                  v === 'negatywna'
-                    ? summary.lightning_visual_inspection_notes
-                    : null,
-              })
-            }
-            onNotesChange={(v) =>
-              updateSummary({ lightning_visual_inspection_notes: v })
-            }
-          />
-
-          <div className="space-y-1">
-            <Label htmlFor="em-notes" className="font-medium">
-              Uwagi do oględzin i oceny
-            </Label>
-            <Textarea
-              id="em-notes"
-              value={summary.electrical_measurement_notes || ''}
-              onChange={(e) =>
-                updateSummary({
-                  electrical_measurement_notes: e.target.value || null,
-                })
-              }
-              placeholder="Dodatkowe uwagi inspektora dotyczące oględzin instalacji elektrycznej…"
-              rows={3}
-            />
-          </div>
+                {/* Uwagi — widoczne tylko przy ocenie Negatywnej (audyt 2026-05-07) */}
+                {isNegative && (
+                  <div className="space-y-1">
+                    <Label htmlFor="em-notes" className="font-medium">
+                      Uwagi do oględzin i oceny
+                    </Label>
+                    <Textarea
+                      id="em-notes"
+                      value={summary.electrical_measurement_notes || ''}
+                      onChange={(e) =>
+                        updateSummary({
+                          electrical_measurement_notes:
+                            e.target.value || null,
+                        })
+                      }
+                      placeholder="Opis stwierdzonych nieprawidłowości / co należy zrobić aby zmienić ocenę na pozytywną…"
+                      rows={4}
+                    />
+                  </div>
+                )}
+              </>
+            )
+          })()}
 
           {/* ── Sprzęt użyty do pomiarów (Artur uwagi pkt 6) ── */}
           <div className="space-y-2 pt-2 border-t border-graphite-100">
