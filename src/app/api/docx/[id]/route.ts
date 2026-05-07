@@ -2552,11 +2552,18 @@ export async function GET(
     // ─── ZDJĘCIA INSPEKCJI ─────────────────────────────────────────────────
     // Pobieramy zdjęcia z `inspection_photos` posortowane po numerze i
     // budujemy tabelę 2-kolumnową: każde zdjęcie + caption "Zdjęcie nr X".
-    const { data: photosData } = await supabase
+    const { data: photosData, error: photosErr } = await supabase
       .from('inspection_photos')
       .select('id, photo_number, file_url, description, sort_order')
       .eq('inspection_id', inspectionId)
       .order('photo_number', { ascending: true, nullsFirst: false })
+
+    if (photosErr) {
+      console.error('[DOCX] Błąd ładowania inspection_photos:', photosErr)
+    }
+    console.log(
+      `[DOCX] inspection_photos dla ${inspectionId}: ${photosData?.length ?? 0} wierszy`
+    )
 
     const photoRows = (photosData || []).filter(
       (p: any) => p.file_url
@@ -2566,6 +2573,8 @@ export async function GET(
       file_url: string
       description: string | null
     }>
+
+    console.log(`[DOCX] photoRows z file_url: ${photoRows.length}`)
 
     const photoSectionBlocks: (Table | Paragraph)[] = []
     if (photoRows.length > 0) {

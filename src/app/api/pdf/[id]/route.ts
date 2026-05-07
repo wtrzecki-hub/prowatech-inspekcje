@@ -1693,11 +1693,18 @@ export async function GET(
 
     // Pobieramy zdjęcia inspekcji posortowane po numerze (z fallbackiem na sort_order).
     // Renderujemy jako siatkę 2 x N z podpisami "Zdjęcie nr X".
-    const { data: photosData } = await supabase
+    const { data: photosData, error: photosErr } = await supabase
       .from('inspection_photos')
       .select('id, photo_number, file_url, description, sort_order')
       .eq('inspection_id', inspectionId)
       .order('photo_number', { ascending: true, nullsFirst: false })
+
+    if (photosErr) {
+      console.error('[PDF] Błąd ładowania inspection_photos:', photosErr)
+    }
+    console.log(
+      `[PDF] inspection_photos dla ${inspectionId}: ${photosData?.length ?? 0} wierszy`
+    )
 
     const photoRows = (photosData || []).filter(
       (p: any) => p.file_url
@@ -1707,6 +1714,8 @@ export async function GET(
       file_url: string
       description: string | null
     }>
+
+    console.log(`[PDF] photoRows z file_url: ${photoRows.length}`)
 
     if (photoRows.length > 0) {
       // Podtytuł sekcji zdjęć — analogicznie do legacy protokołów
