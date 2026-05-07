@@ -338,15 +338,92 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
   const handleDelete = async (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id))
     try {
-      const { error } = await supabase()
+      const sb = supabase()
+      const { error } = await sb
         .from('repair_scope_items')
         .delete()
         .eq('id', id)
       if (error) throw error
+      // Auto-renumber po usunięciu — zamknij dziurę po skasowanym wpisie.
+      await renumberAll(sb)
     } catch (err) {
       console.error('Błąd usuwania:', err)
       void loadItems()
     }
+  }
+
+  /**
+   * Renumberuje wszystkie wiersze tego inspection 1..N po rosnącym item_number.
+   * `repair_scope_items` to osobna tabela bez source_inspection_type — czyli
+   * jedna numeracja per inspekcja. Używane po delete (zamknij dziurę).
+   */
+  const renumberAll = async (
+    sb: ReturnType<typeof createBrowserClient>
+  ): Promise<void> => {
+    const { data: rows, error } = await sb
+      .from('repair_scope_items')
+      .select('id, item_number')
+      .eq('inspection_id', inspectionId)
+      .order('item_number', { ascending: true })
+
+    if (error) {
+      console.error('Błąd pobierania do renumeracji:', error)
+      return
+    }
+    if (!rows || rows.length === 0) return
+
+    const list = rows as Array<{ id: string; item_number: number }>
+    const updates: Array<{ id: string; to: number }> = []
+    list.forEach((row, idx) => {
+      const target = idx + 1
+      if (row.item_number !== target) {
+        updates.push({ id: row.id, to: target })
+      }
+    })
+    if (updates.length === 0) return
+
+    for (const u of updates) {
+      const { error: upErr } = await sb
+        .from('repair_scope_items')
+        .update({ item_number: u.to })
+        .eq('id', u.id)
+      if (upErr) console.error('Błąd renumeracji wpisu', u.id, upErr)
+    }
+
+    setItems((prev) => {
+      const map = new Map<string, number>()
+      list.forEach((row, idx) => map.set(row.id, idx + 1))
+      return prev.map((i) =>
+        map.has(i.id) ? { ...i, item_number: map.get(i.id)! } : i
+      )
+    })
+  }
+
+  /** Manual override numeru pozycji — gdy auto-renumber nie zachowuje
+   *  pożądanej kolejności. Bez auto-resort, użytkownik decyduje. */
+  const handleNumberChange = (id: string, raw: string) => {
+    const n = parseInt(raw, 10)
+    if (!Number.isFinite(n) || n < 1) return
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, item_number: n } : i))
+    )
+    if (debounceTimers.current[id]) {
+      clearTimeout(debounceTimers.current[id])
+    }
+    debounceTimers.current[id] = setTimeout(async () => {
+      setIsSaving(true)
+      try {
+        const { error } = await supabase()
+          .from('repair_scope_items')
+          .update({ item_number: n })
+          .eq('id', id)
+        if (error) throw error
+      } catch (err) {
+        console.error('Błąd zmiany numeru:', err)
+      } finally {
+        setIsSaving(false)
+      }
+    }, 600)
   }
 
   if (isLoading) {
@@ -407,7 +484,9 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
           </div>
         ) : (
           <ul className="space-y-3">
-            {items.map((item) => (
+            {[...items]
+              .sort((a, b) => a.item_number - b.item_number)
+              .map((item) => (
               <li
                 key={item.id}
                 className={`grid grid-cols-12 gap-3 items-start rounded-xl border p-3 shadow-xs ${
@@ -416,8 +495,17 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
                     : 'border-graphite-200 hover:bg-graphite-50'
                 }`}
               >
-                <div className="col-span-1 flex items-center justify-center pt-2 font-mono text-sm font-semibold text-graphite-500">
-                  {item.item_number}.
+                <div className="col-span-1 flex items-start justify-center pt-2">
+                  {/* Edytowalny numer pozycji — manual override gdy auto-renumber
+                      nie zachowuje pożądanej kolejności. */}
+                  <input
+                    type="number"
+                    min={1}
+                    value={item.item_number}
+                    onChange={(e) => handleNumberChange(item.id, e.target.value)}
+                    className="w-12 h-8 rounded-md bg-graphite-50 text-center font-mono text-sm font-semibold text-graphite-700 border border-graphite-200 outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    title="Numer pozycji — kliknij aby edytować ręcznie"
+                  />
                 </div>
                 <div className="col-span-6 space-y-1">
                   <Label
