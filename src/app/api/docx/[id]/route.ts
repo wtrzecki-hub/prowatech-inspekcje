@@ -2549,6 +2549,148 @@ export async function GET(
       )
     }
 
+    // ─── ZDJĘCIA INSPEKCJI ─────────────────────────────────────────────────
+    // Pobieramy zdjęcia z `inspection_photos` posortowane po numerze i
+    // budujemy tabelę 2-kolumnową: każde zdjęcie + caption "Zdjęcie nr X".
+    const { data: photosData } = await supabase
+      .from('inspection_photos')
+      .select('id, photo_number, file_url, description, sort_order')
+      .eq('inspection_id', inspectionId)
+      .order('photo_number', { ascending: true, nullsFirst: false })
+
+    const photoRows = (photosData || []).filter(
+      (p: any) => p.file_url
+    ) as Array<{
+      id: string
+      photo_number: number | null
+      file_url: string
+      description: string | null
+    }>
+
+    const photoSectionBlocks: (Table | Paragraph)[] = []
+    if (photoRows.length > 0) {
+      photoSectionBlocks.push(
+        subHeading(
+          'Dokumentacja fotograficzna wykonana podczas kontroli (elementy obiektu, posiadające usterki lub wady, przewidziane do remontu)'
+        )
+      )
+
+      // Pre-fetch wszystkich obrazów równolegle
+      const photoBuffers = await Promise.all(
+        photoRows.map((p) => fetchImageAsBuffer(p.file_url))
+      )
+
+      // Tabela: każda para zdjęć ma 2 wiersze — wiersz z obrazami + wiersz z captionami.
+      // Obrazy w stałym rozmiarze 280x187 px (3:2 aspect, ~7cm szerokości).
+      const cellWidth = Math.floor(USABLE_WIDTH / 2)
+      const photoTableRows: TableRow[] = []
+
+      for (let i = 0; i < photoRows.length; i += 2) {
+        const imageCells: TableCell[] = []
+        const captionCells: TableCell[] = []
+
+        for (let j = 0; j < 2; j++) {
+          const photo = photoRows[i + j]
+          const buf = photo ? photoBuffers[i + j] : null
+
+          if (photo && buf) {
+            const imageType: 'jpg' | 'png' = buf.format === 'png' ? 'png' : 'jpg'
+            imageCells.push(
+              new TableCell({
+                width: { size: cellWidth, type: WidthType.DXA },
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                      new ImageRun({
+                        type: imageType,
+                        data: buf.buffer,
+                        transformation: { width: 280, height: 187 },
+                        altText: {
+                          title: `Zdjęcie ${photo.photo_number ?? i + j + 1}`,
+                          description: photo.description ?? '',
+                          name: `inspection-photo-${i + j}`,
+                        },
+                      }),
+                    ],
+                  }),
+                ],
+              })
+            )
+          } else if (photo) {
+            // Photo metadata jest, ale buffer się nie pobrał — placeholder
+            imageCells.push(
+              new TableCell({
+                width: { size: cellWidth, type: WidthType.DXA },
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                      new TextRun({
+                        text: '[zdjęcie niedostępne]',
+                        italics: true,
+                        color: HEX.graphite500,
+                        font: 'Arial',
+                        size: FONT_DXA.small,
+                      }),
+                    ],
+                  }),
+                ],
+              })
+            )
+          } else {
+            // Padding gdy nieparzysta liczba — pusta komórka
+            imageCells.push(
+              new TableCell({
+                width: { size: cellWidth, type: WidthType.DXA },
+                children: [new Paragraph({ children: [new TextRun({ text: '' })] })],
+              })
+            )
+          }
+
+          if (photo) {
+            captionCells.push(
+              new TableCell({
+                width: { size: cellWidth, type: WidthType.DXA },
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 200 },
+                    children: [
+                      new TextRun({
+                        text: `Zdjęcie nr ${photo.photo_number ?? i + j + 1}`,
+                        italics: true,
+                        font: 'Arial',
+                        size: FONT_DXA.small,
+                        color: HEX.graphite800,
+                      }),
+                    ],
+                  }),
+                ],
+              })
+            )
+          } else {
+            captionCells.push(
+              new TableCell({
+                width: { size: cellWidth, type: WidthType.DXA },
+                children: [new Paragraph({ children: [new TextRun({ text: '' })] })],
+              })
+            )
+          }
+        }
+
+        photoTableRows.push(new TableRow({ children: imageCells }))
+        photoTableRows.push(new TableRow({ children: captionCells }))
+      }
+
+      photoSectionBlocks.push(
+        new Table({
+          width: { size: USABLE_WIDTH, type: WidthType.DXA },
+          rows: photoTableRows,
+        })
+      )
+    }
+
     sectionChildren.push(
       sectionHeading(
         isFiveYear
@@ -2559,6 +2701,7 @@ export async function GET(
         'Numerację fotografii zsynchronizowano z kolumną „NR FOT." w tabeli ustaleń (sekcja III).',
         { italic: true }
       ),
+      ...photoSectionBlocks,
 
       sectionHeading(isFiveYear ? 'VIII. Podpisy' : 'VII. Podpisy'),
       bodyParagraph(
