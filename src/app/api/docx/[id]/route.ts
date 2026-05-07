@@ -2578,9 +2578,13 @@ export async function GET(
 
     const photoSectionBlocks: (Table | Paragraph)[] = []
     if (photoRows.length > 0) {
+      // Tytuł sekcji zdjęć w 2 liniach (DOCX zawija sam, ale dla spójności
+      // z PDF rozdzielamy bold tytuł od wyjaśnienia italic).
       photoSectionBlocks.push(
-        subHeading(
-          'Dokumentacja fotograficzna wykonana podczas kontroli (elementy obiektu, posiadające usterki lub wady, przewidziane do remontu)'
+        subHeading('Dokumentacja fotograficzna wykonana podczas kontroli'),
+        bodyParagraph(
+          '(elementy obiektu posiadające usterki lub wady, przewidziane do remontu)',
+          { italic: true }
         )
       )
 
