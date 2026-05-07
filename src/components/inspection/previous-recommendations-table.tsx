@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { ExternalLink, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,24 +12,26 @@ import { Textarea } from '@/components/ui/textarea'
 import { COMPLETION_STATUSES } from '@/lib/constants'
 
 /**
- * PIIB sekcja II — Ocena realizacji zaleceń z poprzedniej kontroli.
+ * PIIB sekcja II — Sprawdzenie wykonania zaleceń z poprzednich kontroli.
  *
- * Tabela 4-kolumnowa: Lp / Zalecenie / Stopień wykonania (tak/nie/w_trakcie) / Uwagi.
+ * Audyt 2026-05-07 (Waldek): protokół wymaga sprawdzenia zaleceń z OBU
+ * poprzednich kontroli — rocznej i 5-letniej. Komponent renderuje 2 osobne
+ * sekcje, każda z własnym auto-importem i listą edycyjną. Każdy wiersz
+ * w `previous_recommendations` ma `source_inspection_type` (annual /
+ * five_year / NULL = legacy).
  *
- * AUTO-IMPORT (Krok 5 z roadmapy uwag Artura, 2026-04-27): gdy `turbineId`
- * jest podane i tabela pusta, automatycznie na pierwszym mount-cie ciągniemy
- * zalecenia z ostatniej zakończonej inspekcji tej turbiny. Bez button-clicka.
- * Banner pokazuje datę + ilość zaimportowanych. User może doedytować.
- *
- * Opcjonalnie ręczny re-import też dostępny — przycisk „Importuj ponownie"
- * dla przypadków gdy auto-import nie zadziałał (brak poprzedniej inspekcji,
- * itp.).
+ * AUTO-IMPORT (per typ): pierwszy mount + brak wpisów dla danego typu →
+ * próbuje pobrać zalecenia z ostatniej zakończonej inspekcji tego typu
+ * (z `inspections`), z fallbackiem do `historical_protocols` (PDF-only,
+ * tylko metadata) lub do `turbines.previous_findings` (legacy text).
  *
  * Toggle button group dla `completion_status` (Wykonano / Nie / W trakcie /
- * —) zamiast Selectu — większe touch targety dla tabletu w terenie.
+ * brak) — większe touch targety dla tabletu w terenie.
  *
  * CRUD na tabeli `previous_recommendations`. Auto-save 800ms.
  */
+
+type SourceType = 'annual' | 'five_year'
 
 interface PreviousRecommendation {
   id: string
@@ -37,24 +40,28 @@ interface PreviousRecommendation {
   recommendation_text: string | null
   completion_status: 'tak' | 'nie' | 'w_trakcie' | null
   remarks: string | null
+  source_inspection_type: SourceType | null
 }
 
 interface AutoImportInfo {
-  /** Ile zaleceń zaimportowano w tej sesji. */
   count: number
-  /** Data poprzedniej inspekcji (ISO string, np. '2025-04-15'). Null gdy
-   *  source = 'turbine_legacy'. */
   fromDate: string | null
-  /** Numer protokołu poprzedniej inspekcji jeśli jest. Null gdy source = 'turbine_legacy'. */
   fromProtocolNumber: string | null
   /**
-   * Źródło importu:
-   *  - 'previous_inspection' = znaleziono poprzednią zakończoną inspekcję
-   *    z `repair_scope_items` lub `repair_recommendations`
-   *  - 'turbine_legacy' = fallback na `turbines.previous_findings` (text field
-   *    z migracji starych danych, split po `\n`)
+   * - 'previous_inspection': z `repair_scope_items` lub `repair_recommendations`
+   * - 'historical_meta': z `historical_protocols` (tylko metadata, brak strukturalnych zaleceń)
+   * - 'turbine_legacy': z `turbines.previous_findings`
    */
-  source: 'previous_inspection' | 'turbine_legacy'
+  source: 'previous_inspection' | 'historical_meta' | 'turbine_legacy'
+}
+
+/** Source-aware metadata: pochodzenie ostatniej kontroli danego typu. */
+interface SourceMeta {
+  date: string | null
+  protocolNumber: string | null
+  pdfUrl: string | null
+  /** Czy znaleźliśmy strukturalne zalecenia (T/N decyduje czy auto-import insertował wiersze). */
+  hasStructured: boolean
 }
 
 interface PreviousRecommendationsTableProps {
@@ -67,6 +74,24 @@ const SUPABASE_URL = 'https://lhxhsprqoecepojrxepf.supabase.co'
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeGhzcHJxb2VjZXBvanJ4ZXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTE0NTksImV4cCI6MjA5MDYyNzQ1OX0.sb8WzlwpPAl4tj6CQgIH34PAQRklUmLeDFOMOS2kUi0'
 
+const SOURCE_LABELS: Record<SourceType, { title: string; short: string }> = {
+  five_year: {
+    title: 'Sprawdzenie wykonania zaleceń z poprzedniej kontroli 5-letniej',
+    short: '5-letniej',
+  },
+  annual: {
+    title: 'Sprawdzenie wykonania zaleceń z poprzedniej kontroli rocznej',
+    short: 'rocznej',
+  },
+}
+
+const formatDate = (iso: string | null): string => {
+  if (!iso) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return iso
+  return `${m[3]}.${m[2]}.${m[1]}`
+}
+
 export function PreviousRecommendationsTable({
   inspectionId,
   turbineId,
@@ -74,10 +99,13 @@ export function PreviousRecommendationsTable({
   const [items, setItems] = useState<PreviousRecommendation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [isImporting, setIsImporting] = useState(false)
-  const [autoImportInfo, setAutoImportInfo] = useState<AutoImportInfo | null>(
-    null,
-  )
+  const [importingType, setImportingType] = useState<SourceType | null>(null)
+  const [autoImportInfo, setAutoImportInfo] = useState<
+    Partial<Record<SourceType, AutoImportInfo>>
+  >({})
+  const [sourceMeta, setSourceMeta] = useState<
+    Partial<Record<SourceType, SourceMeta>>
+  >({})
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
   const autoImportTriedRef = useRef(false)
 
@@ -103,17 +131,18 @@ export function PreviousRecommendationsTable({
       const loaded = (data || []) as PreviousRecommendation[]
       setItems(loaded)
 
-      // Auto-import: pierwszy mount, brak wpisów, mamy turbineId. Cisza, bez
-      // przycisku — inspektor po prostu widzi listę gotową do uzupełnienia.
-      // silent=true: gdy brak poprzednich zaleceń — nie pokazujemy alertu
-      // (irytujący komunikat na każdym wejściu w zakładkę).
-      if (
-        !autoImportTriedRef.current &&
-        loaded.length === 0 &&
-        turbineId
-      ) {
+      // Auto-import: pierwszy mount, mamy turbineId. Niezależnie dla każdego typu.
+      if (!autoImportTriedRef.current && turbineId) {
         autoImportTriedRef.current = true
-        await runAutoImport({ silent: true })
+        const types: SourceType[] = ['five_year', 'annual']
+        for (const t of types) {
+          const hasItemsForType = loaded.some(
+            (i) => i.source_inspection_type === t
+          )
+          if (!hasItemsForType) {
+            await runAutoImport(t, { silent: true })
+          }
+        }
       }
     } catch (err) {
       console.error('Błąd ładowania zaleceń poprzedniej kontroli:', err)
@@ -136,13 +165,15 @@ export function PreviousRecommendationsTable({
     }
   }
 
-  const handleAdd = async () => {
+  /**
+   * Dodaje pojedynczy wpis w sekcji danego typu (lub bez przypisania).
+   * `forType=null` dla starych ungrouped wpisów.
+   */
+  const handleAdd = async (forType: SourceType | null) => {
     setIsSaving(true)
     try {
       const nextNumber =
-        items.length > 0
-          ? Math.max(...items.map((i) => i.item_number)) + 1
-          : 1
+        items.length > 0 ? Math.max(...items.map((i) => i.item_number)) + 1 : 1
 
       const { data, error } = await supabase()
         .from('previous_recommendations')
@@ -152,6 +183,7 @@ export function PreviousRecommendationsTable({
           recommendation_text: null,
           completion_status: null,
           remarks: null,
+          source_inspection_type: forType,
         })
         .select()
         .single()
@@ -166,23 +198,22 @@ export function PreviousRecommendationsTable({
   }
 
   /**
-   * Wewnętrzna logika importu — używana przez auto-import na mount oraz
-   * przez ręczny przycisk „Importuj ponownie".
+   * Auto-import zaleceń dla konkretnego typu (annual / five_year).
    *
-   * 3 warstwy fallbacku, w kolejności:
-   *   1. repair_scope_items z ostatniej zakończonej inspekcji (PIIB Faza 10)
-   *   2. repair_recommendations.scope_description (legacy stara struktura)
-   *   3. turbines.previous_findings + previous_findings_status (legacy text
-   *      z migracji starych danych, split po `\n`, parsowanie statusu jeśli
-   *      kolumna `_status` ma odpowiadające linie)
-   *
-   * Zwraca metadata o tym co zostało zaimportowane, lub null jeśli nic.
+   * Warstwy fallbacku:
+   *   1. inspections + repair_scope_items (PIIB Faza 10)
+   *   2. inspections + repair_recommendations (legacy)
+   *   3. historical_protocols — tylko metadata (PDF-only, brak strukturalnych
+   *      zaleceń, ale pokazujemy header z datą + protokołem + linkiem do PDF)
+   *   4. turbines.previous_findings (legacy text) — ostatnia deska ratunku,
+   *      tylko gdy żaden z poprzednich nie zadziałał
    */
   const runAutoImport = async (
-    options: { silent?: boolean } = {},
+    forType: SourceType,
+    options: { silent?: boolean } = {}
   ): Promise<AutoImportInfo | null> => {
     if (!turbineId) return null
-    setIsImporting(true)
+    setImportingType(forType)
     try {
       const sb = supabase()
 
@@ -195,14 +226,16 @@ export function PreviousRecommendationsTable({
       let source: AutoImportInfo['source'] = 'previous_inspection'
       let fromDate: string | null = null
       let fromProtocolNumber: string | null = null
+      let pdfUrl: string | null = null
 
-      // ---------------------------------------------------------------------
-      // Warstwa 1+2: poprzednia zakończona inspekcja
-      // ---------------------------------------------------------------------
+      // -------------------------------------------------------------------
+      // Warstwa 1+2: poprzednia zakończona inspekcja danego typu
+      // -------------------------------------------------------------------
       const { data: prevInspections, error: prevErr } = await sb
         .from('inspections')
-        .select('id, inspection_date, status, protocol_number')
+        .select('id, inspection_date, status, protocol_number, inspection_type')
         .eq('turbine_id', turbineId)
+        .eq('inspection_type', forType)
         .neq('id', inspectionId)
         .in('status', ['completed', 'signed'])
         .not('is_deleted', 'is', true)
@@ -213,7 +246,6 @@ export function PreviousRecommendationsTable({
       const prev = prevInspections?.[0]
 
       if (prev) {
-        // Warstwa 1: repair_scope_items (PIIB)
         const { data: scopeData } = await sb
           .from('repair_scope_items')
           .select('scope_description')
@@ -225,7 +257,6 @@ export function PreviousRecommendationsTable({
             text: s.scope_description as string,
           }))
         } else {
-          // Warstwa 2: legacy repair_recommendations
           const { data: legacyData } = await sb
             .from('repair_recommendations')
             .select('scope_description')
@@ -238,23 +269,59 @@ export function PreviousRecommendationsTable({
         if (recommendations.length > 0) {
           fromDate = prev.inspection_date as string
           fromProtocolNumber = (prev.protocol_number as string | null) ?? null
+          source = 'previous_inspection'
         }
       }
 
-      // ---------------------------------------------------------------------
-      // Warstwa 3: turbines.previous_findings (legacy text, split \n)
-      // Wpadamy tu gdy: brak poprzedniej inspekcji ALBO poprzednia bez
-      // zaleceń. Większość bazy w 2026-04 jeszcze tu siedzi (1 inspekcja
-      // per turbina w nowym appie), więc to ratujący fallback.
-      // ---------------------------------------------------------------------
+      // -------------------------------------------------------------------
+      // Warstwa 3: historical_protocols (archiwum) — PDF-only metadata
+      // Pokazujemy header z datą/protokołem + linkiem do PDF, ale strukturalnych
+      // zaleceń nie wyciągamy (są tylko w PDF — inspektor uzupełnia ręcznie).
+      // -------------------------------------------------------------------
       if (recommendations.length === 0) {
+        const { data: histRows } = await sb
+          .from('historical_protocols')
+          .select(
+            'id, inspection_date, year, protocol_number, protocol_pdf_url'
+          )
+          .eq('turbine_id', turbineId)
+          .eq('inspection_type', forType)
+          .order('inspection_date', { ascending: false, nullsFirst: false })
+          .order('year', { ascending: false })
+          .limit(1)
+
+        const hist = histRows?.[0] as
+          | {
+              id: string
+              inspection_date: string | null
+              year: number | null
+              protocol_number: string | null
+              protocol_pdf_url: string | null
+            }
+          | undefined
+
+        if (hist) {
+          fromDate = hist.inspection_date
+          fromProtocolNumber = hist.protocol_number
+          pdfUrl = hist.protocol_pdf_url
+          source = 'historical_meta'
+        }
+      }
+
+      // -------------------------------------------------------------------
+      // Warstwa 4: legacy text na karcie turbiny (split \n)
+      // Tylko jeśli to 5-letnia (historyczne dane są zwykle z 5y) ALBO
+      // jeśli to annual i nic nie znaleźliśmy. W obu przypadkach próbujemy.
+      // -------------------------------------------------------------------
+      if (recommendations.length === 0 && source !== 'historical_meta') {
         const { data: turbineData } = await sb
           .from('turbines')
           .select('previous_findings, previous_findings_status')
           .eq('id', turbineId)
           .maybeSingle()
 
-        const rawFindings = (turbineData?.previous_findings as string | null) || ''
+        const rawFindings =
+          (turbineData?.previous_findings as string | null) || ''
         const rawStatus =
           (turbineData?.previous_findings_status as string | null) || ''
 
@@ -287,8 +354,6 @@ export function PreviousRecommendationsTable({
             return {
               text,
               status,
-              // Jeśli status text był nietypowy (nie matchuje regex) — zachowaj
-              // go jako uwagi, żeby kontekst nie został zgubiony.
               remarks:
                 status === null && statusLines[idx]?.length
                   ? statusLines[idx]
@@ -302,21 +367,44 @@ export function PreviousRecommendationsTable({
         }
       }
 
-      // ---------------------------------------------------------------------
-      // Nic z 3 warstw — koniec, info dla user-a (silent skip dla auto-mount)
-      // ---------------------------------------------------------------------
+      // -------------------------------------------------------------------
+      // Zachowaj metadata źródła (dla nagłówka sekcji), nawet gdy nic nie
+      // wstawiamy (np. historical_meta).
+      // -------------------------------------------------------------------
+      setSourceMeta((prev) => ({
+        ...prev,
+        [forType]: {
+          date: fromDate,
+          protocolNumber: fromProtocolNumber,
+          pdfUrl,
+          hasStructured: recommendations.length > 0,
+        },
+      }))
+
+      // -------------------------------------------------------------------
+      // Brak czegokolwiek do wstawienia — koniec
+      // -------------------------------------------------------------------
       if (recommendations.length === 0) {
+        if (source === 'historical_meta') {
+          // Mamy metadata z archiwum — info dla user-a (tylko ręczny re-import)
+          if (!options.silent) {
+            alert(
+              `Znaleziono w archiwum protokół ${fromProtocolNumber || ''} z dn. ${formatDate(fromDate)}, ale strukturalne zalecenia są tylko w PDF — uzupełnij ręcznie z dokumentu.`
+            )
+          }
+          return null
+        }
         if (!options.silent) {
           alert(
-            'Brak danych o poprzednich zaleceniach: ani w nowych protokołach tej turbiny, ani w notatkach „previous_findings".',
+            `Brak danych o poprzednich zaleceniach z kontroli ${SOURCE_LABELS[forType].short}: ani w nowych protokołach tej turbiny, ani w archiwum, ani w notatkach.`
           )
         }
         return null
       }
 
-      // ---------------------------------------------------------------------
-      // INSERT do previous_recommendations
-      // ---------------------------------------------------------------------
+      // -------------------------------------------------------------------
+      // INSERT do previous_recommendations z source_inspection_type
+      // -------------------------------------------------------------------
       const baseNumber =
         items.length > 0 ? Math.max(...items.map((i) => i.item_number)) : 0
 
@@ -326,6 +414,7 @@ export function PreviousRecommendationsTable({
         recommendation_text: r.text,
         completion_status: r.status ?? null,
         remarks: r.remarks ?? null,
+        source_inspection_type: forType,
       }))
 
       const { data: inserted, error: insertErr } = await sb
@@ -343,7 +432,7 @@ export function PreviousRecommendationsTable({
         fromProtocolNumber,
         source,
       }
-      setAutoImportInfo(info)
+      setAutoImportInfo((prev) => ({ ...prev, [forType]: info }))
       return info
     } catch (err) {
       console.error('Błąd importu z poprzedniej inspekcji:', err)
@@ -352,12 +441,12 @@ export function PreviousRecommendationsTable({
       }
       return null
     } finally {
-      setIsImporting(false)
+      setImportingType(null)
     }
   }
 
-  /** Ręczny re-import (button click). */
-  const handleManualImport = () => runAutoImport({ silent: false })
+  const handleManualImport = (forType: SourceType) =>
+    runAutoImport(forType, { silent: false })
 
   const handleUpdate = (
     id: string,
@@ -422,28 +511,158 @@ export function PreviousRecommendationsTable({
     )
   }
 
-  const completedCount = items.filter(
-    (i) => i.completion_status === 'tak',
-  ).length
-  const totalCount = items.length
-
-  // Format daty PL z ISO bez time component
-  const formatDate = (iso: string | null): string => {
-    if (!iso) return ''
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
-    if (!m) return iso
-    return `${m[3]}.${m[2]}.${m[1]}`
+  // Grupowanie wpisów po source_inspection_type. NULL = legacy/ungrouped.
+  const itemsByType: Record<SourceType, PreviousRecommendation[]> = {
+    five_year: [],
+    annual: [],
   }
+  const itemsUngrouped: PreviousRecommendation[] = []
+  for (const item of items) {
+    if (item.source_inspection_type === 'five_year') {
+      itemsByType.five_year.push(item)
+    } else if (item.source_inspection_type === 'annual') {
+      itemsByType.annual.push(item)
+    } else {
+      itemsUngrouped.push(item)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <SourceSection
+        type="five_year"
+        items={itemsByType.five_year}
+        meta={sourceMeta.five_year}
+        autoImportInfo={autoImportInfo.five_year}
+        importing={importingType === 'five_year'}
+        turbineId={turbineId}
+        isSaving={isSaving}
+        onAdd={() => handleAdd('five_year')}
+        onImport={() => handleManualImport('five_year')}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+        onDismissImportInfo={() =>
+          setAutoImportInfo((prev) => ({ ...prev, five_year: undefined }))
+        }
+      />
+
+      <SourceSection
+        type="annual"
+        items={itemsByType.annual}
+        meta={sourceMeta.annual}
+        autoImportInfo={autoImportInfo.annual}
+        importing={importingType === 'annual'}
+        turbineId={turbineId}
+        isSaving={isSaving}
+        onAdd={() => handleAdd('annual')}
+        onImport={() => handleManualImport('annual')}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+        onDismissImportInfo={() =>
+          setAutoImportInfo((prev) => ({ ...prev, annual: undefined }))
+        }
+      />
+
+      {itemsUngrouped.length > 0 && (
+        <Card className="rounded-xl border-graphite-200">
+          <CardHeader>
+            <CardTitle className="text-lg">
+              Inne zalecenia (bez przypisanego źródła)
+            </CardTitle>
+            <p className="text-xs text-graphite-500 font-normal">
+              Wpisy dodane przed wprowadzeniem podziału na typ kontroli.
+              Możesz je zostawić tak, jak są — albo usunąć i ponownie
+              zaimportować w sekcjach powyżej.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RecommendationList
+              items={itemsUngrouped}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+            <Button onClick={() => handleAdd(null)} disabled={isSaving} size="sm">
+              <Plus size={16} className="mr-1" />
+              Dodaj zalecenie
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ─── Subkomponenty ─────────────────────────────────────────────────────────
+
+interface SourceSectionProps {
+  type: SourceType
+  items: PreviousRecommendation[]
+  meta: SourceMeta | undefined
+  autoImportInfo: AutoImportInfo | undefined
+  importing: boolean
+  turbineId?: string
+  isSaving: boolean
+  onAdd: () => void
+  onImport: () => void
+  onUpdate: (
+    id: string,
+    field: 'recommendation_text' | 'completion_status' | 'remarks',
+    value: string | null
+  ) => void
+  onDelete: (id: string) => void
+  onDismissImportInfo: () => void
+}
+
+function SourceSection({
+  type,
+  items,
+  meta,
+  autoImportInfo,
+  importing,
+  turbineId,
+  isSaving,
+  onAdd,
+  onImport,
+  onUpdate,
+  onDelete,
+  onDismissImportInfo,
+}: SourceSectionProps) {
+  const completedCount = items.filter((i) => i.completion_status === 'tak').length
+  const totalCount = items.length
 
   return (
     <Card className="rounded-xl border-graphite-200">
       <CardHeader>
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <CardTitle className="text-lg">
-            Ocena realizacji zaleceń z poprzedniej kontroli
-          </CardTitle>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-lg">{SOURCE_LABELS[type].title}</CardTitle>
+            {(meta?.date || meta?.protocolNumber) && (
+              <p className="text-xs text-graphite-500 font-normal mt-1">
+                Źródło:{' '}
+                {meta.protocolNumber && (
+                  <span className="font-mono">{meta.protocolNumber}</span>
+                )}
+                {meta.date && <> z dn. {formatDate(meta.date)}</>}
+                {meta.pdfUrl && (
+                  <>
+                    {' '}
+                    —{' '}
+                    <a
+                      href={meta.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 hover:underline"
+                    >
+                      <ExternalLink size={11} />
+                      otwórz PDF z archiwum
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
           {totalCount > 0 && (
-            <span className="text-sm text-graphite-600 tabular-nums">
+            <span className="text-sm text-graphite-600 tabular-nums shrink-0">
               <span
                 className={
                   completedCount === totalCount
@@ -459,55 +678,47 @@ export function PreviousRecommendationsTable({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Banner auto-importu (sesja-only — pokazany od momentu importu
-            do reload strony, nie persystowany).
-            Tekst zależny od źródła: poprzednia inspekcja vs notatki na karcie
-            turbiny (legacy migracja). */}
+        {/* Banner auto-importu */}
         {autoImportInfo && autoImportInfo.count > 0 && (
-          <div className="rounded-xl border border-info-200 bg-info-50 p-3 flex items-start gap-3">
-            <Sparkles size={18} className="text-info-700 shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-info-100 bg-info-50 p-3 flex items-start gap-3">
+            <Sparkles size={18} className="text-info-800 shrink-0 mt-0.5" />
             <div className="text-sm text-info-900 flex-1">
-              {autoImportInfo.source === 'previous_inspection' ? (
-                <p className="font-semibold">
-                  Zaczerpnięto {autoImportInfo.count}{' '}
-                  {autoImportInfo.count === 1 ? 'zalecenie' : 'zaleceń'} z
-                  poprzedniej kontroli
-                  {autoImportInfo.fromDate && (
+              <p className="font-semibold">
+                Zaczerpnięto {autoImportInfo.count}{' '}
+                {autoImportInfo.count === 1 ? 'zalecenie' : 'zaleceń'} z{' '}
+                {autoImportInfo.source === 'turbine_legacy'
+                  ? 'notatek na karcie turbiny (legacy z migracji).'
+                  : `kontroli ${SOURCE_LABELS[type].short}`}
+                {autoImportInfo.source !== 'turbine_legacy' &&
+                  autoImportInfo.fromDate && (
                     <> (z dn. {formatDate(autoImportInfo.fromDate)}</>
                   )}
-                  {autoImportInfo.fromProtocolNumber && (
+                {autoImportInfo.source !== 'turbine_legacy' &&
+                  autoImportInfo.fromProtocolNumber && (
                     <>, protokół {autoImportInfo.fromProtocolNumber}</>
                   )}
-                  {autoImportInfo.fromDate && <>)</>}.
-                </p>
-              ) : (
-                <p className="font-semibold">
-                  Zaczerpnięto {autoImportInfo.count}{' '}
-                  {autoImportInfo.count === 1 ? 'zalecenie' : 'zaleceń'} z
-                  notatek na karcie turbiny (legacy z migracji).
-                </p>
-              )}
+                {autoImportInfo.source !== 'turbine_legacy' &&
+                  autoImportInfo.fromDate && <>)</>}
+                .
+              </p>
               <p className="text-xs text-info-800 mt-1">
                 {autoImportInfo.source === 'turbine_legacy' ? (
                   <>
-                    Statusy „Wykonano"/„Nie wykonano" zostały{' '}
-                    <strong>wstępnie odczytane</strong> z pola
-                    {' '}<code className="text-[11px]">previous_findings_status</code>.
-                    Sprawdź i ewentualnie popraw poniżej.
+                    Statusy zostały wstępnie odczytane — sprawdź i ewentualnie
+                    popraw poniżej.
                   </>
                 ) : (
                   <>
                     Dla każdego oznacz <strong>Wykonano</strong> /{' '}
-                    <strong>Nie wykonano</strong> / <strong>W trakcie</strong>{' '}
-                    poniżej.
+                    <strong>Nie wykonano</strong> / <strong>W trakcie</strong>.
                   </>
                 )}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setAutoImportInfo(null)}
-              className="text-info-700 hover:text-info-900 text-xs"
+              onClick={onDismissImportInfo}
+              className="text-info-800 hover:text-info-900 text-xs"
               aria-label="Zamknij komunikat"
             >
               ✕
@@ -515,176 +726,201 @@ export function PreviousRecommendationsTable({
           </div>
         )}
 
+        {/* Empty state — różny zależnie od czy mamy metadata źródła */}
         {items.length === 0 ? (
-          <p className="text-sm text-graphite-500">
-            Brak zaleceń z poprzedniej kontroli.{' '}
-            {turbineId
-              ? 'Możesz zaimportować z poprzedniej zakończonej inspekcji tej turbiny lub dodać ręcznie.'
-              : 'Dodaj ręcznie poniżej.'}
-          </p>
+          meta && !meta.hasStructured ? (
+            <p className="text-sm text-graphite-500">
+              W archiwum znaleziono protokół{' '}
+              {meta.protocolNumber && (
+                <span className="font-mono">{meta.protocolNumber}</span>
+              )}
+              {meta.date && <> z dn. {formatDate(meta.date)}</>}, ale
+              strukturalne zalecenia są tylko w PDF.{' '}
+              {meta.pdfUrl && (
+                <Link
+                  href={meta.pdfUrl}
+                  target="_blank"
+                  className="text-primary-700 hover:text-primary-800 hover:underline"
+                >
+                  Otwórz PDF
+                </Link>
+              )}{' '}
+              i uzupełnij poniżej ręcznie.
+            </p>
+          ) : (
+            <p className="text-sm text-graphite-500">
+              Brak zaleceń z kontroli {SOURCE_LABELS[type].short}.{' '}
+              {turbineId
+                ? 'Możesz spróbować zaimportować z poprzedniej inspekcji tej turbiny lub dodać ręcznie.'
+                : 'Dodaj ręcznie poniżej.'}
+            </p>
+          )
         ) : (
-          <ul className="space-y-3">
-            {items.map((item) => (
-              <li
-                key={item.id}
-                className="rounded-xl border border-graphite-200 p-3 shadow-xs space-y-3 bg-white"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="shrink-0 w-8 h-8 rounded-full bg-graphite-100 flex items-center justify-center font-mono text-sm font-semibold text-graphite-700">
-                    {item.item_number}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <Label
-                      htmlFor={`rec-${item.id}`}
-                      className="text-xs text-graphite-500"
-                    >
-                      Zalecenie z poprzedniej kontroli
-                    </Label>
-                    <Textarea
-                      id={`rec-${item.id}`}
-                      value={item.recommendation_text || ''}
-                      onChange={(e) =>
-                        handleUpdate(
-                          item.id,
-                          'recommendation_text',
-                          e.target.value,
-                        )
-                      }
-                      placeholder="Treść zalecenia z poprzedniego protokołu…"
-                      rows={2}
-                      className="text-sm"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(item.id)}
-                    className="text-danger hover:bg-danger-50 hover:text-danger-800 shrink-0"
-                    title="Usuń pozycję"
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </div>
-
-                {/* Toggle buttons stopnia wykonania — większe touch targety
-                    dla tabletu. Spójne kolorystycznie z bulk-status barem
-                    (success/danger/warning + neutral). */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-graphite-500">
-                    Stopień wykonania
-                  </Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {COMPLETION_STATUSES.map((opt) => {
-                      const active = item.completion_status === opt.value
-                      const palette =
-                        opt.value === 'tak'
-                          ? {
-                              activeBg: 'bg-success-100',
-                              activeText: 'text-success-800',
-                              activeBorder: 'border-success-300',
-                            }
-                          : opt.value === 'nie'
-                            ? {
-                                activeBg: 'bg-danger-100',
-                                activeText: 'text-danger-800',
-                                activeBorder: 'border-danger-300',
-                              }
-                            : {
-                                activeBg: 'bg-warning-100',
-                                activeText: 'text-warning-800',
-                                activeBorder: 'border-warning-300',
-                              }
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() =>
-                            handleUpdate(
-                              item.id,
-                              'completion_status',
-                              active ? null : opt.value,
-                            )
-                          }
-                          className={`min-h-[44px] rounded-lg border-2 px-3 text-sm font-semibold transition active:scale-[0.98] ${
-                            active
-                              ? `${palette.activeBg} ${palette.activeText} ${palette.activeBorder}`
-                              : 'bg-white text-graphite-700 border-graphite-200 hover:border-graphite-300'
-                          }`}
-                        >
-                          {opt.value === 'tak' && '✓ '}
-                          {opt.value === 'nie' && '✕ '}
-                          {opt.value === 'w_trakcie' && '◐ '}
-                          {opt.label}
-                        </button>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleUpdate(item.id, 'completion_status', null)
-                      }
-                      className={`min-h-[44px] rounded-lg border-2 px-3 text-sm font-medium transition active:scale-[0.98] ${
-                        item.completion_status === null
-                          ? 'bg-graphite-100 text-graphite-700 border-graphite-300'
-                          : 'bg-white text-graphite-500 border-graphite-200 hover:border-graphite-300'
-                      }`}
-                    >
-                      — brak —
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label
-                    htmlFor={`remarks-${item.id}`}
-                    className="text-xs text-graphite-500"
-                  >
-                    Uwagi do realizacji (opcjonalnie)
-                  </Label>
-                  <Input
-                    id={`remarks-${item.id}`}
-                    value={item.remarks || ''}
-                    onChange={(e) =>
-                      handleUpdate(item.id, 'remarks', e.target.value)
-                    }
-                    placeholder="np. wykonano w lipcu, dokumentacja w archiwum, częściowo…"
-                    className="text-sm"
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
+          <RecommendationList
+            items={items}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
+          />
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">
-          <Button onClick={handleAdd} disabled={isSaving} size="sm">
+          <Button onClick={onAdd} disabled={isSaving} size="sm">
             <Plus size={16} className="mr-1" />
             Dodaj zalecenie
           </Button>
           {turbineId && (
             <Button
-              onClick={handleManualImport}
-              disabled={isImporting}
+              onClick={onImport}
+              disabled={importing}
               variant="outline"
               size="sm"
             >
               <RefreshCw
                 size={16}
-                className={`mr-1 ${isImporting ? 'animate-spin' : ''}`}
+                className={`mr-1 ${importing ? 'animate-spin' : ''}`}
               />
-              {isImporting
+              {importing
                 ? 'Importowanie…'
                 : items.length === 0
-                  ? 'Importuj z poprzedniej inspekcji'
-                  : 'Doimportuj z poprzedniej inspekcji'}
+                  ? `Importuj z poprzedniej kontroli ${SOURCE_LABELS[type].short}`
+                  : `Doimportuj z kontroli ${SOURCE_LABELS[type].short}`}
             </Button>
           )}
         </div>
-
-        {isSaving && (
-          <p className="text-xs text-graphite-400 text-right">Zapisywanie…</p>
-        )}
       </CardContent>
     </Card>
+  )
+}
+
+interface RecommendationListProps {
+  items: PreviousRecommendation[]
+  onUpdate: (
+    id: string,
+    field: 'recommendation_text' | 'completion_status' | 'remarks',
+    value: string | null
+  ) => void
+  onDelete: (id: string) => void
+}
+
+function RecommendationList({ items, onUpdate, onDelete }: RecommendationListProps) {
+  return (
+    <ul className="space-y-3">
+      {items.map((item) => (
+        <li
+          key={item.id}
+          className="rounded-xl border border-graphite-200 p-3 shadow-xs space-y-3 bg-white"
+        >
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 w-8 h-8 rounded-full bg-graphite-100 flex items-center justify-center font-mono text-sm font-semibold text-graphite-700">
+              {item.item_number}
+            </div>
+            <div className="flex-1 space-y-1">
+              <Label
+                htmlFor={`rec-${item.id}`}
+                className="text-xs text-graphite-500"
+              >
+                Zalecenie z poprzedniej kontroli
+              </Label>
+              <Textarea
+                id={`rec-${item.id}`}
+                value={item.recommendation_text || ''}
+                onChange={(e) =>
+                  onUpdate(item.id, 'recommendation_text', e.target.value)
+                }
+                placeholder="Treść zalecenia z poprzedniego protokołu…"
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(item.id)}
+              className="text-danger hover:bg-danger-50 hover:text-danger-800 shrink-0"
+              title="Usuń pozycję"
+            >
+              <Trash2 size={16} />
+            </Button>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-graphite-500">Stopień wykonania</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {COMPLETION_STATUSES.map((opt) => {
+                const active = item.completion_status === opt.value
+                const palette =
+                  opt.value === 'tak'
+                    ? {
+                        activeBg: 'bg-success-100',
+                        activeText: 'text-success-800',
+                        activeBorder: 'border-success-300',
+                      }
+                    : opt.value === 'nie'
+                      ? {
+                          activeBg: 'bg-danger-100',
+                          activeText: 'text-danger-800',
+                          activeBorder: 'border-danger-300',
+                        }
+                      : {
+                          activeBg: 'bg-warning-100',
+                          activeText: 'text-warning-800',
+                          activeBorder: 'border-warning-300',
+                        }
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() =>
+                      onUpdate(
+                        item.id,
+                        'completion_status',
+                        active ? null : opt.value
+                      )
+                    }
+                    className={`min-h-[44px] rounded-lg border-2 px-3 text-sm font-semibold transition active:scale-[0.98] ${
+                      active
+                        ? `${palette.activeBg} ${palette.activeText} ${palette.activeBorder}`
+                        : 'bg-white text-graphite-700 border-graphite-200 hover:border-graphite-300'
+                    }`}
+                  >
+                    {opt.value === 'tak' && '✓ '}
+                    {opt.value === 'nie' && '✕ '}
+                    {opt.value === 'w_trakcie' && '◐ '}
+                    {opt.label}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => onUpdate(item.id, 'completion_status', null)}
+                className={`min-h-[44px] rounded-lg border-2 px-3 text-sm font-medium transition active:scale-[0.98] ${
+                  item.completion_status === null
+                    ? 'bg-graphite-100 text-graphite-700 border-graphite-300'
+                    : 'bg-white text-graphite-500 border-graphite-200 hover:border-graphite-300'
+                }`}
+              >
+                — brak —
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label
+              htmlFor={`remarks-${item.id}`}
+              className="text-xs text-graphite-500"
+            >
+              Uwagi do realizacji (opcjonalnie)
+            </Label>
+            <Input
+              id={`remarks-${item.id}`}
+              value={item.remarks || ''}
+              onChange={(e) => onUpdate(item.id, 'remarks', e.target.value)}
+              placeholder="np. wykonano w lipcu, dokumentacja w archiwum, częściowo…"
+              className="text-sm"
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
   )
 }

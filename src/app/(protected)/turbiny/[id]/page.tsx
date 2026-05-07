@@ -54,6 +54,14 @@ interface Turbine {
   hub_height_m: number
   serial_number: string
   has_measurement_station: boolean
+  /** PIIB metryczka — Rodzaj konstrukcji wieży (stalowa/zelbetowa/hybrydowa/inna). */
+  tower_construction_type: 'stalowa' | 'zelbetowa' | 'hybrydowa' | 'inna' | null
+  /** PIIB metryczka — Rok zakończenia budowy turbiny (1980-2099). */
+  commissioning_year: number | null
+  /** PIIB metryczka — Nr pozwolenia na budowę. */
+  building_permit_number: string | null
+  /** PIIB metryczka — Data pozwolenia na budowę (ISO YYYY-MM-DD). */
+  building_permit_date: string | null
   location_address: string
   cadastral_parcel: string
   latitude: number | null
@@ -623,6 +631,42 @@ export default function TurbineDetailPage() {
                 <InfoItem label="Wysokość wieży" value={turbine.tower_height_m ? `${turbine.tower_height_m} m` : '-'} mono />
                 <InfoItem label="Średnica wirnika" value={turbine.rotor_diameter_m ? `${turbine.rotor_diameter_m} m` : '-'} mono />
                 <InfoItem label="Wysokość piasty" value={turbine.hub_height_m ? `${turbine.hub_height_m} m` : '-'} mono />
+                {/* Pola PIIB metryczki — Rodzaj konstrukcji, Rok budowy, Pozwolenie. */}
+                <InfoItem
+                  label="Rodzaj konstrukcji wieży"
+                  value={
+                    turbine.tower_construction_type
+                      ? ({
+                          stalowa: 'Stalowa',
+                          zelbetowa: 'Żelbetowa',
+                          hybrydowa: 'Hybrydowa (stal+żelbet)',
+                          inna: 'Inna',
+                        } as const)[turbine.tower_construction_type]
+                      : '-'
+                  }
+                />
+                <InfoItem
+                  label="Rok zakończenia budowy"
+                  value={turbine.commissioning_year ? `${turbine.commissioning_year}` : '-'}
+                  mono
+                />
+                <InfoItem
+                  label="Nr / data pozwolenia na budowę"
+                  value={(() => {
+                    const num = turbine.building_permit_number?.trim()
+                    const dateIso = turbine.building_permit_date
+                    const dateFmt = dateIso
+                      ? (() => {
+                          const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateIso)
+                          return m ? `${m[3]}.${m[2]}.${m[1]}` : dateIso
+                        })()
+                      : null
+                    if (num && dateFmt) return `${num} z dn. ${dateFmt}`
+                    if (num) return num
+                    if (dateFmt) return `z dn. ${dateFmt}`
+                    return '-'
+                  })()}
+                />
               </div>
             </CardContent>
           </Card>
@@ -936,6 +980,10 @@ function TurbineHero({
                 rotor_diameter_m: turbine.rotor_diameter_m,
                 serial_number: turbine.serial_number,
                 has_measurement_station: turbine.has_measurement_station ?? false,
+                tower_construction_type: turbine.tower_construction_type,
+                commissioning_year: turbine.commissioning_year,
+                building_permit_number: turbine.building_permit_number,
+                building_permit_date: turbine.building_permit_date,
               }}
               onSuccess={() => {
                 setIsEditOpen(false)

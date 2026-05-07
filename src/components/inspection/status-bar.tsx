@@ -5,6 +5,7 @@ import { Check, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { INSPECTION_STATUSES } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import { createBrowserClient } from '@supabase/ssr'
 
 interface StatusBarProps {
@@ -43,7 +44,12 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
   const [isLoading, setIsLoading] = useState(false)
 
   const currentIndex = statusOrder.indexOf(status)
+  const nextStatusIndex = nextStatus
+    ? (statusOrder as readonly string[]).indexOf(nextStatus)
+    : -1
+  const isBackward = nextStatusIndex !== -1 && nextStatusIndex < currentIndex
 
+  /** Otwiera dialog potwierdzenia z wybranym statusem (backward lub forward). */
   const handleStatusAdvance = (newStatus: string) => {
     setNextStatus(newStatus)
     setConfirmDialog(true)
@@ -79,26 +85,56 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
   return (
     <>
       <div className="w-full">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {statusOrder.map((s, index) => {
             const isCompleted = index < currentIndex
             const isCurrent = s === status
+            const isClickable = !isCurrent && !isLoading
             const label = INSPECTION_STATUSES.find((item) => item.value === s)?.label || s
+            const goingBack = index < currentIndex
 
             return (
               <div key={s} className="flex items-center gap-2">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
-                    isCompleted
-                      ? 'bg-success text-white'
-                      : isCurrent
-                        ? `${statusColors[s]} ${statusTextColors[s]}`
-                        : 'bg-graphite-100 text-graphite-500'
-                  }`}
+                <button
+                  type="button"
+                  onClick={() => isClickable && handleStatusAdvance(s)}
+                  disabled={!isClickable}
+                  title={
+                    isCurrent
+                      ? `Aktualny status: ${label}`
+                      : goingBack
+                        ? `Cofnij do statusu: ${label}`
+                        : `Zmień status na: ${label}`
+                  }
+                  className={cn(
+                    'flex items-center gap-2 group rounded-lg px-1 -mx-1',
+                    isClickable
+                      ? 'cursor-pointer hover:bg-graphite-50 transition-colors'
+                      : 'cursor-default'
+                  )}
                 >
-                  {isCompleted ? <Check size={20} /> : index + 1}
-                </div>
-                <div className="text-sm font-medium">{label}</div>
+                  <div
+                    className={cn(
+                      'w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all',
+                      isCompleted
+                        ? 'bg-success text-white'
+                        : isCurrent
+                          ? `${statusColors[s]} ${statusTextColors[s]}`
+                          : 'bg-graphite-100 text-graphite-500',
+                      isClickable && 'group-hover:ring-2 group-hover:ring-primary-600 group-hover:ring-offset-1'
+                    )}
+                  >
+                    {isCompleted ? <Check size={20} /> : index + 1}
+                  </div>
+                  <div
+                    className={cn(
+                      'text-sm font-medium',
+                      isClickable && 'group-hover:text-primary-700 group-hover:underline'
+                    )}
+                  >
+                    {label}
+                  </div>
+                </button>
                 {index < statusOrder.length - 1 && <ChevronRight size={16} className="text-graphite-400" />}
               </div>
             )
@@ -110,28 +146,47 @@ export function StatusBar({ status, onStatusChange, inspectionId }: StatusBarPro
             <Button
               onClick={() => handleStatusAdvance(statusOrder[currentIndex + 1])}
               disabled={isLoading}
-              className=""
             >
               Przejdź do: {INSPECTION_STATUSES.find((item) => item.value === statusOrder[currentIndex + 1])?.label}
             </Button>
           </div>
         )}
+        <p className="mt-3 text-xs text-graphite-500">
+          Wskazówka: kliknij dowolny etap powyżej, aby cofnąć inspekcję do
+          tego statusu (np. „Szkic" — żeby uzupełnić brakujące dane).
+        </p>
       </div>
 
       <Dialog open={confirmDialog} onOpenChange={setConfirmDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Potwierdzenie zmiany statusu</DialogTitle>
+            <DialogTitle>
+              {isBackward ? 'Cofnąć inspekcję?' : 'Potwierdzenie zmiany statusu'}
+            </DialogTitle>
             <DialogDescription>
-              Czy na pewno chcesz zmienić status inspeksji na "{INSPECTION_STATUSES.find((item) => item.value === nextStatus)?.label}"?
+              {isBackward ? (
+                <>
+                  Status zostanie cofnięty do „
+                  {INSPECTION_STATUSES.find((item) => item.value === nextStatus)?.label}
+                  ". Dane (daty podpisów, oceny elementów, zdjęcia) pozostaną
+                  zapisane — będziesz mógł uzupełnić brakujące pola i ponownie
+                  przejść przez kolejne etapy aż do „Podpisana".
+                </>
+              ) : (
+                <>
+                  Czy na pewno chcesz zmienić status inspekcji na „
+                  {INSPECTION_STATUSES.find((item) => item.value === nextStatus)?.label}
+                  "?
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setConfirmDialog(false)}>
+            <Button variant="outline" onClick={() => setConfirmDialog(false)} disabled={isLoading}>
               Anuluj
             </Button>
             <Button onClick={confirmStatusChange} disabled={isLoading}>
-              {isLoading ? 'Aktualizowanie...' : 'Potwierdź'}
+              {isLoading ? 'Aktualizowanie…' : isBackward ? 'Cofnij' : 'Potwierdź'}
             </Button>
           </div>
         </DialogContent>
