@@ -482,6 +482,29 @@ export async function GET(
         rel_specialty: item.specialty,
       }))
 
+    // ─── FETCH PARTICIPANTS (Przy udziale — przedstawiciele klienta) ──────
+    // Fallback do legacy `additional_participants` gdy brak rekordów.
+    const { data: participantRels } = await supabase
+      .from('inspection_participants')
+      .select(
+        `
+        representative:representative_id (
+          id,
+          full_name,
+          role
+        )
+      `
+      )
+      .eq('inspection_id', inspectionId)
+
+    const participants = (participantRels || [])
+      .map((item: any) => item.representative)
+      .filter(Boolean) as Array<{
+      id: string
+      full_name: string
+      role: string | null
+    }>
+
     // ─── FETCH PIIB TABLES ─────────────────────────────────────────────────
     const { data: prevRecs } = await supabase
       .from('previous_recommendations')
@@ -1191,7 +1214,16 @@ export async function GET(
               .join('; ') ||
             ''
         ),
-        metaRow('Przy udziale:', insp.additional_participants || ''),
+        metaRow(
+          'Przy udziale:',
+          participants.length > 0
+            ? participants
+                .map((p) =>
+                  p.role ? `${p.full_name} (${p.role})` : p.full_name
+                )
+                .join('; ')
+            : insp.additional_participants || ''
+        ),
       ],
     })
 

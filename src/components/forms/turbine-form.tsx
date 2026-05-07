@@ -6,6 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+/** Pola z 2026-04-25_piib_turbine_fields.sql używane w nagłówku PIIB. */
+type TowerConstructionType = 'stalowa' | 'zelbetowa' | 'hybrydowa' | 'inna'
+const TOWER_TYPES: Array<{ value: TowerConstructionType; label: string }> = [
+  { value: 'stalowa', label: 'Stalowa' },
+  { value: 'zelbetowa', label: 'Żelbetowa' },
+  { value: 'hybrydowa', label: 'Hybrydowa (stal+żelbet)' },
+  { value: 'inna', label: 'Inna' },
+]
+
 interface TurbineFormProps {
   windFarmId: string
   initialData?: {
@@ -19,6 +28,10 @@ interface TurbineFormProps {
     rotor_diameter_m: number
     serial_number: string
     has_measurement_station?: boolean
+    tower_construction_type?: TowerConstructionType | null
+    commissioning_year?: number | null
+    building_permit_number?: string | null
+    building_permit_date?: string | null
   }
   onSuccess?: () => void
 }
@@ -39,6 +52,10 @@ export function TurbineForm({
 
     const formData = new FormData(e.currentTarget)
     const ewRaw = (formData.get('ew_designation') as string | null)?.trim()
+    const towerTypeRaw = (formData.get('tower_construction_type') as string | null)?.trim()
+    const commYearRaw = (formData.get('commissioning_year') as string | null)?.trim()
+    const permitNumRaw = (formData.get('building_permit_number') as string | null)?.trim()
+    const permitDateRaw = (formData.get('building_permit_date') as string | null)?.trim()
     const data = {
       turbine_code: formData.get('turbine_code'),
       ew_designation: ewRaw || null,
@@ -49,6 +66,10 @@ export function TurbineForm({
       rotor_diameter_m: parseInt(formData.get('rotor_diameter_m') as string),
       serial_number: formData.get('serial_number'),
       has_measurement_station: formData.get('has_measurement_station') === 'on',
+      tower_construction_type: towerTypeRaw || null,
+      commissioning_year: commYearRaw ? parseInt(commYearRaw, 10) : null,
+      building_permit_number: permitNumRaw || null,
+      building_permit_date: permitDateRaw || null,
       wind_farm_id: windFarmId,
     }
 
@@ -178,6 +199,58 @@ export function TurbineForm({
           defaultValue={initialData?.serial_number || ''}
           placeholder="SWW-123456789"
         />
+      </div>
+
+      {/* ─── Pola PIIB (Podstawowe dane obiektu) ──────────────────────── */}
+      <div>
+        <Label htmlFor="tower_construction_type">Rodzaj konstrukcji wieży</Label>
+        <select
+          id="tower_construction_type"
+          name="tower_construction_type"
+          defaultValue={initialData?.tower_construction_type || ''}
+          className="mt-1 flex h-10 w-full rounded-md border border-graphite-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+        >
+          <option value="">— nie określono —</option>
+          {TOWER_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <Label htmlFor="commissioning_year">Rok zakończenia budowy</Label>
+        <Input
+          id="commissioning_year"
+          name="commissioning_year"
+          type="number"
+          min={1980}
+          max={2099}
+          defaultValue={initialData?.commissioning_year ?? ''}
+          placeholder="2018"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="building_permit_number">Nr pozwolenia na budowę</Label>
+          <Input
+            id="building_permit_number"
+            name="building_permit_number"
+            defaultValue={initialData?.building_permit_number || ''}
+            placeholder="np. 123/2017"
+          />
+        </div>
+        <div>
+          <Label htmlFor="building_permit_date">Data pozwolenia</Label>
+          <Input
+            id="building_permit_date"
+            name="building_permit_date"
+            type="date"
+            defaultValue={initialData?.building_permit_date || ''}
+          />
+        </div>
       </div>
 
       <div className="flex items-start gap-2 pt-2">

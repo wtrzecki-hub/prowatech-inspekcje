@@ -2,10 +2,19 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, ImageIcon, Upload, X } from 'lucide-react'
+import { AlertCircle, ExternalLink, ImageIcon, Plus, Trash2, Upload, X } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -89,6 +98,35 @@ interface InspectionMetadata {
   general_findings_intro: string | null
   kob_entries_summary: string | null
   documents_reviewed: DocumentsReviewed | null
+}
+
+/** Inspektor z bazy (do multi-select „Wykonawca kontroli"). */
+interface AvailableInspector {
+  id: string
+  full_name: string
+  license_number: string | null
+  specialty: 'konstrukcyjna' | 'elektryczna' | 'sanitarna' | 'inna' | null
+  specialty_description: string | null
+  chamber_membership: string | null
+}
+
+/** Przedstawiciel klienta (do multi-select „Przy udziale"). */
+interface ClientRepresentative {
+  id: string
+  client_id: string
+  full_name: string
+  role: string | null
+  phone: string | null
+  email: string | null
+  is_active: boolean
+}
+
+/** Etykiety branż dla widoku — krótkie. */
+const SPECIALTY_LABEL: Record<NonNullable<AvailableInspector['specialty']>, string> = {
+  konstrukcyjna: 'budowlana',
+  elektryczna: 'elektryczna',
+  sanitarna: 'sanitarna',
+  inna: 'inna',
 }
 
 interface InspectionMetadataPiibProps {
@@ -180,12 +218,42 @@ interface TurbineForDefaults {
   model: string | null
   location_address: string | null
   cadastral_parcel: string | null
+  /** PIIB pola — edytowalne też w metryczce inspekcji (zapis do `turbines`). */
+  tower_construction_type: 'stalowa' | 'zelbetowa' | 'hybrydowa' | 'inna' | null
+  commissioning_year: number | null
+  building_permit_number: string | null
+  building_permit_date: string | null
   wind_farms: {
     location_gmina: string | null
     location_powiat: string | null
     location_voivodeship: string | null
-    clients: { name: string | null } | null
+    clients: { id: string; name: string | null } | null
   } | null
+}
+
+/** Stan edycji 4 pól turbiny widocznych w metryczce inspekcji. */
+interface TurbinePiibFields {
+  tower_construction_type: 'stalowa' | 'zelbetowa' | 'hybrydowa' | 'inna' | null
+  commissioning_year: number | null
+  building_permit_number: string | null
+  building_permit_date: string | null
+}
+
+const EMPTY_TURBINE_PIIB: TurbinePiibFields = {
+  tower_construction_type: null,
+  commissioning_year: null,
+  building_permit_number: null,
+  building_permit_date: null,
+}
+
+const TOWER_CONSTRUCTION_LABELS: Record<
+  NonNullable<TurbinePiibFields['tower_construction_type']>,
+  string
+> = {
+  stalowa: 'Stalowa',
+  zelbetowa: 'Żelbetowa',
+  hybrydowa: 'Hybrydowa (stal+żelbet)',
+  inna: 'Inna',
 }
 
 const trim = (v: string | null | undefined) => v?.trim() || null
@@ -474,6 +542,38 @@ export function InspectionMetadataPiib({
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
+  // Pola turbiny (PIIB Podstawowe dane obiektu) — edytowalne tutaj, zapis
+  // bezpośrednio do tabeli `turbines`. Te same pola są widoczne na karcie turbiny.
+  const [turbinePiib, setTurbinePiib] = useState<TurbinePiibFields>(EMPTY_TURBINE_PIIB)
+  const [turbineSaving, setTurbineSaving] = useState(false)
+  const turbineDebounceRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Wykonawca kontroli — multi-select inspektorów (junction inspection_inspectors).
+  const [allInspectors, setAllInspectors] = useState<AvailableInspector[]>([])
+  const [selectedInspectorIds, setSelectedInspectorIds] = useState<Set<string>>(
+    new Set()
+  )
+
+  // Przy udziale — przedstawiciele klienta (junction inspection_participants).
+  const [clientId, setClientId] = useState<string | null>(null)
+  const [allReps, setAllReps] = useState<ClientRepresentative[]>([])
+  const [selectedRepIds, setSelectedRepIds] = useState<Set<string>>(new Set())
+
+  // Dialog dodawania nowego przedstawiciela. Kontekst decyduje, gdzie nowy
+  // wpis trafi po zapisie: 'participant' = auto-check w „Przy udziale",
+  // 'manager' = ustawienie jako zarządca obiektu.
+  const [repDialogOpen, setRepDialogOpen] = useState(false)
+  const [repDialogContext, setRepDialogContext] = useState<'participant' | 'manager'>(
+    'participant'
+  )
+  const [repForm, setRepForm] = useState({
+    full_name: '',
+    role: '',
+    phone: '',
+    email: '',
+  })
+  const [repSaving, setRepSaving] = useState(false)
+
   useEffect(() => {
     void loadMetadata()
     return () => {
@@ -517,9 +617,11 @@ export function InspectionMetadataPiib({
             `id, photo_url, photo_url_2, photo_url_3,
              turbine_code, ew_designation, manufacturer, model,
              location_address, cadastral_parcel,
+             tower_construction_type, commissioning_year,
+             building_permit_number, building_permit_date,
              wind_farms (
                location_gmina, location_powiat, location_voivodeship,
-               clients ( name )
+               clients ( id, name )
              )`
           )
           .eq('id', tId)
@@ -535,6 +637,82 @@ export function InspectionMetadataPiib({
             photo_url_2: t.photo_url_2,
             photo_url_3: t.photo_url_3,
           })
+
+          // Pola PIIB turbiny — edytowalne w metryczce inspekcji.
+          setTurbinePiib({
+            tower_construction_type: t.tower_construction_type,
+            commissioning_year: t.commissioning_year,
+            building_permit_number: t.building_permit_number,
+            building_permit_date: t.building_permit_date,
+          })
+
+          // ── Klient (do filtrowania przedstawicieli) ────────────────────
+          const cId = t.wind_farms?.clients?.id ?? null
+          setClientId(cId)
+
+          // ── Wykonawcy + przedstawiciele (równolegle) ───────────────────
+          const [
+            { data: inspectorsRows, error: insErr },
+            { data: linkedInspectors, error: linkInsErr },
+            { data: repsRows, error: repsErr },
+            { data: linkedReps, error: linkRepsErr },
+          ] = await Promise.all([
+            sb
+              .from('inspectors')
+              .select(
+                'id, full_name, license_number, specialty, specialty_description, chamber_membership'
+              )
+              .eq('is_active', true)
+              .eq('is_deleted', false)
+              .order('full_name', { ascending: true }),
+            sb
+              .from('inspection_inspectors')
+              .select('inspector_id')
+              .eq('inspection_id', inspectionId),
+            cId
+              ? sb
+                  .from('client_representatives')
+                  .select('id, client_id, full_name, role, phone, email, is_active')
+                  .eq('client_id', cId)
+                  .eq('is_deleted', false)
+                  .order('full_name', { ascending: true })
+              : Promise.resolve({ data: [] as ClientRepresentative[], error: null }),
+            sb
+              .from('inspection_participants')
+              .select('representative_id')
+              .eq('inspection_id', inspectionId),
+          ])
+
+          if (insErr) console.error('Błąd ładowania inspektorów:', insErr)
+          if (inspectorsRows) {
+            setAllInspectors(inspectorsRows as AvailableInspector[])
+          }
+          if (linkInsErr)
+            console.error('Błąd ładowania powiązanych wykonawców:', linkInsErr)
+          if (linkedInspectors) {
+            setSelectedInspectorIds(
+              new Set(
+                (linkedInspectors as Array<{ inspector_id: string }>).map(
+                  (r) => r.inspector_id
+                )
+              )
+            )
+          }
+
+          if (repsErr) console.error('Błąd ładowania przedstawicieli:', repsErr)
+          if (repsRows) setAllReps(repsRows as ClientRepresentative[])
+
+          if (linkRepsErr)
+            console.error('Błąd ładowania powiązanych przedstawicieli:', linkRepsErr)
+          if (linkedReps) {
+            setSelectedRepIds(
+              new Set(
+                (linkedReps as Array<{ representative_id: string }>).map(
+                  (r) => r.representative_id
+                )
+              )
+            )
+          }
 
           // Wylicz domyślne wartości pól obiektu z karty turbiny i podstaw je
           // dla pól, które aktualnie są puste (NULL / pusty string). Edycje
@@ -634,6 +812,37 @@ export function InspectionMetadataPiib({
   }
 
   /**
+   * Zapis pól PIIB turbiny (tower_construction_type, commissioning_year,
+   * building_permit_*). Debounce 800ms — analogicznie do `queueSave`.
+   * Pola należą do tabeli `turbines`, więc edycja tutaj zaktualizuje też
+   * kartę turbiny i przyszłe inspekcje.
+   */
+  const handleTurbineField = <K extends keyof TurbinePiibFields>(
+    field: K,
+    value: TurbinePiibFields[K]
+  ) => {
+    setTurbinePiib((prev) => ({ ...prev, [field]: value }))
+
+    if (!turbinePhotos.turbineId) return
+
+    if (turbineDebounceRef.current) clearTimeout(turbineDebounceRef.current)
+    turbineDebounceRef.current = setTimeout(async () => {
+      setTurbineSaving(true)
+      try {
+        const { error } = await supabase()
+          .from('turbines')
+          .update({ [field]: value })
+          .eq('id', turbinePhotos.turbineId!)
+        if (error) throw error
+      } catch (err) {
+        console.error('Błąd zapisu pól turbiny:', err)
+      } finally {
+        setTurbineSaving(false)
+      }
+    }, 800)
+  }
+
+  /**
    * Update jednego z 4 dokumentów strukturyzowanych (previous_annual,
    * previous_5y, electrical_measurements, service). Każdy ma `status` + `info`.
    */
@@ -729,6 +938,195 @@ export function InspectionMetadataPiib({
     queueSave({ object_photo_url: null })
   }
 
+  /**
+   * Toggle inspektora w junction `inspection_inspectors`. Branża i is_lead
+   * ustawiane automatycznie: specialty z karty inspektora (fallback `inna`),
+   * is_lead = TRUE dla pierwszego dodanego, FALSE dla kolejnych.
+   * Optymistyczna aktualizacja state + revert przy błędzie.
+   */
+  const toggleInspector = async (inspector: AvailableInspector) => {
+    const sb = supabase()
+    const isSelected = selectedInspectorIds.has(inspector.id)
+
+    setSelectedInspectorIds((prev) => {
+      const next = new Set(prev)
+      if (isSelected) next.delete(inspector.id)
+      else next.add(inspector.id)
+      return next
+    })
+
+    try {
+      if (isSelected) {
+        const { error } = await sb
+          .from('inspection_inspectors')
+          .delete()
+          .eq('inspection_id', inspectionId)
+          .eq('inspector_id', inspector.id)
+        if (error) throw error
+      } else {
+        const { error } = await sb.from('inspection_inspectors').insert({
+          inspection_id: inspectionId,
+          inspector_id: inspector.id,
+          specialty: inspector.specialty || 'inna',
+          is_lead: selectedInspectorIds.size === 0,
+        })
+        if (error) throw error
+      }
+    } catch (err) {
+      console.error('Błąd zapisu wykonawcy kontroli:', err)
+      setSelectedInspectorIds((prev) => {
+        const next = new Set(prev)
+        if (isSelected) next.add(inspector.id)
+        else next.delete(inspector.id)
+        return next
+      })
+    }
+  }
+
+  /** Toggle przedstawiciela klienta w junction `inspection_participants`. */
+  const toggleRepresentative = async (repId: string) => {
+    const sb = supabase()
+    const isSelected = selectedRepIds.has(repId)
+
+    setSelectedRepIds((prev) => {
+      const next = new Set(prev)
+      if (isSelected) next.delete(repId)
+      else next.add(repId)
+      return next
+    })
+
+    try {
+      if (isSelected) {
+        const { error } = await sb
+          .from('inspection_participants')
+          .delete()
+          .eq('inspection_id', inspectionId)
+          .eq('representative_id', repId)
+        if (error) throw error
+      } else {
+        const { error } = await sb
+          .from('inspection_participants')
+          .insert({ inspection_id: inspectionId, representative_id: repId })
+        if (error) throw error
+      }
+    } catch (err) {
+      console.error('Błąd zapisu uczestnika:', err)
+      setSelectedRepIds((prev) => {
+        const next = new Set(prev)
+        if (isSelected) next.add(repId)
+        else next.delete(repId)
+        return next
+      })
+    }
+  }
+
+  /** Format pojedynczego przedstawiciela na potrzeby pól tekstowych (manager_name). */
+  const formatRepDisplay = (rep: ClientRepresentative): string =>
+    rep.role ? `${rep.full_name} (${rep.role})` : rep.full_name
+
+  /**
+   * Dodaje nowego przedstawiciela do `client_representatives`. W zależności
+   * od `repDialogContext`:
+   *   - 'participant' → przypina do bieżącej inspekcji (`inspection_participants`)
+   *   - 'manager'     → ustawia jako zarządcę obiektu (`manager_name`)
+   */
+  const handleAddRep = async () => {
+    if (!clientId) {
+      alert('Brak klienta — sprawdź przypisanie turbiny do farmy/klienta.')
+      return
+    }
+    if (!repForm.full_name.trim()) {
+      alert('Imię i nazwisko jest wymagane.')
+      return
+    }
+    setRepSaving(true)
+    try {
+      const sb = supabase()
+      const { data, error } = await sb
+        .from('client_representatives')
+        .insert({
+          client_id: clientId,
+          full_name: repForm.full_name.trim(),
+          role: repForm.role.trim() || null,
+          phone: repForm.phone.trim() || null,
+          email: repForm.email.trim() || null,
+        })
+        .select('id, client_id, full_name, role, phone, email, is_active')
+        .single()
+      if (error) throw error
+      const newRep = data as ClientRepresentative
+      setAllReps((prev) =>
+        [...prev, newRep].sort((a, b) => a.full_name.localeCompare(b.full_name))
+      )
+
+      if (repDialogContext === 'manager') {
+        // Zapis do inspections.manager_name
+        handleField('manager_name', formatRepDisplay(newRep))
+      } else {
+        // Domyślnie: przypnij jako uczestnik bieżącej inspekcji
+        const { error: linkErr } = await sb
+          .from('inspection_participants')
+          .insert({ inspection_id: inspectionId, representative_id: newRep.id })
+        if (linkErr) throw linkErr
+        setSelectedRepIds((prev) => {
+          const next = new Set(prev)
+          next.add(newRep.id)
+          return next
+        })
+      }
+
+      setRepForm({ full_name: '', role: '', phone: '', email: '' })
+      setRepDialogOpen(false)
+    } catch (err) {
+      console.error('Błąd dodawania przedstawiciela:', err)
+      alert('Nie udało się dodać przedstawiciela. Spróbuj ponownie.')
+    } finally {
+      setRepSaving(false)
+    }
+  }
+
+  /** Otwiera dialog z odpowiednim kontekstem (zarządca vs uczestnik). */
+  const openRepDialog = (context: 'participant' | 'manager') => {
+    setRepDialogContext(context)
+    setRepForm({ full_name: '', role: '', phone: '', email: '' })
+    setRepDialogOpen(true)
+  }
+
+  /** Soft-delete przedstawiciela — wraca do bazy ale nie pojawia się w UI. */
+  const handleDeleteRep = async (rep: ClientRepresentative) => {
+    if (
+      !confirm(
+        `Usunąć przedstawiciela „${rep.full_name}" z listy klienta? Pozostanie zachowany w starszych inspekcjach, ale nie będzie już proponowany.`
+      )
+    )
+      return
+    try {
+      const sb = supabase()
+      const { error } = await sb
+        .from('client_representatives')
+        .update({ is_deleted: true })
+        .eq('id', rep.id)
+      if (error) throw error
+      setAllReps((prev) => prev.filter((r) => r.id !== rep.id))
+      // Odepnij od bieżącej inspekcji jeśli był wybrany
+      if (selectedRepIds.has(rep.id)) {
+        await sb
+          .from('inspection_participants')
+          .delete()
+          .eq('inspection_id', inspectionId)
+          .eq('representative_id', rep.id)
+        setSelectedRepIds((prev) => {
+          const next = new Set(prev)
+          next.delete(rep.id)
+          return next
+        })
+      }
+    } catch (err) {
+      console.error('Błąd usuwania przedstawiciela:', err)
+      alert('Nie udało się usunąć. Spróbuj ponownie.')
+    }
+  }
+
   if (isLoading) {
     return (
       <Card className="rounded-xl border-graphite-200">
@@ -740,6 +1138,33 @@ export function InspectionMetadataPiib({
   }
 
   const docs = meta.documents_reviewed || {}
+
+  // Walidacja wykonawców kontroli — ostrzeżenie (nie blokada).
+  const selectedInspectors = allInspectors.filter((i) =>
+    selectedInspectorIds.has(i.id)
+  )
+  const inspectorWarnings: string[] = []
+  if (selectedInspectors.length < 2) {
+    inspectorWarnings.push(
+      `Minimum 2 osoby wymagane (wybrano: ${selectedInspectors.length}). Wynika z zasad bezpieczeństwa pracy w terenie.`
+    )
+  }
+  if (inspectionType === 'five_year') {
+    const hasConstr = selectedInspectors.some(
+      (i) => i.specialty === 'konstrukcyjna'
+    )
+    const hasElectr = selectedInspectors.some(
+      (i) => i.specialty === 'elektryczna'
+    )
+    if (!hasConstr)
+      inspectorWarnings.push(
+        'Brak inspektora budowlanego (specjalność „konstrukcyjna") — wymagany dla kontroli 5-letniej.'
+      )
+    if (!hasElectr)
+      inspectorWarnings.push(
+        'Brak inspektora elektrycznego — wymagany dla kontroli 5-letniej.'
+      )
+  }
 
   return (
     <div className="space-y-6">
@@ -898,6 +1323,127 @@ export function InspectionMetadataPiib({
         </CardContent>
       </Card>
 
+      {/* Sekcja 1b: Dane techniczne obiektu (pola turbiny używane w PIIB) */}
+      <Card className="rounded-xl border-graphite-200">
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-lg">Dane techniczne obiektu</CardTitle>
+            {turbinePhotos.turbineId && (
+              <Link
+                href={`/turbiny/${turbinePhotos.turbineId}`}
+                className="inline-flex items-center gap-1 text-xs text-primary-700 hover:text-primary-800 hover:underline"
+                target="_blank"
+              >
+                <ExternalLink size={12} />
+                Otwórz kartę turbiny
+              </Link>
+            )}
+          </div>
+          <p className="text-sm text-graphite-500 font-normal">
+            Edycja zapisuje się bezpośrednio do karty turbiny — zmiany
+            zobaczysz przy kolejnych inspekcjach tej samej turbiny.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="tower_construction_type" className="font-medium">
+                Rodzaj konstrukcji wieży
+              </Label>
+              <Select
+                value={turbinePiib.tower_construction_type ?? '__none__'}
+                onValueChange={(v) =>
+                  handleTurbineField(
+                    'tower_construction_type',
+                    v === '__none__'
+                      ? null
+                      : (v as NonNullable<TurbinePiibFields['tower_construction_type']>)
+                  )
+                }
+                disabled={!turbinePhotos.turbineId}
+              >
+                <SelectTrigger id="tower_construction_type">
+                  <SelectValue placeholder="— wybierz —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— nie określono —</SelectItem>
+                  {Object.entries(TOWER_CONSTRUCTION_LABELS).map(([v, label]) => (
+                    <SelectItem key={v} value={v}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="commissioning_year" className="font-medium">
+                Rok zakończenia budowy
+              </Label>
+              <Input
+                id="commissioning_year"
+                type="number"
+                min={1980}
+                max={2099}
+                value={turbinePiib.commissioning_year ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  if (!v) {
+                    handleTurbineField('commissioning_year', null)
+                    return
+                  }
+                  const n = parseInt(v, 10)
+                  handleTurbineField(
+                    'commissioning_year',
+                    Number.isFinite(n) ? n : null
+                  )
+                }}
+                placeholder="np. 2018"
+                disabled={!turbinePhotos.turbineId}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="building_permit_number" className="font-medium">
+                Nr pozwolenia na budowę
+              </Label>
+              <Input
+                id="building_permit_number"
+                value={turbinePiib.building_permit_number || ''}
+                onChange={(e) =>
+                  handleTurbineField(
+                    'building_permit_number',
+                    e.target.value || null
+                  )
+                }
+                placeholder="np. 123/2017"
+                disabled={!turbinePhotos.turbineId}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="building_permit_date" className="font-medium">
+                Data pozwolenia na budowę
+              </Label>
+              <Input
+                id="building_permit_date"
+                type="date"
+                value={turbinePiib.building_permit_date || ''}
+                onChange={(e) =>
+                  handleTurbineField('building_permit_date', e.target.value || null)
+                }
+                disabled={!turbinePhotos.turbineId}
+              />
+            </div>
+          </div>
+          {turbineSaving && (
+            <p className="text-xs text-graphite-400 text-right">
+              Zapisywanie do karty turbiny…
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Sekcja 2: Strony protokołu */}
       <Card className="rounded-xl border-graphite-200">
         <CardHeader>
@@ -921,44 +1467,413 @@ export function InspectionMetadataPiib({
               <Label htmlFor="manager_name" className="font-medium">
                 Zarządca obiektu
               </Label>
+              {/* Select z bazy klienta + przycisk dodawania nowego rekordu.
+                  Wybór z dropdownu wpisuje sformatowaną wartość do `manager_name`
+                  (legacy TEXT) — dzięki temu generator PDF/DOCX nie wymaga zmian. */}
+              <div className="flex gap-2">
+                <Select
+                  value={(() => {
+                    if (!meta.manager_name) return '__none__'
+                    const matched = allReps.find(
+                      (r) =>
+                        r.full_name === meta.manager_name ||
+                        formatRepDisplay(r) === meta.manager_name
+                    )
+                    return matched?.id ?? '__custom__'
+                  })()}
+                  onValueChange={(v) => {
+                    if (v === '__none__') {
+                      handleField('manager_name', null)
+                    } else if (v === '__custom__') {
+                      // No-op — zostawiamy stary tekst, użytkownik edytuje w polu poniżej.
+                    } else {
+                      const rep = allReps.find((r) => r.id === v)
+                      if (rep) handleField('manager_name', formatRepDisplay(rep))
+                    }
+                  }}
+                  disabled={!clientId}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="— wybierz z bazy klienta —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— brak —</SelectItem>
+                    {allReps.length > 0 && (
+                      <>
+                        {allReps.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {formatRepDisplay(r)}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {/* Pseudo-opcja widoczna tylko jeśli aktualny manager_name
+                        nie pasuje do żadnego rekordu w bazie (legacy / własny wpis). */}
+                    {meta.manager_name &&
+                      !allReps.some(
+                        (r) =>
+                          r.full_name === meta.manager_name ||
+                          formatRepDisplay(r) === meta.manager_name
+                      ) && (
+                        <SelectItem value="__custom__">
+                          {meta.manager_name} (własny wpis)
+                        </SelectItem>
+                      )}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => openRepDialog('manager')}
+                  disabled={!clientId}
+                  title={
+                    clientId
+                      ? 'Dodaj nowego zarządcę do bazy klienta'
+                      : 'Brak klienta — przypisz turbinę do farmy/klienta najpierw'
+                  }
+                >
+                  <Plus size={14} />
+                </Button>
+              </div>
+              {/* Stary wolny tekst — zachowany jako edytowalny override */}
               <Input
                 id="manager_name"
                 value={meta.manager_name || ''}
                 onChange={(e) => handleField('manager_name', e.target.value || null)}
-                placeholder="imię i nazwisko / nazwa zarządcy"
+                placeholder="lub wpisz ręcznie (zostanie użyte w protokole jak jest)"
+                className="text-xs"
               />
+              {!clientId && (
+                <p className="text-xs text-warning-800">
+                  Brak przypisanego klienta — wybór z bazy niedostępny.
+                </p>
+              )}
             </div>
 
-            <div className="md:col-span-2 space-y-1">
-              <Label htmlFor="contractor_info" className="font-medium">
-                Wykonawca kontroli
-              </Label>
-              <Input
-                id="contractor_info"
-                value={meta.contractor_info || ''}
-                onChange={(e) =>
-                  handleField('contractor_info', e.target.value || null)
-                }
-                placeholder="imię i nazwisko / nr uprawnień / specjalność"
-              />
+            {/* ── Wykonawca kontroli — multi-select inspektorów ─────────── */}
+            <div className="md:col-span-2 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="font-medium">Wykonawca kontroli</Label>
+                <Link
+                  href="/inspektorzy"
+                  target="_blank"
+                  className="inline-flex items-center gap-1 text-xs text-primary-700 hover:text-primary-800 hover:underline"
+                >
+                  <ExternalLink size={12} />
+                  Dodaj inspektora w bazie
+                </Link>
+              </div>
+              <p className="text-xs text-graphite-500">
+                Zaznacz inspektorów wykonujących tę kontrolę. Min. 2 osoby
+                (bezpieczeństwo).
+                {inspectionType === 'five_year' && (
+                  <>
+                    {' '}
+                    Dla 5-letniej wymagany inspektor budowlany („konstrukcyjna")
+                    i elektryczny.
+                  </>
+                )}
+              </p>
+
+              {allInspectors.length === 0 ? (
+                <p className="text-xs text-graphite-500">
+                  Brak inspektorów w bazie. Dodaj ich na stronie{' '}
+                  <Link
+                    href="/inspektorzy"
+                    target="_blank"
+                    className="text-primary-700 hover:underline"
+                  >
+                    /inspektorzy
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <div className="space-y-1 rounded-lg border border-graphite-200 bg-graphite-50/50 p-3 max-h-72 overflow-y-auto">
+                  {allInspectors.map((insp) => {
+                    const checked = selectedInspectorIds.has(insp.id)
+                    return (
+                      <label
+                        key={insp.id}
+                        className="flex items-start gap-3 px-2 py-1.5 rounded hover:bg-white cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => void toggleInspector(insp)}
+                          className="mt-0.5"
+                        />
+                        <div className="text-sm leading-tight flex-1 min-w-0">
+                          <span className="font-medium text-graphite-900">
+                            {insp.full_name}
+                          </span>
+                          {insp.specialty && (
+                            <span className="ml-2 inline-flex items-center rounded-full bg-primary-50 text-primary-700 text-[10px] font-medium px-2 py-0.5 align-middle">
+                              {SPECIALTY_LABEL[insp.specialty]}
+                            </span>
+                          )}
+                          {insp.license_number && insp.license_number !== '-' && (
+                            <span className="text-graphite-500 font-mono ml-2 text-xs">
+                              {insp.license_number}
+                            </span>
+                          )}
+                          {insp.chamber_membership && (
+                            <span className="block text-xs text-graphite-500">
+                              {insp.chamber_membership}
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+
+              {inspectorWarnings.length > 0 && (
+                <div className="rounded-md border border-warning-100 bg-warning-50 p-2.5 text-xs text-warning-800 flex gap-2">
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {inspectorWarnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Legacy: stary wolny tekst contractor_info — pokazujemy z opcją wyczyszczenia */}
+              {meta.contractor_info && meta.contractor_info.trim() && (
+                <div className="rounded-md border border-graphite-200 bg-graphite-50 p-2.5 text-xs flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-graphite-700">
+                      Stary tekst (legacy):
+                    </span>{' '}
+                    <span className="text-graphite-600">
+                      {meta.contractor_info}
+                    </span>
+                    <p className="text-[11px] text-graphite-500 mt-0.5">
+                      Używany w protokole tylko gdy nikt nie jest zaznaczony powyżej.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-graphite-500 hover:text-danger h-6 px-2"
+                    onClick={() => handleField('contractor_info', null)}
+                    title="Wyczyść stary tekst"
+                  >
+                    <X size={12} />
+                  </Button>
+                </div>
+              )}
             </div>
 
-            <div className="md:col-span-2 space-y-1">
-              <Label htmlFor="additional_participants" className="font-medium">
-                Przy udziale
-              </Label>
-              <Input
-                id="additional_participants"
-                value={meta.additional_participants || ''}
-                onChange={(e) =>
-                  handleField('additional_participants', e.target.value || null)
-                }
-                placeholder="przedstawiciel właściciela lub zarządcy"
-              />
+            {/* ── Przy udziale — multi-select przedstawicieli klienta ──── */}
+            <div className="md:col-span-2 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="font-medium">Przy udziale</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openRepDialog('participant')}
+                  disabled={!clientId}
+                  title={
+                    clientId
+                      ? 'Dodaj nowego przedstawiciela do bazy klienta'
+                      : 'Brak klienta — przypisz turbinę do farmy/klienta najpierw'
+                  }
+                >
+                  <Plus size={14} className="mr-1" />
+                  Dodaj przedstawiciela
+                </Button>
+              </div>
+              <p className="text-xs text-graphite-500">
+                Przedstawiciele właściciela lub zarządcy. Odznacz osoby, które
+                nie były obecne podczas tej kontroli — pozostają w bazie klienta
+                do następnych inspekcji.
+              </p>
+
+              {!clientId ? (
+                <p className="text-xs text-warning-800">
+                  Brak przypisanego klienta — nie mogę pokazać przedstawicieli.
+                </p>
+              ) : allReps.length === 0 ? (
+                <p className="text-xs text-graphite-500">
+                  Brak przedstawicieli w bazie tego klienta. Kliknij „Dodaj
+                  przedstawiciela" aby utworzyć pierwszego wpisu.
+                </p>
+              ) : (
+                <div className="space-y-1 rounded-lg border border-graphite-200 bg-graphite-50/50 p-3 max-h-72 overflow-y-auto">
+                  {allReps.map((rep) => {
+                    const checked = selectedRepIds.has(rep.id)
+                    return (
+                      <div
+                        key={rep.id}
+                        className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-white group"
+                      >
+                        <label className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() =>
+                              void toggleRepresentative(rep.id)
+                            }
+                            className="mt-0.5"
+                          />
+                          <div className="text-sm leading-tight flex-1 min-w-0">
+                            <span className="font-medium text-graphite-900">
+                              {rep.full_name}
+                            </span>
+                            {rep.role && (
+                              <span className="text-graphite-500 ml-2 text-xs">
+                                — {rep.role}
+                              </span>
+                            )}
+                            {(rep.phone || rep.email) && (
+                              <span className="block text-xs text-graphite-500">
+                                {[rep.phone, rep.email].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                          </div>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteRep(rep)}
+                          className="opacity-0 group-hover:opacity-100 text-graphite-400 hover:text-danger transition-opacity p-1"
+                          title="Usuń z bazy klienta"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Legacy: stary wolny tekst additional_participants */}
+              {meta.additional_participants &&
+                meta.additional_participants.trim() && (
+                  <div className="rounded-md border border-graphite-200 bg-graphite-50 p-2.5 text-xs flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-graphite-700">
+                        Stary tekst (legacy):
+                      </span>{' '}
+                      <span className="text-graphite-600">
+                        {meta.additional_participants}
+                      </span>
+                      <p className="text-[11px] text-graphite-500 mt-0.5">
+                        Używany w protokole tylko gdy nikt nie jest zaznaczony powyżej.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-graphite-500 hover:text-danger h-6 px-2"
+                      onClick={() => handleField('additional_participants', null)}
+                      title="Wyczyść stary tekst"
+                    >
+                      <X size={12} />
+                    </Button>
+                  </div>
+                )}
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialog: dodaj nowego przedstawiciela klienta */}
+      <Dialog open={repDialogOpen} onOpenChange={setRepDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {repDialogContext === 'manager'
+                ? 'Dodaj zarządcę obiektu'
+                : 'Dodaj przedstawiciela klienta'}
+            </DialogTitle>
+            <DialogDescription>
+              {repDialogContext === 'manager'
+                ? 'Osoba/firma zostanie dodana do bazy klienta i ustawiona jako zarządca obiektu w tej inspekcji. Pojawi się jako propozycja przy kolejnych inspekcjach turbin tego samego klienta.'
+                : 'Osoba zostanie dodana do bazy klienta i automatycznie zaznaczona jako uczestnik tej kontroli. Pojawi się jako propozycja przy kolejnych inspekcjach turbin tego samego klienta.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="rep_full_name" className="font-medium">
+                Imię i nazwisko *
+              </Label>
+              <Input
+                id="rep_full_name"
+                value={repForm.full_name}
+                onChange={(e) =>
+                  setRepForm((prev) => ({ ...prev, full_name: e.target.value }))
+                }
+                placeholder="np. Jan Kowalski"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rep_role" className="font-medium">
+                Funkcja / rola
+              </Label>
+              <Input
+                id="rep_role"
+                value={repForm.role}
+                onChange={(e) =>
+                  setRepForm((prev) => ({ ...prev, role: e.target.value }))
+                }
+                placeholder="np. Przedstawiciel właściciela, Zarządca, Inspektor BHP"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="rep_phone" className="font-medium">
+                  Telefon
+                </Label>
+                <Input
+                  id="rep_phone"
+                  type="tel"
+                  value={repForm.phone}
+                  onChange={(e) =>
+                    setRepForm((prev) => ({ ...prev, phone: e.target.value }))
+                  }
+                  placeholder="+48 …"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="rep_email" className="font-medium">
+                  E-mail
+                </Label>
+                <Input
+                  id="rep_email"
+                  type="email"
+                  value={repForm.email}
+                  onChange={(e) =>
+                    setRepForm((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  placeholder="…@…"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRepDialogOpen(false)}
+              disabled={repSaving}
+            >
+              Anuluj
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleAddRep()}
+              disabled={repSaving || !repForm.full_name.trim()}
+            >
+              {repSaving ? 'Zapisywanie…' : 'Dodaj i zaznacz'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Sekcja 3: Dokumenty przedstawione do wglądu */}
       <Card className="rounded-xl border-graphite-200">

@@ -223,6 +223,23 @@ export async function GET(
       rel_specialty: item.specialty,
     }))
 
+    // Przedstawiciele klienta uczestniczacy w kontroli ("Przy udziale").
+    // Fallback do legacy `additional_participants` gdy brak.
+    const { data: participantRels } = await supabase
+      .from('inspection_participants')
+      .select(
+        `
+        representative:representative_id (
+          id, full_name, role
+        )
+        `
+      )
+      .eq('inspection_id', inspectionId)
+
+    const participants = (participantRels || [])
+      .map((item: any) => item.representative)
+      .filter(Boolean) as Array<{ id: string; full_name: string; role: string | null }>
+
     const { data: prevRecs } = await supabase
       .from('previous_recommendations')
       .select('item_number, recommendation_text, completion_status, remarks')
@@ -942,7 +959,17 @@ export async function GET(
             )
             .join('; '),
       },
-      { label: 'Przy udziale', value: insp.additional_participants || '' },
+      {
+        label: 'Przy udziale',
+        value:
+          participants.length > 0
+            ? participants
+                .map((p) =>
+                  p.role ? `${p.full_name} (${p.role})` : p.full_name
+                )
+                .join('; ')
+            : insp.additional_participants || '',
+      },
     ])
 
     // ─── PODSTAWOWE DANE OBIEKTU ───────────────────────────────────────────
