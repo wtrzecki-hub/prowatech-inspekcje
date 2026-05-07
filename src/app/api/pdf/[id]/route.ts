@@ -1482,6 +1482,9 @@ export async function GET(
           withNotes,
         ])
       }
+      // Legacy: `electrical_measurement_notes` zostało usunięte z UI metryczki
+      // (cleanup 2026-05-07). Stare inspekcje wciąż mogą mieć tu wartość —
+      // renderujemy ją, żeby protokół z archiwum nie zgubił treści.
       if (insp.electrical_measurement_notes) {
         summaryRows.push([
           'Uwagi do oględzin i oceny',
