@@ -1447,10 +1447,17 @@ export async function GET(
         summaryRows.push(['Orzeczenie', withNotes])
       }
       if (insp.electrical_measurement_final_assessment) {
-        summaryRows.push([
-          'Ocena końcowa',
-          insp.electrical_measurement_final_assessment,
-        ])
+        // Format strukturalnych wartości (pozytywna/negatywna) z capitalize;
+        // legacy / własny tekst pokazujemy as-is.
+        const raw = insp.electrical_measurement_final_assessment as string
+        const lower = raw.toLowerCase().trim()
+        const formatted =
+          lower === 'pozytywna'
+            ? 'Pozytywna'
+            : lower === 'negatywna'
+              ? 'Negatywna'
+              : raw
+        summaryRows.push(['Ocena końcowa', formatted])
       }
       // Oględziny instalacji elektrycznej (audyt 2026-05-07)
       if (insp.electrical_visual_inspection_result) {
