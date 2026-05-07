@@ -157,6 +157,8 @@ export async function GET(
         electrical_measurement_protocol_number, electrical_measurement_verdict,
         electrical_measurement_verdict_notes, electrical_measurement_final_assessment,
         electrical_measurement_notes, electrical_measurement_protocol_url,
+        electrical_visual_inspection_result, electrical_visual_inspection_notes,
+        lightning_visual_inspection_result, lightning_visual_inspection_notes,
         turbines (
           id, turbine_code, ew_designation, model, manufacturer, rated_power_mw, serial_number,
           location_address, tower_height_m, hub_height_m, rotor_diameter_m,
@@ -1448,6 +1450,29 @@ export async function GET(
         summaryRows.push([
           'Ocena końcowa',
           insp.electrical_measurement_final_assessment,
+        ])
+      }
+      // Oględziny instalacji elektrycznej (audyt 2026-05-07)
+      if (insp.electrical_visual_inspection_result) {
+        const r = insp.electrical_visual_inspection_result as string
+        const label = r === 'pozytywna' ? 'Pozytywna' : 'Negatywna'
+        const withNotes =
+          r === 'negatywna' && insp.electrical_visual_inspection_notes
+            ? `${label} — ${insp.electrical_visual_inspection_notes}`
+            : label
+        summaryRows.push(['Oględziny instalacji elektrycznej', withNotes])
+      }
+      // Oględziny instalacji odgromowej i uziomów
+      if (insp.lightning_visual_inspection_result) {
+        const r = insp.lightning_visual_inspection_result as string
+        const label = r === 'pozytywna' ? 'Pozytywna' : 'Negatywna'
+        const withNotes =
+          r === 'negatywna' && insp.lightning_visual_inspection_notes
+            ? `${label} — ${insp.lightning_visual_inspection_notes}`
+            : label
+        summaryRows.push([
+          'Oględziny instalacji odgromowej i uziomów',
+          withNotes,
         ])
       }
       if (insp.electrical_measurement_notes) {

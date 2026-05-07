@@ -64,6 +64,11 @@ interface MeasurementSummary {
   electrical_measurement_final_assessment: string | null
   electrical_measurement_notes: string | null
   electrical_measurement_protocol_url: string | null
+  /** Wyniki oględzin (audyt 2026-05-07): instalacji elektrycznej i odgromowej. */
+  electrical_visual_inspection_result: 'pozytywna' | 'negatywna' | null
+  electrical_visual_inspection_notes: string | null
+  lightning_visual_inspection_result: 'pozytywna' | 'negatywna' | null
+  lightning_visual_inspection_notes: string | null
 }
 
 const EMPTY_SUMMARY: MeasurementSummary = {
@@ -75,6 +80,10 @@ const EMPTY_SUMMARY: MeasurementSummary = {
   electrical_measurement_final_assessment: null,
   electrical_measurement_notes: null,
   electrical_measurement_protocol_url: null,
+  electrical_visual_inspection_result: null,
+  electrical_visual_inspection_notes: null,
+  lightning_visual_inspection_result: null,
+  lightning_visual_inspection_notes: null,
 }
 
 const VERDICT_OPTIONS: { value: NonNullable<MeasurementSummary['electrical_measurement_verdict']>; label: string }[] = [
@@ -167,7 +176,11 @@ export function ElectricalMeasurements({
              electrical_measurement_verdict_notes,
              electrical_measurement_final_assessment,
              electrical_measurement_notes,
-             electrical_measurement_protocol_url`
+             electrical_measurement_protocol_url,
+             electrical_visual_inspection_result,
+             electrical_visual_inspection_notes,
+             lightning_visual_inspection_result,
+             lightning_visual_inspection_notes`
           )
           .eq('id', inspectionId)
           .single(),
@@ -620,6 +633,46 @@ export function ElectricalMeasurements({
               rows={2}
             />
           </div>
+
+          {/* ── Oględziny: instalacji elektrycznej + odgromowej (audyt 2026-05-07) ── */}
+          <VisualInspectionItem
+            id="em-visual-electrical"
+            label="Oględziny instalacji elektrycznej"
+            result={summary.electrical_visual_inspection_result}
+            notes={summary.electrical_visual_inspection_notes}
+            onResultChange={(v) =>
+              updateSummary({
+                electrical_visual_inspection_result: v,
+                // Czyść opis, jeśli wynik wraca do pozytywnej / null.
+                electrical_visual_inspection_notes:
+                  v === 'negatywna'
+                    ? summary.electrical_visual_inspection_notes
+                    : null,
+              })
+            }
+            onNotesChange={(v) =>
+              updateSummary({ electrical_visual_inspection_notes: v })
+            }
+          />
+
+          <VisualInspectionItem
+            id="em-visual-lightning"
+            label="Oględziny instalacji odgromowej i uziomów"
+            result={summary.lightning_visual_inspection_result}
+            notes={summary.lightning_visual_inspection_notes}
+            onResultChange={(v) =>
+              updateSummary({
+                lightning_visual_inspection_result: v,
+                lightning_visual_inspection_notes:
+                  v === 'negatywna'
+                    ? summary.lightning_visual_inspection_notes
+                    : null,
+              })
+            }
+            onNotesChange={(v) =>
+              updateSummary({ lightning_visual_inspection_notes: v })
+            }
+          />
 
           <div className="space-y-1">
             <Label htmlFor="em-notes" className="font-medium">
@@ -1092,6 +1145,62 @@ export function ElectricalMeasurements({
           </Button>
         </div>
       </details>
+    </div>
+  )
+}
+
+// ─── VisualInspectionItem ────────────────────────────────────────────────────
+// Strukturalny wynik oględzin: pozytywna / negatywna + warunkowy opis przy
+// negatywnej. Używany dla obu sekcji (instalacja elektryczna + odgromowa).
+
+interface VisualInspectionItemProps {
+  id: string
+  label: string
+  result: 'pozytywna' | 'negatywna' | null
+  notes: string | null
+  onResultChange: (v: 'pozytywna' | 'negatywna' | null) => void
+  onNotesChange: (v: string | null) => void
+}
+
+function VisualInspectionItem({
+  id,
+  label,
+  result,
+  notes,
+  onResultChange,
+  onNotesChange,
+}: VisualInspectionItemProps) {
+  return (
+    <div className="space-y-1 rounded-lg border border-graphite-200 bg-graphite-50/50 p-3">
+      <Label htmlFor={id} className="font-medium">
+        {label}
+      </Label>
+      <Select
+        value={result ?? '__none__'}
+        onValueChange={(v) =>
+          onResultChange(
+            v === '__none__' ? null : (v as 'pozytywna' | 'negatywna')
+          )
+        }
+      >
+        <SelectTrigger id={id}>
+          <SelectValue placeholder="— wybierz ocenę —" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">— nie określono —</SelectItem>
+          <SelectItem value="pozytywna">Pozytywna</SelectItem>
+          <SelectItem value="negatywna">Negatywna</SelectItem>
+        </SelectContent>
+      </Select>
+      {result === 'negatywna' && (
+        <Textarea
+          value={notes || ''}
+          onChange={(e) => onNotesChange(e.target.value || null)}
+          placeholder="Opis stwierdzonych nieprawidłowości / zakres koniecznych prac…"
+          rows={2}
+          className="mt-2"
+        />
+      )}
     </div>
   )
 }

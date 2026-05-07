@@ -377,6 +377,10 @@ export async function GET(
         electrical_measurement_verdict_notes,
         electrical_measurement_final_assessment,
         electrical_measurement_notes,
+        electrical_visual_inspection_result,
+        electrical_visual_inspection_notes,
+        lightning_visual_inspection_result,
+        lightning_visual_inspection_notes,
         electrical_measurement_protocol_url,
         turbines (
           id,
@@ -1857,7 +1861,9 @@ export async function GET(
         insp.electrical_measurement_verdict ||
         insp.electrical_measurement_final_assessment ||
         insp.electrical_measurement_notes ||
-        insp.electrical_measurement_protocol_url
+        insp.electrical_measurement_protocol_url ||
+        insp.electrical_visual_inspection_result ||
+        insp.lightning_visual_inspection_result
       if (hasSummary) {
         electricalSection.push(subHeading('Podsumowanie pomiarów'))
         const summaryRows: TableRow[] = []
@@ -1897,6 +1903,30 @@ export async function GET(
               'Ocena końcowa:',
               insp.electrical_measurement_final_assessment as string
             )
+          )
+        }
+        // Oględziny instalacji elektrycznej (audyt 2026-05-07)
+        if (insp.electrical_visual_inspection_result) {
+          const r = insp.electrical_visual_inspection_result as string
+          const label = r === 'pozytywna' ? 'Pozytywna' : 'Negatywna'
+          const withNotes =
+            r === 'negatywna' && insp.electrical_visual_inspection_notes
+              ? `${label} — ${insp.electrical_visual_inspection_notes as string}`
+              : label
+          summaryRows.push(
+            metaRow('Oględziny instalacji elektrycznej:', withNotes)
+          )
+        }
+        // Oględziny instalacji odgromowej i uziomów
+        if (insp.lightning_visual_inspection_result) {
+          const r = insp.lightning_visual_inspection_result as string
+          const label = r === 'pozytywna' ? 'Pozytywna' : 'Negatywna'
+          const withNotes =
+            r === 'negatywna' && insp.lightning_visual_inspection_notes
+              ? `${label} — ${insp.lightning_visual_inspection_notes as string}`
+              : label
+          summaryRows.push(
+            metaRow('Oględziny instalacji odgromowej i uziomów:', withNotes)
           )
         }
         if (insp.electrical_measurement_notes) {
