@@ -1691,6 +1691,97 @@ export async function GET(
       { italic: true }
     )
 
+    // Pobieramy zdjęcia inspekcji posortowane po numerze (z fallbackiem na sort_order).
+    // Renderujemy jako siatkę 2 x N z podpisami "Zdjęcie nr X".
+    const { data: photosData } = await supabase
+      .from('inspection_photos')
+      .select('id, photo_number, file_url, description, sort_order')
+      .eq('inspection_id', inspectionId)
+      .order('photo_number', { ascending: true, nullsFirst: false })
+
+    const photoRows = (photosData || []).filter(
+      (p: any) => p.file_url
+    ) as Array<{
+      id: string
+      photo_number: number | null
+      file_url: string
+      description: string | null
+    }>
+
+    if (photoRows.length > 0) {
+      // Podtytuł sekcji zdjęć — analogicznie do legacy protokołów
+      addSubHeading(
+        'Dokumentacja fotograficzna wykonana podczas kontroli (elementy obiektu, posiadające usterki lub wady, przewidziane do remontu)'
+      )
+
+      // Pre-fetch wszystkich obrazów równolegle
+      const photoImages = await Promise.all(
+        photoRows.map((p) => fetchImageAsBase64(p.file_url))
+      )
+
+      // Layout: 2 zdjęcia w wierszu, każde ~85mm szerokości, 3:2 aspect
+      const gap = 4
+      const photoWidth = (pageWidth - 2 * margin - gap) / 2
+      const photoHeight = (photoWidth * 2) / 3 // 3:2 landscape
+
+      for (let i = 0; i < photoRows.length; i += 2) {
+        // Margines na 1 wiersz: zdjęcie + caption + odstęp
+        ensureSpace(photoHeight + 12)
+        const yStart = yPosition
+
+        for (let j = 0; j < 2 && i + j < photoRows.length; j++) {
+          const photo = photoRows[i + j]
+          const img = photoImages[i + j]
+          const x = margin + j * (photoWidth + gap)
+
+          if (img) {
+            // jsPDF nie wspiera natywnie WEBP — fallback na JPEG (nadal działa
+            // bo nasz convert pipeline robi z webp jpeg przy uploadzie).
+            const fmt = img.format === 'WEBP' ? 'JPEG' : img.format
+            try {
+              pdf.addImage(img.base64, fmt, x, yStart, photoWidth, photoHeight)
+            } catch (e) {
+              console.error('Nie udało się wstawić zdjęcia do PDF:', e)
+              // Placeholder jako prostokąt
+              pdf.setDrawColor(...RGB.graphite200)
+              pdf.rect(x, yStart, photoWidth, photoHeight)
+              pdf.setFontSize(8)
+              pdf.setTextColor(...RGB.graphite500)
+              pdf.text('[brak]', x + photoWidth / 2, yStart + photoHeight / 2, {
+                align: 'center',
+              })
+            }
+          } else {
+            // Placeholder gdy fetch zwrócił null
+            pdf.setDrawColor(...RGB.graphite200)
+            pdf.rect(x, yStart, photoWidth, photoHeight)
+            pdf.setFontSize(8)
+            pdf.setTextColor(...RGB.graphite500)
+            pdf.text('[brak]', x + photoWidth / 2, yStart + photoHeight / 2, {
+              align: 'center',
+            })
+          }
+        }
+
+        // Captions pod zdjęciami
+        yPosition = yStart + photoHeight + 4
+        pdf.setFontSize(9)
+        pdf.setFont('Roboto', 'italic')
+        pdf.setTextColor(...RGB.graphite800)
+        for (let j = 0; j < 2 && i + j < photoRows.length; j++) {
+          const photo = photoRows[i + j]
+          const x = margin + j * (photoWidth + gap)
+          const num = photo.photo_number ?? i + j + 1
+          pdf.text(`Zdjęcie nr ${num}`, x + photoWidth / 2, yPosition, {
+            align: 'center',
+          })
+        }
+        pdf.setFont('Roboto', 'normal')
+        pdf.setTextColor(0)
+        yPosition += 8
+      }
+    }
+
     addSection(isFiveYear ? 'VIII. Podpisy' : 'VII. Podpisy')
     addBody(
       'Oświadczam, iż ustalenia zawarte w protokole są zgodne ze stanem faktycznym.'
