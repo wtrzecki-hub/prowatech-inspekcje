@@ -598,11 +598,15 @@ export async function GET(
     }
 
     const addKeyValueTable = (rows: { label: string; value: string }[]) => {
+      // Pomijamy wiersze z pustym value — nie chcemy wyświetlać niewypełnionych
+      // pól (zwłaszcza pól turbiny w sekcji "Dane techniczne") w protokole.
+      const filledRows = rows.filter((r) => r.value && r.value.trim())
+      if (filledRows.length === 0) return
       ensureSpace(40)
       ;(pdf as any).autoTable({
         startY: yPosition,
         margin: margin,
-        body: rows.map((r) => [r.label, r.value || '-']),
+        body: filledRows.map((r) => [r.label, r.value]),
         styles: {
           font: 'Roboto',
           fontSize: 9,
