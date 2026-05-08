@@ -22,6 +22,64 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
+// ─── DATA STATUS ────────────────────────────────────────────────────────────
+// Status weryfikacji wpisu UDT/Rescue przez inspektora. Migracja
+// 2026-05-08_udt_rescue_data_status.sql.
+type DataStatus = 'do_weryfikacji' | 'aktualne' | 'nieaktualne'
+
+const DATA_STATUS_OPTIONS: {
+  value: DataStatus
+  label: string
+  active: string
+  idle: string
+}[] = [
+  {
+    value: 'do_weryfikacji',
+    label: 'Do weryfikacji',
+    active: 'bg-warning-100 text-warning-800 border-warning-300',
+    idle: 'text-graphite-500 hover:bg-warning-50',
+  },
+  {
+    value: 'aktualne',
+    label: 'Aktualne',
+    active: 'bg-success-100 text-success-800 border-success-300',
+    idle: 'text-graphite-500 hover:bg-success-50',
+  },
+  {
+    value: 'nieaktualne',
+    label: 'Nieaktualne',
+    active: 'bg-danger-100 text-danger-800 border-danger-300',
+    idle: 'text-graphite-500 hover:bg-danger-50',
+  },
+]
+
+function DataStatusSelector({
+  value,
+  onChange,
+}: {
+  value: DataStatus
+  onChange: (next: DataStatus) => void
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-lg border border-graphite-200 bg-graphite-50 p-1">
+      {DATA_STATUS_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+            value === opt.value
+              ? opt.active
+              : `border-transparent bg-transparent ${opt.idle}`
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 const SUPABASE_URL = 'https://lhxhsprqoecepojrxepf.supabase.co'
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeGhzcHJxb2VjZXBvanJ4ZXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTE0NTksImV4cCI6MjA5MDYyNzQ1OX0.sb8WzlwpPAl4tj6CQgIH34PAQRklUmLeDFOMOS2kUi0'
@@ -43,6 +101,7 @@ interface UdtDevice {
   last_inspection_date: string | null
   next_inspection_date: string | null
   notes: string | null
+  data_status: DataStatus
   sort_order: number
 }
 
@@ -165,6 +224,14 @@ export function UdtDevicesSection({ turbineId }: { turbineId: string }) {
                 key={item.id}
                 className="rounded-xl border border-graphite-200 p-3 space-y-2 hover:bg-graphite-50/40"
               >
+                <div className="flex items-center justify-between gap-2">
+                  <DataStatusSelector
+                    value={item.data_status}
+                    onChange={(next) =>
+                      handleUpdate(item.id, 'data_status', next)
+                    }
+                  />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-graphite-500">
@@ -349,6 +416,7 @@ interface RescueItem {
   next_inspection_date: string | null
   description: string | null
   notes: string | null
+  data_status: DataStatus
   sort_order: number
 }
 
@@ -470,6 +538,14 @@ export function RescueEquipmentSection({ turbineId }: { turbineId: string }) {
                 key={item.id}
                 className="rounded-xl border border-graphite-200 p-3 space-y-2 hover:bg-graphite-50/40"
               >
+                <div className="flex items-center justify-between gap-2">
+                  <DataStatusSelector
+                    value={item.data_status}
+                    onChange={(next) =>
+                      handleUpdate(item.id, 'data_status', next)
+                    }
+                  />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-graphite-500">Typ sprzętu *</Label>
