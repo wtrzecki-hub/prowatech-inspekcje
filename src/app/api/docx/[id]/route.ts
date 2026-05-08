@@ -404,15 +404,10 @@ export async function GET(
           commissioning_year,
           tower_construction_type,
           tower_segments_count,
-          nacelle_material,
-          blade_material,
           foundation_diameter_m,
           foundation_depth_m,
-          foundation_concrete_class,
           pedestal_height_m,
           service_crane_capacity_t,
-          mv_cable_type,
-          mv_cable_length_m,
           has_as_built_documentation,
           has_building_log_book,
           photo_url,
@@ -2812,31 +2807,11 @@ export async function GET(
         label: 'Wysokość cokołu',
         value: fmtNum(turbineRow.pedestal_height_m, 'm'),
       })
-    if (turbineRow?.foundation_concrete_class)
-      techRows.push({
-        label: 'Klasa betonu fundamentu',
-        value: turbineRow.foundation_concrete_class,
-      })
-    if (turbineRow?.nacelle_material)
-      techRows.push({ label: 'Materiał gondoli', value: turbineRow.nacelle_material })
-    if (turbineRow?.blade_material)
-      techRows.push({ label: 'Materiał łopat', value: turbineRow.blade_material })
     if (turbineRow?.service_crane_capacity_t)
       techRows.push({
         label: 'Udźwig dźwigu/wciągarki serwisowej',
         value: fmtNum(turbineRow.service_crane_capacity_t, 't'),
       })
-    if (turbineRow?.mv_cable_type || turbineRow?.mv_cable_length_m) {
-      techRows.push({
-        label: 'Wyposażenie instalacyjne — kabel SN',
-        value: [
-          turbineRow.mv_cable_type,
-          turbineRow.mv_cable_length_m ? `dł. ${turbineRow.mv_cable_length_m} m`: null,
-        ]
-          .filter(Boolean)
-          .join(', '),
-      })
-    }
     if (techRows.length > 0) {
       const techCol1 = Math.floor(USABLE_WIDTH * 0.4)
       const techCol2 = USABLE_WIDTH - techCol1

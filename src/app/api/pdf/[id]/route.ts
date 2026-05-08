@@ -168,10 +168,9 @@ export async function GET(
           location_address, tower_height_m, hub_height_m, rotor_diameter_m,
           building_permit_number, building_permit_date, commissioning_year,
           tower_construction_type,
-          tower_segments_count, nacelle_material, blade_material,
-          foundation_diameter_m, foundation_depth_m, foundation_concrete_class,
+          tower_segments_count,
+          foundation_diameter_m, foundation_depth_m,
           pedestal_height_m, service_crane_capacity_t,
-          mv_cable_type, mv_cable_length_m,
           has_as_built_documentation, has_building_log_book,
           photo_url, photo_url_2, photo_url_3,
           wind_farms (
@@ -1159,39 +1158,11 @@ export async function GET(
           label: 'Wysokość cokołu',
           value: fmtNum(turbine.pedestal_height_m, 'm'),
         })
-      if (turbine?.foundation_concrete_class)
-        techRows.push({
-          label: 'Klasa betonu fundamentu',
-          value: turbine.foundation_concrete_class,
-        })
-      if (turbine?.nacelle_material)
-        techRows.push({
-          label: 'Materiał gondoli',
-          value: turbine.nacelle_material,
-        })
-      if (turbine?.blade_material)
-        techRows.push({
-          label: 'Materiał łopat',
-          value: turbine.blade_material,
-        })
       if (turbine?.service_crane_capacity_t)
         techRows.push({
           label: 'Udźwig dźwigu/wciągarki serwisowej',
           value: fmtNum(turbine.service_crane_capacity_t, 't'),
         })
-      if (turbine?.mv_cable_type || turbine?.mv_cable_length_m) {
-        techRows.push({
-          label: 'Wyposażenie instalacyjne — kabel SN',
-          value: [
-            turbine.mv_cable_type,
-            turbine.mv_cable_length_m
-              ? `dł. ${turbine.mv_cable_length_m} m`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(', '),
-        })
-      }
       if (techRows.length > 0) {
         addSection('Opis techniczny obiektu')
         addKeyValueTable(techRows)

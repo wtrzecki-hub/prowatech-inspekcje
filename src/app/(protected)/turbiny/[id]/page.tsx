@@ -68,15 +68,10 @@ interface Turbine {
   building_permit_date: string | null
   // Opis techniczny rozszerzony (audyt 5L pkt 6)
   tower_segments_count: number | null
-  nacelle_material: string | null
-  blade_material: string | null
   foundation_diameter_m: number | null
   foundation_depth_m: number | null
-  foundation_concrete_class: string | null
   pedestal_height_m: number | null
   service_crane_capacity_t: number | null
-  mv_cable_type: string | null
-  mv_cable_length_m: number | null
   location_address: string
   cadastral_parcel: string
   latitude: number | null
@@ -137,6 +132,7 @@ interface InspectionHistoryRow {
   protocol_number: string | null
   inspection_date: string | null
   inspection_type: 'annual' | 'five_year'
+  status: 'draft' | 'in_progress' | 'completed' | 'signed' | null
   overall_condition_rating: RatingKey | null
   next_annual_date: string | null
   next_five_year_date: string | null
@@ -305,6 +301,7 @@ export default function TurbineDetailPage() {
           protocol_number,
           inspection_date,
           inspection_type,
+          status,
           overall_condition_rating,
           next_annual_date,
           next_five_year_date,
@@ -491,9 +488,30 @@ export default function TurbineDetailPage() {
     )
   }
 
-  const isOverdue = turbine.next_inspection_date && new Date(turbine.next_inspection_date) < new Date()
-  const daysUntilInspection = turbine.next_inspection_date
-    ? Math.ceil((new Date(turbine.next_inspection_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  // "Dane kontroli" + banner przeterminowanego przeglądu liczymy z najnowszej
+  // zakończonej inspekcji (signed/completed), nie z denormalized pól na turbines
+  // (turbines.last_*/next_inspection_date często rozjeżdżają się z rzeczywistym
+  // stanem `inspections` — bug niespójności z 2026-05-08).
+  const latestCompletedInspection = inspectionsHistory.find(
+    (i) => i.status === 'signed' || i.status === 'completed'
+  ) || null
+  const computedNextInspectionDate = latestCompletedInspection
+    ? [
+        latestCompletedInspection.next_annual_date,
+        latestCompletedInspection.next_electrical_date,
+        latestCompletedInspection.next_five_year_date,
+      ]
+        .filter((d): d is string => !!d)
+        .sort()[0] ?? null
+    : null
+  const isOverdue =
+    !!computedNextInspectionDate &&
+    new Date(computedNextInspectionDate) < new Date()
+  const daysUntilInspection = computedNextInspectionDate
+    ? Math.ceil(
+        (new Date(computedNextInspectionDate).getTime() - new Date().getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
     : null
 
   const googleMapsUrl = turbine.latitude && turbine.longitude
@@ -518,6 +536,9 @@ export default function TurbineDetailPage() {
         openRecsCount={openRecsCount}
         daysUntilInspection={daysUntilInspection}
         isOverdue={isOverdue}
+        latestInspectionDate={
+          latestCompletedInspection?.inspection_date ?? null
+        }
         canAddInspection={canUpload}
         canEdit={canUpload}
         onAddInspection={() => router.push(`/inspekcje/nowa?turbineId=${turbineId}`)}
@@ -610,7 +631,7 @@ export default function TurbineDetailPage() {
           </Card>
 
           {/* Alert inspekcji (przeterminowany / za 90 dni / OK) */}
-          {turbine.next_inspection_date && (
+          {computedNextInspectionDate && (
             <div className={`flex items-center gap-3 p-4 rounded-xl border ${
               isOverdue
                 ? 'bg-danger-50 border-danger-100 text-danger-800'
@@ -621,8 +642,8 @@ export default function TurbineDetailPage() {
               <AlertTriangle className="h-5 w-5 flex-shrink-0" />
               <p className="text-sm font-medium">
                 {isOverdue
-                  ? `Przegląd przeterminowany! Termin: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')}`
-                  : `Następny przegląd: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')} (za ${daysUntilInspection} dni)`
+                  ? `Przegląd przeterminowany! Termin: ${new Date(computedNextInspectionDate).toLocaleDateString('pl-PL')}`
+                  : `Następny przegląd: ${new Date(computedNextInspectionDate).toLocaleDateString('pl-PL')} (za ${daysUntilInspection} dni)`
                 }
               </p>
             </div>
@@ -704,29 +725,8 @@ export default function TurbineDetailPage() {
                   mono
                 />
                 <InfoItem
-                  label="Klasa betonu fundamentu"
-                  value={turbine.foundation_concrete_class || '-'}
-                />
-                <InfoItem
-                  label="Materiał gondoli"
-                  value={turbine.nacelle_material || '-'}
-                />
-                <InfoItem
-                  label="Materiał łopat"
-                  value={turbine.blade_material || '-'}
-                />
-                <InfoItem
                   label="Udźwig dźwigu serwisowego"
                   value={turbine.service_crane_capacity_t ? `${turbine.service_crane_capacity_t} t` : '-'}
-                  mono
-                />
-                <InfoItem
-                  label="Typ kabla SN"
-                  value={turbine.mv_cable_type || '-'}
-                />
-                <InfoItem
-                  label="Długość kabla SN"
-                  value={turbine.mv_cable_length_m ? `${turbine.mv_cable_length_m} m` : '-'}
                   mono
                 />
               </div>
@@ -790,21 +790,31 @@ export default function TurbineDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 <InfoItem
                   label="Data ostatniego przeglądu"
-                  value={turbine.last_inspection_date
-                    ? new Date(turbine.last_inspection_date).toLocaleDateString('pl-PL')
-                    : 'Brak danych'}
+                  value={
+                    latestCompletedInspection?.inspection_date
+                      ? new Date(
+                          latestCompletedInspection.inspection_date
+                        ).toLocaleDateString('pl-PL')
+                      : 'Brak danych'
+                  }
                   mono
                 />
                 <InfoItem
                   label="Nr protokołu"
-                  value={turbine.last_inspection_protocol || 'Brak danych'}
+                  value={
+                    latestCompletedInspection?.protocol_number || 'Brak danych'
+                  }
                   mono
                 />
                 <InfoItem
                   label="Data następnego przeglądu"
-                  value={turbine.next_inspection_date
-                    ? new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')
-                    : 'Brak danych'}
+                  value={
+                    computedNextInspectionDate
+                      ? new Date(
+                          computedNextInspectionDate
+                        ).toLocaleDateString('pl-PL')
+                      : 'Brak danych'
+                  }
                   mono
                   danger={!!isOverdue}
                 />
@@ -920,6 +930,7 @@ function TurbineHero({
   openRecsCount,
   daysUntilInspection,
   isOverdue,
+  latestInspectionDate,
   canAddInspection,
   canEdit,
   onAddInspection,
@@ -929,6 +940,7 @@ function TurbineHero({
   openRecsCount: number
   daysUntilInspection: number | null
   isOverdue: boolean | null
+  latestInspectionDate: string | null
   canAddInspection: boolean
   canEdit: boolean
   onAddInspection: () => void
@@ -980,7 +992,7 @@ function TurbineHero({
                     : `Aktywne zalecenia · ${openRecsCount}`}
                 </span>
               )}
-              {turbine.next_inspection_date && daysUntilInspection !== null && (
+              {daysUntilInspection !== null && (
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold font-mono ${
                     isOverdue
@@ -1055,15 +1067,10 @@ function TurbineHero({
                 building_permit_date: turbine.building_permit_date,
                 // Opis techniczny rozszerzony
                 tower_segments_count: turbine.tower_segments_count,
-                nacelle_material: turbine.nacelle_material,
-                blade_material: turbine.blade_material,
                 foundation_diameter_m: turbine.foundation_diameter_m,
                 foundation_depth_m: turbine.foundation_depth_m,
-                foundation_concrete_class: turbine.foundation_concrete_class,
                 pedestal_height_m: turbine.pedestal_height_m,
                 service_crane_capacity_t: turbine.service_crane_capacity_t,
-                mv_cable_type: turbine.mv_cable_type,
-                mv_cable_length_m: turbine.mv_cable_length_m,
               }}
               onSuccess={() => {
                 setIsEditOpen(false)
@@ -1083,9 +1090,11 @@ function TurbineHero({
         <HeroSpec label="Nr seryjny" value={turbine.serial_number || '—'} mono />
         <HeroSpec
           label="Ostatnia kontrola"
-          value={turbine.last_inspection_date
-            ? new Date(turbine.last_inspection_date).toLocaleDateString('pl-PL')
-            : '—'}
+          value={
+            latestInspectionDate
+              ? new Date(latestInspectionDate).toLocaleDateString('pl-PL')
+              : '—'
+          }
           mono
         />
       </div>
