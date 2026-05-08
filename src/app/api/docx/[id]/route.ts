@@ -32,7 +32,9 @@ import {
   TRACKING_DXA,
   RATING_COLORS_HEX,
   RATING_LABELS,
+  ART5_MET_COLORS_HEX,
   type RatingKey,
+  type Art5MetKey,
 } from '@/lib/design/protocol-tokens'
 import {
   buildProtocolFilename,
@@ -382,6 +384,9 @@ export async function GET(
         lightning_visual_inspection_result,
         lightning_visual_inspection_notes,
         electrical_measurement_protocol_url,
+        environmental_protection_findings,
+        documentation_verification_findings,
+        weather_exposure_methods,
         turbines (
           id,
           turbine_code,
@@ -398,6 +403,18 @@ export async function GET(
           building_permit_date,
           commissioning_year,
           tower_construction_type,
+          tower_segments_count,
+          nacelle_material,
+          blade_material,
+          foundation_diameter_m,
+          foundation_depth_m,
+          foundation_concrete_class,
+          pedestal_height_m,
+          service_crane_capacity_t,
+          mv_cable_type,
+          mv_cable_length_m,
+          has_as_built_documentation,
+          has_building_log_book,
           photo_url,
           photo_url_2,
           photo_url_3,
@@ -510,9 +527,34 @@ export async function GET(
     }>
 
     // ─── FETCH PIIB TABLES ─────────────────────────────────────────────────
+    // Urzadzenia UDT i sprzet ewakuacyjny przypisany do turbiny (audyt 5L pkt 6)
+    const turbineId = (insp.turbines as any)?.id as string | undefined
+    const { data: udtDevices } = turbineId
+      ? await supabase
+          .from('turbine_udt_devices')
+          .select(
+            'device_type, manufacturer, model, capacity_t, is_udt_subject, inspection_frequency, certificate_number, last_inspection_date, next_inspection_date, notes, sort_order'
+          )
+          .eq('turbine_id', turbineId)
+          .eq('is_deleted', false)
+          .order('sort_order', { ascending: true })
+      : { data: null }
+    const { data: rescueEquipment } = turbineId
+      ? await supabase
+          .from('turbine_rescue_equipment')
+          .select(
+            'equipment_type, manufacturer, model, inspection_frequency, last_inspection_date, next_inspection_date, description, notes, sort_order'
+          )
+          .eq('turbine_id', turbineId)
+          .eq('is_deleted', false)
+          .order('sort_order', { ascending: true })
+      : { data: null }
+
     const { data: prevRecs } = await supabase
       .from('previous_recommendations')
-      .select('item_number, recommendation_text, completion_status, remarks')
+      .select(
+        'item_number, recommendation_text, completion_status, remarks, source_inspection_type'
+      )
       .eq('inspection_id', inspectionId)
       .order('item_number')
 
@@ -525,7 +567,7 @@ export async function GET(
     let { data: repairScope } = await supabase
       .from('repair_scope_items')
       .select(
-        'item_number, scope_description, deadline_text, deadline_date, is_completed, completion_date'
+        'item_number, scope_description, element_name, work_kind, urgency_level, deadline_text, deadline_date, is_completed, completion_date'
       )
       .eq('inspection_id', inspectionId)
       .order('item_number')
@@ -538,6 +580,9 @@ export async function GET(
       const fallback: Array<{
         item_number: number
         scope_description: string
+        element_name: string | null
+        work_kind: string | null
+        urgency_level: string | null
         deadline_text: string | null
         deadline_date: string | null
         is_completed: boolean
@@ -556,13 +601,14 @@ export async function GET(
       }>) {
         const desc = r.scope_description?.trim()
         if (!desc) continue
-        const prefix = r.element_name?.trim() ? `[${r.element_name.trim()}] ` : ''
-        const text = prefix + desc
-        if (seen.has(text)) continue
-        seen.add(text)
+        if (seen.has(desc)) continue
+        seen.add(desc)
         fallback.push({
           item_number: nextNo++,
-          scope_description: text,
+          scope_description: desc,
+          element_name: r.element_name?.trim() || null,
+          work_kind: null,
+          urgency_level: null,
           deadline_text: null,
           deadline_date: null,
           is_completed: false,
@@ -585,22 +631,20 @@ export async function GET(
         if (!rec) continue
         const num = row.definition?.element_number
         const namePl = row.definition?.name_pl
-        const prefix =
-          num != null && namePl
-            ? `[${num}. ${namePl}] `
-            : namePl
-              ? `[${namePl}] `
-              : ''
+        const elemLabel =
+          num != null && namePl ? `${num}. ${namePl}` : namePl ?? null
         for (const line of rec
           .split(/\r?\n+/)
           .map((s) => s.trim())
           .filter((s) => s.length > 0)) {
-          const text = prefix + line
-          if (seen.has(text)) continue
-          seen.add(text)
+          if (seen.has(line)) continue
+          seen.add(line)
           fallback.push({
             item_number: nextNo++,
-            scope_description: text,
+            scope_description: line,
+            element_name: elemLabel,
+            work_kind: null,
+            urgency_level: null,
             deadline_text: null,
             deadline_date: null,
             is_completed: false,
@@ -1477,86 +1521,179 @@ export async function GET(
       nie: 'nie',
       w_trakcie: 'w trakcie',
     }
-    const prevRecsRows: TableRow[] = [
-      new TableRow({
-        tableHeader: true,
-        children: [
-          headerCell('Lp.', prevRecsCols[0]),
-          headerCell('Zalecenia z poprzedniej kontroli', prevRecsCols[1]),
-          headerCell('Stopień wykonania', prevRecsCols[2]),
-          headerCell('Realizacja zaleceń — uwagi', prevRecsCols[3]),
-        ],
-      }),
-      ...((prevRecs && prevRecs.length > 0)
-        ? prevRecs
-        : [1, 2, 3, 4].map((n) => ({
-            item_number: n,
-            recommendation_text: '',
-            completion_status: null,
-            remarks: '',
-          }))
-      ).map(
-        (r: any) =>
-          new TableRow({
-            children: [
-              dataCell(String(r.item_number), prevRecsCols[0]),
-              dataCell(r.recommendation_text || '', prevRecsCols[1]),
-              dataCell(
-                r.completion_status
-                  ? completionLabel[r.completion_status] || r.completion_status
-                  : '',
-                prevRecsCols[2]
-              ),
-              dataCell(r.remarks || '', prevRecsCols[3]),
-            ],
-          })
-      ),
-    ]
-    const prevRecsTable = new Table({
-      width: { size: USABLE_WIDTH, type: WidthType.DXA },
-      rows: prevRecsRows,
-    })
+    type PrevRec = {
+      item_number: number
+      recommendation_text: string | null
+      completion_status: string | null
+      remarks: string | null
+      source_inspection_type: 'annual' | 'five_year' | null
+    }
+    const prevRecsAll = (prevRecs || []) as PrevRec[]
+    const prevRecsBySource = {
+      five_year: prevRecsAll.filter((r) => r.source_inspection_type === 'five_year'),
+      annual: prevRecsAll.filter((r) => r.source_inspection_type === 'annual'),
+      unsourced: prevRecsAll.filter((r) => !r.source_inspection_type),
+    }
+    const buildPrevRecsTable = (rows: PrevRec[], placeholderWhenEmpty: boolean) => {
+      const dataRows: PrevRec[] =
+        rows.length > 0
+          ? rows
+          : placeholderWhenEmpty
+          ? [1, 2, 3, 4].map((n) => ({
+              item_number: n,
+              recommendation_text: '',
+              completion_status: null,
+              remarks: '',
+              source_inspection_type: null,
+            }))
+          : []
+      const tableRows: TableRow[] = [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            headerCell('Lp.', prevRecsCols[0]),
+            headerCell('Zalecenia z poprzedniej kontroli', prevRecsCols[1]),
+            headerCell('Stopień wykonania', prevRecsCols[2]),
+            headerCell('Realizacja zaleceń — uwagi', prevRecsCols[3]),
+          ],
+        }),
+        ...dataRows.map(
+          (r) =>
+            new TableRow({
+              children: [
+                dataCell(String(r.item_number), prevRecsCols[0]),
+                dataCell(r.recommendation_text || '', prevRecsCols[1]),
+                dataCell(
+                  r.completion_status
+                    ? completionLabel[r.completion_status] || r.completion_status
+                    : '',
+                  prevRecsCols[2]
+                ),
+                dataCell(r.remarks || '', prevRecsCols[3]),
+              ],
+            })
+        ),
+      ]
+      return new Table({
+        width: { size: USABLE_WIDTH, type: WidthType.DXA },
+        rows: tableRows,
+      })
+    }
+    // Nr + data poprzednich protokołów: bierzemy z documents_reviewed (info wpisuje
+    // inspektor w metryczce, sekcja "Dokumenty obiektu okazane do wglądu").
+    const prev5ySource = docs.previous_5y?.replace(/^Okazano[\s,—-]*/i, '').trim()
+    const prevAnnualSource = docs.previous_annual?.replace(/^Okazano[\s,—-]*/i, '').trim()
+    const headingWithSource = (label: string, source: string | undefined) =>
+      source ? `${label} (${source})` : label
+    const prevRecsBlocks: Array<Paragraph | Table> = []
+    if (isFiveYear) {
+      // Wyjątek: pierwsza kontrola 5-letnia (brak poprzedniej tego typu) —
+      // odniesienie wyłącznie do kontroli rocznej, sekcja 5y pomijana.
+      const isFirstFiveYear =
+        !prev5ySource && prevRecsBySource.five_year.length === 0
+      if (isFirstFiveYear) {
+        prevRecsBlocks.push(
+          subHeading(
+            'Ocena realizacji zaleceń z poprzedniej kontroli 5-letniej'
+          ),
+          bodyParagraph(
+            'Pierwsza kontrola pięcioletnia — brak poprzedniej kontroli tego typu, odniesienie wyłącznie do poprzedniej kontroli rocznej.',
+            { italic: true }
+          )
+        )
+      } else {
+        prevRecsBlocks.push(
+          subHeading(
+            headingWithSource(
+              'Ocena realizacji zaleceń z poprzedniej kontroli 5-letniej',
+              prev5ySource
+            )
+          ),
+          buildPrevRecsTable(prevRecsBySource.five_year, true)
+        )
+      }
+      prevRecsBlocks.push(
+        subHeading(
+          headingWithSource(
+            'Ocena realizacji zaleceń z poprzedniej kontroli rocznej',
+            prevAnnualSource
+          )
+        ),
+        buildPrevRecsTable(prevRecsBySource.annual, true)
+      )
+      if (prevRecsBySource.unsourced.length > 0) {
+        prevRecsBlocks.push(
+          subHeading('Inne zalecenia (bez przypisanego źródła)'),
+          buildPrevRecsTable(prevRecsBySource.unsourced, false)
+        )
+      }
+    } else {
+      // Wyjątek: pierwsza kontrola roczna (nowa turbina, brak poprzedniej) —
+      // sekcja pomijana, zostaje notka.
+      const isFirstAnnual =
+        !prevAnnualSource &&
+        prevRecsBySource.annual.length === 0 &&
+        prevRecsAll.length === 0
+      if (isFirstAnnual) {
+        prevRecsBlocks.push(
+          subHeading('Ocena realizacji zaleceń z poprzedniej kontroli'),
+          bodyParagraph(
+            'Pierwsza kontrola roczna obiektu — brak poprzedniej kontroli, brak zaleceń do sprawdzenia.',
+            { italic: true }
+          )
+        )
+      } else {
+        const annualRows =
+          prevRecsBySource.annual.length > 0
+            ? prevRecsBySource.annual
+            : prevRecsAll
+        prevRecsBlocks.push(
+          subHeading(
+            headingWithSource(
+              'Ocena realizacji zaleceń z poprzedniej kontroli',
+              prevAnnualSource
+            )
+          ),
+          buildPrevRecsTable(annualRows, true)
+        )
+      }
+    }
 
-    // Stan awaryjny
+    // Stan awaryjny — render tabeli tylko gdy są wpisy
+    const hasEmergency = !!(emergencyItems && emergencyItems.length > 0)
     const emergencyCols = [
       Math.floor(USABLE_WIDTH * 0.06),
       Math.floor(USABLE_WIDTH * 0.34),
       USABLE_WIDTH - Math.floor(USABLE_WIDTH * 0.06) - Math.floor(USABLE_WIDTH * 0.34),
     ]
-    const emergencyRows: TableRow[] = [
-      new TableRow({
-        tableHeader: true,
-        children: [
-          headerCell('Lp.', emergencyCols[0]),
-          headerCell('Element obiektu', emergencyCols[1]),
-          headerCell(
-            'Zakres pilnego remontu, naprawy lub robót zabezpieczających',
-            emergencyCols[2]
-          ),
-        ],
-      }),
-      ...((emergencyItems && emergencyItems.length > 0)
-        ? emergencyItems
-        : [1, 2, 3, 4].map((n) => ({
-            item_number: n,
-            element_name: '',
-            urgent_repair_scope: '',
-          }))
-      ).map(
-        (e: any) =>
-          new TableRow({
-            children: [
-              dataCell(String(e.item_number), emergencyCols[0]),
-              dataCell(e.element_name || '', emergencyCols[1]),
-              dataCell(e.urgent_repair_scope || '', emergencyCols[2]),
-            ],
-          })
-      ),
-    ]
-    const emergencyTable = new Table({
-      width: { size: USABLE_WIDTH, type: WidthType.DXA },
-      rows: emergencyRows,
-    })
+    const emergencyTable = hasEmergency
+      ? new Table({
+          width: { size: USABLE_WIDTH, type: WidthType.DXA },
+          rows: [
+            new TableRow({
+              tableHeader: true,
+              children: [
+                headerCell('Lp.', emergencyCols[0]),
+                headerCell('Element obiektu', emergencyCols[1]),
+                headerCell(
+                  'Zakres pilnego remontu, naprawy lub robót zabezpieczających',
+                  emergencyCols[2]
+                ),
+              ],
+            }),
+            ...emergencyItems!.map(
+              (e: any) =>
+                new TableRow({
+                  children: [
+                    dataCell(String(e.item_number), emergencyCols[0]),
+                    dataCell(e.element_name || '', emergencyCols[1]),
+                    dataCell(e.urgent_repair_scope || '', emergencyCols[2]),
+                  ],
+                })
+            ),
+          ],
+        })
+      : null
 
     // ─── III. USTALENIA — JEDNA TABELA PIIB ─────────────────────────────────
     // Roczny: ELEMENT / OPIS / OCENA / ZALECENIA / NR FOT. / DATA WYK.
@@ -2177,23 +2314,41 @@ export async function GET(
         })
     )
 
-    // ─── ZALECENIA (Zakres czynności / Termin) ──────────────────────────────
+    // ─── ZALECENIA (kolumny zgodnie z PIIB / WACETOB) ───────────────────────
+    // Lp | Element | Zakres robot | Rodzaj (K/NB/NG) | Stopien (I-IV) | Termin
     const repairCols = [
-      Math.floor(USABLE_WIDTH * 0.7),
-      USABLE_WIDTH - Math.floor(USABLE_WIDTH * 0.7),
+      Math.floor(USABLE_WIDTH * 0.06), // Lp
+      Math.floor(USABLE_WIDTH * 0.13), // Element
+      Math.floor(USABLE_WIDTH * 0.42), // Zakres
+      Math.floor(USABLE_WIDTH * 0.1), // Rodzaj
+      Math.floor(USABLE_WIDTH * 0.1), // Pilność
+      USABLE_WIDTH -
+        Math.floor(USABLE_WIDTH * 0.06) -
+        Math.floor(USABLE_WIDTH * 0.13) -
+        Math.floor(USABLE_WIDTH * 0.42) -
+        Math.floor(USABLE_WIDTH * 0.1) -
+        Math.floor(USABLE_WIDTH * 0.1), // Termin
     ]
     const repairRows: TableRow[] = [
       new TableRow({
         tableHeader: true,
         children: [
-          headerCell('Zakres czynności', repairCols[0]),
-          headerCell('Termin wykonania', repairCols[1]),
+          headerCell('Lp.', repairCols[0]),
+          headerCell('Element / lokalizacja', repairCols[1]),
+          headerCell('Zakres robót remontowych', repairCols[2]),
+          headerCell('Rodzaj', repairCols[3]),
+          headerCell('Pilność', repairCols[4]),
+          headerCell('Termin wykonania', repairCols[5]),
         ],
       }),
       ...((repairScope && repairScope.length > 0)
         ? repairScope
-        : [1, 2, 3, 4, 5].map(() => ({
+        : [1, 2, 3, 4, 5].map((n) => ({
+            item_number: n,
             scope_description: '',
+            element_name: null,
+            work_kind: null,
+            urgency_level: null,
             deadline_text: '',
             deadline_date: null,
             is_completed: false,
@@ -2202,11 +2357,15 @@ export async function GET(
         (r: any) =>
           new TableRow({
             children: [
-              dataCell(r.scope_description || '', repairCols[0]),
+              dataCell(String(r.item_number ?? ''), repairCols[0]),
+              dataCell(r.element_name || '', repairCols[1]),
+              dataCell(r.scope_description || '', repairCols[2]),
+              dataCell(r.work_kind || '', repairCols[3]),
+              dataCell(r.urgency_level || '', repairCols[4]),
               dataCell(
                 r.deadline_text ||
                   (r.deadline_date ? formatDate(r.deadline_date) : ''),
-                repairCols[1]
+                repairCols[5]
               ),
             ],
           })
@@ -2216,6 +2375,116 @@ export async function GET(
       width: { size: USABLE_WIDTH, type: WidthType.DXA },
       rows: repairRows,
     })
+
+    // ─── 3 TABELE-LEGENDY (PIIB / WACETOB / MSWiA) ─────────────────────────
+    const buildLegendTable = (
+      headers: string[],
+      rows: string[][],
+      widths: number[]
+    ): Table => {
+      const total = widths.reduce((a, b) => a + b, 0)
+      const cols = widths.map((w) => Math.floor((USABLE_WIDTH * w) / total))
+      // Skoryguj ostatnia kolumne by sumowala sie do USABLE_WIDTH
+      const sumWithoutLast = cols.slice(0, -1).reduce((a, b) => a + b, 0)
+      cols[cols.length - 1] = USABLE_WIDTH - sumWithoutLast
+      const tblRows: TableRow[] = [
+        new TableRow({
+          tableHeader: true,
+          children: headers.map((h, i) => headerCell(h, cols[i])),
+        }),
+        ...rows.map(
+          (r) =>
+            new TableRow({
+              children: r.map((cell, i) => dataCell(cell, cols[i])),
+            })
+        ),
+      ]
+      return new Table({
+        width: { size: USABLE_WIDTH, type: WidthType.DXA },
+        rows: tblRows,
+      })
+    }
+
+    const workKindLegendTable = buildLegendTable(
+      ['Symbol', 'Rodzaj robót', 'Definicja'],
+      [
+        [
+          'K',
+          'Konserwacja',
+          'Roboty utrzymujące sprawność techniczną elementów obiektu (czyszczenie, smarowanie, dokręcanie, drobne uzupełnienia).',
+        ],
+        [
+          'NB',
+          'Naprawa bieżąca',
+          'Okresowy remont elementów obiektu zapobiegający skutkom zużycia, utrzymujący właściwy stan techniczny.',
+        ],
+        [
+          'NG',
+          'Naprawa główna',
+          'Remont polegający na wymianie co najmniej jednego elementu obiektu.',
+        ],
+      ],
+      [10, 25, 65]
+    )
+
+    const urgencyLegendTable = buildLegendTable(
+      ['Stopień', 'Zalecany termin', 'Opis'],
+      [
+        [
+          'I',
+          'natychmiast',
+          'Remont w przypadku uszkodzeń zagrażających bezpieczeństwu użytkowania lub mogących stać się przyczyną zniszczenia/awarii. Wymaga natychmiastowego zabezpieczenia, naprawy głównej, wymiany lub rozbiórki.',
+        ],
+        [
+          'II',
+          'do 3 miesięcy',
+          'Remont, który może być odłożony na okres do 3 miesięcy lub do okresu zimowego bez szkody dla użytkowników. Okres przesunięcia winien być wykorzystany na opracowanie dokumentacji oraz wybór wykonawcy.',
+        ],
+        [
+          'III',
+          'do 12 miesięcy',
+          'Remont, który może być odłożony na okres do 1 roku bez specjalnej szkody dla użytkowników obiektu.',
+        ],
+        [
+          'IV',
+          'do 5 lat',
+          'Remont, który może być odłożony na okres do 5 lat bez specjalnej szkody dla użytkowników obiektu.',
+        ],
+      ],
+      [10, 22, 68]
+    )
+
+    const ratingCriteriaLegendTable = buildLegendTable(
+      ['Klasa', 'Zużycie [%]', 'Kryterium oceny'],
+      [
+        [
+          'dobry',
+          '0–15',
+          'Element dobrze utrzymany, bez widocznego zużycia. Cechy materiałów odpowiadają wymogom norm. Ewentualne drobne naprawy konserwacyjne.',
+        ],
+        [
+          'zadowalający',
+          '16–30',
+          'Element utrzymywany należycie. Celowe wykonanie konserwacji lub napraw bieżących w niewielkim zakresie.',
+        ],
+        [
+          'średni',
+          '31–50',
+          'Niewielkie uszkodzenia i ubytki, niezagrażające bezpieczeństwu. Wymagana naprawa bieżąca w większym zakresie lub naprawa główna.',
+        ],
+        [
+          'zły',
+          '51–70',
+          'Znaczne ubytki mogące zagrażać bezpieczeństwu. Materiały utraciły pierwotne właściwości. Wymagany remont kapitalny — wymiana wielu elementów.',
+        ],
+        [
+          'awaryjny',
+          '> 71',
+          'Tak duże zniszczenia/ubytki, że nie pozwalają na dalsze bezpieczne użytkowanie. Wymagany remont kapitalny w dużym rozmiarze lub rozbiórka.',
+        ],
+      ],
+      [12, 12, 76]
+    )
 
     // ─── VI. WYMAGANIA ART. 5 PB (5-letni) ──────────────────────────────────
     let art5Section: (Paragraph | Table)[] = []
@@ -2240,12 +2509,40 @@ export async function GET(
           ],
         }),
       ]
+      const art5MetCell = (
+        key: Art5MetKey | null,
+        widthDxa: number
+      ): TableCell => {
+        const colors = key ? ART5_MET_COLORS_HEX[key] : null
+        return new TableCell({
+          width: { size: widthDxa, type: WidthType.DXA },
+          borders: thinBorder,
+          shading: colors
+            ? { type: ShadingType.CLEAR, color: 'auto', fill: colors.bg }
+            : undefined,
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({
+                  text: key ? metLabel[key] : '—',
+                  font: 'Arial',
+                  size: FONT_DXA.body,
+                  bold: !!key,
+                  color: colors ? colors.text : HEX.graphite900,
+                }),
+              ],
+            }),
+          ],
+        })
+      }
       for (const r of art5Items as any[]) {
+        const metKey = (r.is_met as Art5MetKey) || null
         art5Rows.push(
           new TableRow({
             children: [
               dataCell(r.requirement_label, art5Cols[0]),
-              dataCell(r.is_met ? metLabel[r.is_met] : '', art5Cols[1]),
+              art5MetCell(metKey, art5Cols[1]),
               dataCell(r.remarks || '', art5Cols[2]),
             ],
           })
@@ -2470,7 +2767,232 @@ export async function GET(
       )
     }
 
+    // ─── OPIS TECHNICZNY OBIEKTU + UDT + EWAKUACJA (audyt 5L pkt 6) ─────────
+    const techDescBlocks: Array<Paragraph | Table> = []
+    const turbineRow = (insp.turbines as any) ?? null
+    const techRows: Array<{ label: string; value: string }> = []
+    const fmtNum = (n: number | null | undefined, unit?: string) =>
+      n != null && !Number.isNaN(Number(n))
+        ? `${n}${unit ? ' ' + unit : ''}`
+        : ''
+    if (turbineRow?.tower_height_m)
+      techRows.push({ label: 'Wysokość wieży', value: fmtNum(turbineRow.tower_height_m, 'm') })
+    if (turbineRow?.hub_height_m)
+      techRows.push({ label: 'Wysokość osi piasty', value: fmtNum(turbineRow.hub_height_m, 'm') })
+    if (turbineRow?.rotor_diameter_m)
+      techRows.push({ label: 'Średnica rotora', value: fmtNum(turbineRow.rotor_diameter_m, 'm') })
+    if (turbineRow?.tower_segments_count)
+      techRows.push({
+        label: 'Liczba segmentów wieży',
+        value: String(turbineRow.tower_segments_count),
+      })
+    if (turbineRow?.foundation_diameter_m)
+      techRows.push({
+        label: 'Średnica fundamentu',
+        value: fmtNum(turbineRow.foundation_diameter_m, 'm'),
+      })
+    if (turbineRow?.foundation_depth_m)
+      techRows.push({
+        label: 'Głębokość posadowienia',
+        value: fmtNum(turbineRow.foundation_depth_m, 'm'),
+      })
+    if (turbineRow?.pedestal_height_m)
+      techRows.push({
+        label: 'Wysokość cokołu',
+        value: fmtNum(turbineRow.pedestal_height_m, 'm'),
+      })
+    if (turbineRow?.foundation_concrete_class)
+      techRows.push({
+        label: 'Klasa betonu fundamentu',
+        value: turbineRow.foundation_concrete_class,
+      })
+    if (turbineRow?.nacelle_material)
+      techRows.push({ label: 'Materiał gondoli', value: turbineRow.nacelle_material })
+    if (turbineRow?.blade_material)
+      techRows.push({ label: 'Materiał łopat', value: turbineRow.blade_material })
+    if (turbineRow?.service_crane_capacity_t)
+      techRows.push({
+        label: 'Udźwig dźwigu/wciągarki serwisowej',
+        value: fmtNum(turbineRow.service_crane_capacity_t, 't'),
+      })
+    if (turbineRow?.mv_cable_type || turbineRow?.mv_cable_length_m) {
+      techRows.push({
+        label: 'Wyposażenie instalacyjne — kabel SN',
+        value: [
+          turbineRow.mv_cable_type,
+          turbineRow.mv_cable_length_m ? `dł. ${turbineRow.mv_cable_length_m} m`: null,
+        ]
+          .filter(Boolean)
+          .join(', '),
+      })
+    }
+    if (techRows.length > 0) {
+      const techCol1 = Math.floor(USABLE_WIDTH * 0.4)
+      const techCol2 = USABLE_WIDTH - techCol1
+      const techTable = new Table({
+        width: { size: USABLE_WIDTH, type: WidthType.DXA },
+        rows: techRows.map(
+          (r) =>
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: techCol1, type: WidthType.DXA },
+                  borders: thinBorder,
+                  shading: {
+                    type: ShadingType.CLEAR,
+                    color: 'auto',
+                    fill: HEX.graphite50,
+                  },
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: r.label,
+                          font: 'Arial',
+                          size: FONT_DXA.body,
+                          bold: true,
+                          color: HEX.graphite700,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+                dataCell(r.value, techCol2),
+              ],
+            })
+        ),
+      })
+      techDescBlocks.push(sectionHeading('Opis techniczny obiektu'), techTable)
+    }
+
+    if (udtDevices && udtDevices.length > 0) {
+      const udtCols = [
+        Math.floor(USABLE_WIDTH * 0.35),
+        Math.floor(USABLE_WIDTH * 0.12),
+        Math.floor(USABLE_WIDTH * 0.1),
+        USABLE_WIDTH -
+          Math.floor(USABLE_WIDTH * 0.35) -
+          Math.floor(USABLE_WIDTH * 0.12) -
+          Math.floor(USABLE_WIDTH * 0.1),
+      ]
+      const udtTblRows: TableRow[] = [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            headerCell('Urządzenie', udtCols[0]),
+            headerCell('Udźwig', udtCols[1]),
+            headerCell('UDT', udtCols[2]),
+            headerCell('Cykl kontrolny / uwagi', udtCols[3]),
+          ],
+        }),
+        ...(udtDevices as any[]).map(
+          (d) =>
+            new TableRow({
+              children: [
+                dataCell(
+                  [d.device_type, d.manufacturer, d.model]
+                    .filter(Boolean)
+                    .join(' / '),
+                  udtCols[0]
+                ),
+                dataCell(d.capacity_t != null ? `${d.capacity_t} t` : '', udtCols[1]),
+                dataCell(d.is_udt_subject ? 'Tak' : 'Nie', udtCols[2]),
+                dataCell(
+                  [
+                    d.inspection_frequency,
+                    d.certificate_number ? `Nr cert.: ${d.certificate_number}` : null,
+                    d.last_inspection_date
+                      ? `ost. przegląd: ${formatDate(d.last_inspection_date)}`
+                      : null,
+                    d.next_inspection_date
+                      ? `nast. przegląd: ${formatDate(d.next_inspection_date)}`
+                      : null,
+                    d.notes,
+                  ]
+                    .filter(Boolean)
+                    .join('; '),
+                  udtCols[3]
+                ),
+              ],
+            })
+        ),
+      ]
+      techDescBlocks.push(
+        sectionHeading('Urządzenia podlegające pod UDT'),
+        new Table({
+          width: { size: USABLE_WIDTH, type: WidthType.DXA },
+          rows: udtTblRows,
+        })
+      )
+    }
+
+    if (rescueEquipment && rescueEquipment.length > 0) {
+      const rsCols = [
+        Math.floor(USABLE_WIDTH * 0.3),
+        Math.floor(USABLE_WIDTH * 0.4),
+        USABLE_WIDTH -
+          Math.floor(USABLE_WIDTH * 0.3) -
+          Math.floor(USABLE_WIDTH * 0.4),
+      ]
+      const rsTblRows: TableRow[] = [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            headerCell('Sprzęt', rsCols[0]),
+            headerCell('Opis', rsCols[1]),
+            headerCell('Cykl kontrolny / uwagi', rsCols[2]),
+          ],
+        }),
+        ...(rescueEquipment as any[]).map(
+          (r) =>
+            new TableRow({
+              children: [
+                dataCell(
+                  [r.equipment_type, r.manufacturer, r.model]
+                    .filter(Boolean)
+                    .join(' / '),
+                  rsCols[0]
+                ),
+                dataCell(
+                  [
+                    r.description,
+                    r.inspection_frequency
+                      ? `Częstotliwość: ${r.inspection_frequency}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join('. '),
+                  rsCols[1]
+                ),
+                dataCell(
+                  [
+                    r.last_inspection_date
+                      ? `ost. przegląd: ${formatDate(r.last_inspection_date)}`
+                      : null,
+                    r.next_inspection_date
+                      ? `nast. przegląd: ${formatDate(r.next_inspection_date)}`
+                      : null,
+                    r.notes,
+                  ]
+                    .filter(Boolean)
+                    .join('; '),
+                  rsCols[2]
+                ),
+              ],
+            })
+        ),
+      ]
+      techDescBlocks.push(
+        sectionHeading('Sprzęt ewakuacyjno-ratunkowy'),
+        new Table({
+          width: { size: USABLE_WIDTH, type: WidthType.DXA },
+          rows: rsTblRows,
+        })
+      )
+    }
+
     sectionChildren.push(
+      ...techDescBlocks,
       sectionHeading('Dokumenty przedstawione do wglądu'),
       docsTable,
 
@@ -2484,15 +3006,14 @@ export async function GET(
       ...(insp.general_findings_intro
         ? [bodyParagraph(insp.general_findings_intro)]
         : []),
-      subHeading('Ocena realizacji zaleceń z poprzedniej kontroli'),
-      prevRecsTable,
+      ...prevRecsBlocks,
       subHeading('Stan awaryjny stwierdzony w wyniku przeglądu'),
       bodyParagraph(
-        emergencyItems && emergencyItems.length > 0
+        hasEmergency
           ? 'W wyniku przeglądu technicznego stwierdzam stan awaryjny następujących elementów obiektu:'
           : 'W wyniku przeglądu technicznego nie stwierdzono stanu awaryjnego.'
       ),
-      emergencyTable,
+      ...(emergencyTable ? [emergencyTable] : []),
 
       sectionHeading('III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego'),
       bodyParagraph('W trakcie kontroli ustalono:'),
@@ -2506,8 +3027,18 @@ export async function GET(
       )
     }
 
-    // Tomasz pkt 5: sekcja V. Serwis warunkowo (default true gdy null)
-    if (serviceInfoData?.include_in_protocol !== false) {
+    // Tomasz pkt 5 + Waldek 2026-05-08: sekcja V. Serwis renderowana tylko gdy
+    // include_in_protocol === true ORAZ wpisano jakiekolwiek dane.
+    const hasServiceData = !!(
+      serviceInfoData?.service_company ||
+      serviceInfoData?.udt_certificate_number ||
+      serviceInfoData?.last_service_date ||
+      serviceInfoData?.last_service_protocol_number ||
+      serviceInfoData?.next_service_date ||
+      serviceInfoData?.notes ||
+      (serviceChecklistData && serviceChecklistData.length > 0)
+    )
+    if (serviceInfoData?.include_in_protocol === true && hasServiceData) {
       sectionChildren.push(
         sectionHeading('V. Informacje o serwisie technicznym turbiny'),
         bodyParagraph(
@@ -2526,7 +3057,13 @@ export async function GET(
         isFiveYear ? 'VI. Zalecenia' : 'IV. Zalecenia'
       ),
       bodyParagraph('Określenie zakresu robót remontowych i kolejności ich wykonywania:'),
-      repairTable
+      repairTable,
+      subHeading('Definicje rodzajów robót remontowych'),
+      workKindLegendTable,
+      subHeading('Zalecany czas wykonania robót remontowych — stopień pilności'),
+      urgencyLegendTable,
+      subHeading('Kryteria oceny i klasyfikacji stanu technicznego'),
+      ratingCriteriaLegendTable
     )
 
     if (insp.overall_assessment) {
@@ -2541,6 +3078,23 @@ export async function GET(
         bodyParagraph(insp.hazard_information)
       )
     }
+
+    // Pkt 6/7 zakresu kontroli + pkt 8.6 wzorca PIIB (Waldek 2026-05-08).
+    const ENV_FALLBACK =
+      'W trakcie kontroli dokonano przeglądu instalacji i urządzeń służących ochronie środowiska (instalacja odgromowa, oświetlenie nawigacyjne). Nie stwierdzono uchybień ani odstępstw od wymagań ochrony środowiska.'
+    const DOC_FALLBACK =
+      'Zweryfikowano kompletność i aktualność dokumentów obiektu: Książka Obiektu Budowlanego (KOB), protokoły serwisowe, protokoły pomiarów elektrycznych, certyfikaty UDT urządzeń podlegających kontroli. Dokumentacja kompletna i aktualna.'
+    const WEATHER_FALLBACK = 'Nie dotyczy.'
+    sectionChildren.push(
+      subHeading('Stan techniczny instalacji ochrony środowiska'),
+      bodyParagraph(insp.environmental_protection_findings || ENV_FALLBACK),
+      subHeading('Weryfikacja kompletności i aktualności dokumentów'),
+      bodyParagraph(insp.documentation_verification_findings || DOC_FALLBACK),
+      subHeading(
+        'Metody i środki użytkowania elementów narażonych na szkodliwe wpływy atmosferyczne i niszczące działanie innych czynników'
+      ),
+      bodyParagraph(insp.weather_exposure_methods || WEATHER_FALLBACK)
+    )
 
     if (art5Section.length > 0) {
       sectionChildren.push(

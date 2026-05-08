@@ -162,6 +162,36 @@ export const URGENCY_COLORS_RGB: Record<UrgencyKey, UrgencyColorRgb> = {
 }
 
 // ---------------------------------------------------------------------------
+// Wymagania podstawowe (art. 5 PB) — kodowanie ocen w protokole
+// Pastelowe tła dla komórek "spełnione / niespełnione / nie dotyczy"
+// (Waldek 2026-05-08, audyt 5L pkt 7).
+// ---------------------------------------------------------------------------
+
+export type Art5MetKey = 'spelnia' | 'nie_spelnia' | 'nie_dotyczy'
+
+export interface Art5MetColorHex {
+  bg: string
+  text: string
+}
+
+export const ART5_MET_COLORS_HEX: Record<Art5MetKey, Art5MetColorHex> = {
+  spelnia: { bg: 'F0F9F1', text: '0A321A' }, // pastelowy zielony
+  nie_spelnia: { bg: 'FEF2F2', text: '7F1D1D' }, // pastelowy czerwony
+  nie_dotyczy: { bg: 'F7F9FB', text: '5F6B7A' }, // pastelowy szary (neutral)
+}
+
+export interface Art5MetColorRgb {
+  bg: readonly [number, number, number]
+  text: readonly [number, number, number]
+}
+
+export const ART5_MET_COLORS_RGB: Record<Art5MetKey, Art5MetColorRgb> = {
+  spelnia: { bg: [240, 249, 241], text: [10, 50, 26] },
+  nie_spelnia: { bg: [254, 242, 242], text: [127, 29, 29] },
+  nie_dotyczy: { bg: [247, 249, 251], text: [95, 107, 122] },
+}
+
+// ---------------------------------------------------------------------------
 // Typografia
 // ---------------------------------------------------------------------------
 
