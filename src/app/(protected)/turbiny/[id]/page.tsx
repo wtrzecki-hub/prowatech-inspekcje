@@ -39,6 +39,10 @@ import {
 import Link from 'next/link'
 import { TurbineForm } from '@/components/forms/turbine-form'
 import HistoricalProtocolsTab from '@/components/turbine/historical-protocols-tab'
+import {
+  UdtDevicesSection,
+  RescueEquipmentSection,
+} from '@/components/turbine/udt-rescue-sections'
 
 interface Turbine {
   id: string
@@ -62,6 +66,17 @@ interface Turbine {
   building_permit_number: string | null
   /** PIIB metryczka — Data pozwolenia na budowę (ISO YYYY-MM-DD). */
   building_permit_date: string | null
+  // Opis techniczny rozszerzony (audyt 5L pkt 6)
+  tower_segments_count: number | null
+  nacelle_material: string | null
+  blade_material: string | null
+  foundation_diameter_m: number | null
+  foundation_depth_m: number | null
+  foundation_concrete_class: string | null
+  pedestal_height_m: number | null
+  service_crane_capacity_t: number | null
+  mv_cable_type: string | null
+  mv_cable_length_m: number | null
   location_address: string
   cadastral_parcel: string
   latitude: number | null
@@ -667,9 +682,62 @@ export default function TurbineDetailPage() {
                     return '-'
                   })()}
                 />
+                {/* Opis techniczny rozszerzony (audyt 5L pkt 6) */}
+                <InfoItem
+                  label="Liczba segmentów wieży"
+                  value={turbine.tower_segments_count ? `${turbine.tower_segments_count}` : '-'}
+                  mono
+                />
+                <InfoItem
+                  label="Średnica fundamentu"
+                  value={turbine.foundation_diameter_m ? `${turbine.foundation_diameter_m} m` : '-'}
+                  mono
+                />
+                <InfoItem
+                  label="Głębokość posadowienia"
+                  value={turbine.foundation_depth_m ? `${turbine.foundation_depth_m} m` : '-'}
+                  mono
+                />
+                <InfoItem
+                  label="Wysokość cokołu"
+                  value={turbine.pedestal_height_m ? `${turbine.pedestal_height_m} m` : '-'}
+                  mono
+                />
+                <InfoItem
+                  label="Klasa betonu fundamentu"
+                  value={turbine.foundation_concrete_class || '-'}
+                />
+                <InfoItem
+                  label="Materiał gondoli"
+                  value={turbine.nacelle_material || '-'}
+                />
+                <InfoItem
+                  label="Materiał łopat"
+                  value={turbine.blade_material || '-'}
+                />
+                <InfoItem
+                  label="Udźwig dźwigu serwisowego"
+                  value={turbine.service_crane_capacity_t ? `${turbine.service_crane_capacity_t} t` : '-'}
+                  mono
+                />
+                <InfoItem
+                  label="Typ kabla SN"
+                  value={turbine.mv_cable_type || '-'}
+                />
+                <InfoItem
+                  label="Długość kabla SN"
+                  value={turbine.mv_cable_length_m ? `${turbine.mv_cable_length_m} m` : '-'}
+                  mono
+                />
               </div>
             </CardContent>
           </Card>
+
+          {/* Urządzenia UDT */}
+          <UdtDevicesSection turbineId={turbine.id} />
+
+          {/* Sprzęt ewakuacyjno-ratunkowy */}
+          <RescueEquipmentSection turbineId={turbine.id} />
 
           {/* Lokalizacja */}
           <Card className="rounded-xl border border-graphite-200 shadow-xs">
@@ -977,6 +1045,7 @@ function TurbineHero({
                 model: turbine.model,
                 rated_power_mw: turbine.rated_power_mw,
                 tower_height_m: turbine.tower_height_m,
+                hub_height_m: turbine.hub_height_m,
                 rotor_diameter_m: turbine.rotor_diameter_m,
                 serial_number: turbine.serial_number,
                 has_measurement_station: turbine.has_measurement_station ?? false,
@@ -984,6 +1053,17 @@ function TurbineHero({
                 commissioning_year: turbine.commissioning_year,
                 building_permit_number: turbine.building_permit_number,
                 building_permit_date: turbine.building_permit_date,
+                // Opis techniczny rozszerzony
+                tower_segments_count: turbine.tower_segments_count,
+                nacelle_material: turbine.nacelle_material,
+                blade_material: turbine.blade_material,
+                foundation_diameter_m: turbine.foundation_diameter_m,
+                foundation_depth_m: turbine.foundation_depth_m,
+                foundation_concrete_class: turbine.foundation_concrete_class,
+                pedestal_height_m: turbine.pedestal_height_m,
+                service_crane_capacity_t: turbine.service_crane_capacity_t,
+                mv_cable_type: turbine.mv_cable_type,
+                mv_cable_length_m: turbine.mv_cable_length_m,
               }}
               onSuccess={() => {
                 setIsEditOpen(false)

@@ -25,6 +25,7 @@ interface TurbineFormProps {
     model: string
     rated_power_mw: number
     tower_height_m: number
+    hub_height_m?: number | null
     rotor_diameter_m: number
     serial_number: string
     has_measurement_station?: boolean
@@ -32,6 +33,17 @@ interface TurbineFormProps {
     commissioning_year?: number | null
     building_permit_number?: string | null
     building_permit_date?: string | null
+    // Opis techniczny rozszerzony (audyt 5L pkt 6)
+    tower_segments_count?: number | null
+    nacelle_material?: string | null
+    blade_material?: string | null
+    foundation_diameter_m?: number | null
+    foundation_depth_m?: number | null
+    foundation_concrete_class?: string | null
+    pedestal_height_m?: number | null
+    service_crane_capacity_t?: number | null
+    mv_cable_type?: string | null
+    mv_cable_length_m?: number | null
   }
   onSuccess?: () => void
 }
@@ -56,6 +68,24 @@ export function TurbineForm({
     const commYearRaw = (formData.get('commissioning_year') as string | null)?.trim()
     const permitNumRaw = (formData.get('building_permit_number') as string | null)?.trim()
     const permitDateRaw = (formData.get('building_permit_date') as string | null)?.trim()
+    // Opis techniczny rozszerzony
+    const hubHeightRaw = (formData.get('hub_height_m') as string | null)?.trim()
+    const segCountRaw = (formData.get('tower_segments_count') as string | null)?.trim()
+    const nacelleMatRaw = (formData.get('nacelle_material') as string | null)?.trim()
+    const bladeMatRaw = (formData.get('blade_material') as string | null)?.trim()
+    const foundDiamRaw = (formData.get('foundation_diameter_m') as string | null)?.trim()
+    const foundDepthRaw = (formData.get('foundation_depth_m') as string | null)?.trim()
+    const foundConcRaw = (formData.get('foundation_concrete_class') as string | null)?.trim()
+    const pedestalRaw = (formData.get('pedestal_height_m') as string | null)?.trim()
+    const craneCapRaw = (formData.get('service_crane_capacity_t') as string | null)?.trim()
+    const cableTypeRaw = (formData.get('mv_cable_type') as string | null)?.trim()
+    const cableLenRaw = (formData.get('mv_cable_length_m') as string | null)?.trim()
+
+    const numOrNull = (v: string | undefined) =>
+      v && v.length > 0 && !Number.isNaN(parseFloat(v)) ? parseFloat(v) : null
+    const intOrNull = (v: string | undefined) =>
+      v && v.length > 0 && !Number.isNaN(parseInt(v, 10)) ? parseInt(v, 10) : null
+
     const data = {
       turbine_code: formData.get('turbine_code'),
       ew_designation: ewRaw || null,
@@ -63,6 +93,7 @@ export function TurbineForm({
       model: formData.get('model'),
       rated_power_mw: parseFloat(formData.get('rated_power_mw') as string),
       tower_height_m: parseInt(formData.get('tower_height_m') as string),
+      hub_height_m: numOrNull(hubHeightRaw),
       rotor_diameter_m: parseInt(formData.get('rotor_diameter_m') as string),
       serial_number: formData.get('serial_number'),
       has_measurement_station: formData.get('has_measurement_station') === 'on',
@@ -70,6 +101,17 @@ export function TurbineForm({
       commissioning_year: commYearRaw ? parseInt(commYearRaw, 10) : null,
       building_permit_number: permitNumRaw || null,
       building_permit_date: permitDateRaw || null,
+      // Opis techniczny rozszerzony
+      tower_segments_count: intOrNull(segCountRaw),
+      nacelle_material: nacelleMatRaw || null,
+      blade_material: bladeMatRaw || null,
+      foundation_diameter_m: numOrNull(foundDiamRaw),
+      foundation_depth_m: numOrNull(foundDepthRaw),
+      foundation_concrete_class: foundConcRaw || null,
+      pedestal_height_m: numOrNull(pedestalRaw),
+      service_crane_capacity_t: numOrNull(craneCapRaw),
+      mv_cable_type: cableTypeRaw || null,
+      mv_cable_length_m: intOrNull(cableLenRaw),
       wind_farm_id: windFarmId,
     }
 
@@ -250,6 +292,146 @@ export function TurbineForm({
             type="date"
             defaultValue={initialData?.building_permit_date || ''}
           />
+        </div>
+      </div>
+
+      {/* ─── Opis techniczny rozszerzony (audyt 5L pkt 6) ──────────────── */}
+      <div className="border-t border-graphite-200 pt-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-graphite-700 uppercase tracking-wide">
+            Opis techniczny — szczegóły
+          </h3>
+          <span className="text-xs text-graphite-500">
+            (opcjonalne — używane w sekcji „Opis techniczny" protokołu)
+          </span>
+        </div>
+
+        <div>
+          <Label htmlFor="hub_height_m">Wysokość osi piasty (m)</Label>
+          <Input
+            id="hub_height_m"
+            name="hub_height_m"
+            type="number"
+            step="0.01"
+            defaultValue={initialData?.hub_height_m ?? ''}
+            placeholder="np. 108.60"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="tower_segments_count">Liczba segmentów wieży</Label>
+          <Input
+            id="tower_segments_count"
+            name="tower_segments_count"
+            type="number"
+            min={1}
+            max={20}
+            defaultValue={initialData?.tower_segments_count ?? ''}
+            placeholder="np. 5"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="nacelle_material">Materiał gondoli</Label>
+            <Input
+              id="nacelle_material"
+              name="nacelle_material"
+              defaultValue={initialData?.nacelle_material ?? ''}
+              placeholder="np. kompozyt szklano-węglowy z żywicą epoksydową"
+            />
+          </div>
+          <div>
+            <Label htmlFor="blade_material">Materiał łopat</Label>
+            <Input
+              id="blade_material"
+              name="blade_material"
+              defaultValue={initialData?.blade_material ?? ''}
+              placeholder="np. kompozyt szklano-węglowy"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label htmlFor="foundation_diameter_m">Średnica fundamentu (m)</Label>
+            <Input
+              id="foundation_diameter_m"
+              name="foundation_diameter_m"
+              type="number"
+              step="0.01"
+              defaultValue={initialData?.foundation_diameter_m ?? ''}
+              placeholder="np. 24.00"
+            />
+          </div>
+          <div>
+            <Label htmlFor="foundation_depth_m">Głębokość posadowienia (m)</Label>
+            <Input
+              id="foundation_depth_m"
+              name="foundation_depth_m"
+              type="number"
+              step="0.01"
+              defaultValue={initialData?.foundation_depth_m ?? ''}
+              placeholder="np. 2.25"
+            />
+          </div>
+          <div>
+            <Label htmlFor="pedestal_height_m">Wysokość cokołu (m)</Label>
+            <Input
+              id="pedestal_height_m"
+              name="pedestal_height_m"
+              type="number"
+              step="0.01"
+              defaultValue={initialData?.pedestal_height_m ?? ''}
+              placeholder="np. 0.20"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="foundation_concrete_class">Klasa betonu fundamentu</Label>
+          <Input
+            id="foundation_concrete_class"
+            name="foundation_concrete_class"
+            defaultValue={initialData?.foundation_concrete_class ?? ''}
+            placeholder="np. C30/C37 wg PN-EN 206-1"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="service_crane_capacity_t">
+            Udźwig dźwigu/wciągarki serwisowej (t)
+          </Label>
+          <Input
+            id="service_crane_capacity_t"
+            name="service_crane_capacity_t"
+            type="number"
+            step="0.001"
+            defaultValue={initialData?.service_crane_capacity_t ?? ''}
+            placeholder="np. 0.250 (= 250 kg)"
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2">
+            <Label htmlFor="mv_cable_type">Typ kabla SN</Label>
+            <Input
+              id="mv_cable_type"
+              name="mv_cable_type"
+              defaultValue={initialData?.mv_cable_type ?? ''}
+              placeholder="np. XRUHAKXS 1x240/16"
+            />
+          </div>
+          <div>
+            <Label htmlFor="mv_cable_length_m">Długość kabla (m)</Label>
+            <Input
+              id="mv_cable_length_m"
+              name="mv_cable_length_m"
+              type="number"
+              defaultValue={initialData?.mv_cable_length_m ?? ''}
+              placeholder="np. 675"
+            />
+          </div>
         </div>
       </div>
 
