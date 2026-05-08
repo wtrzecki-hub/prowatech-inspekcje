@@ -23,17 +23,36 @@ import { Textarea } from '@/components/ui/textarea'
  * CRUD na tabeli `repair_scope_items`. Auto-save 800ms.
  */
 
+type WorkKind = 'K' | 'NB' | 'NG'
+type UrgencyLevel = 'I' | 'II' | 'III' | 'IV'
+
 interface RepairScopeItem {
   id: string
   inspection_id: string
   item_number: number
   scope_description: string
+  element_name: string | null
+  work_kind: WorkKind | null
+  urgency_level: UrgencyLevel | null
   deadline_text: string | null
   deadline_date: string | null
   is_completed: boolean
   completion_date: string | null
   completion_notes: string | null
 }
+
+const WORK_KIND_OPTIONS: Array<{ value: WorkKind; label: string }> = [
+  { value: 'K', label: 'K — konserwacja' },
+  { value: 'NB', label: 'NB — naprawa bieżąca' },
+  { value: 'NG', label: 'NG — naprawa główna' },
+]
+
+const URGENCY_OPTIONS: Array<{ value: UrgencyLevel; label: string }> = [
+  { value: 'I', label: 'I — natychmiast' },
+  { value: 'II', label: 'II — do 3 mies.' },
+  { value: 'III', label: 'III — do 12 mies.' },
+  { value: 'IV', label: 'IV — do 5 lat' },
+]
 
 interface RepairScopeTableProps {
   inspectionId: string
@@ -507,25 +526,100 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
                     title="Numer pozycji — kliknij aby edytować ręcznie"
                   />
                 </div>
-                <div className="col-span-6 space-y-1">
-                  <Label
-                    htmlFor={`scope-${item.id}`}
-                    className="text-xs text-graphite-500"
-                  >
-                    Zakres czynności
-                  </Label>
-                  <Textarea
-                    id={`scope-${item.id}`}
-                    value={item.scope_description}
-                    onChange={(e) =>
-                      handleUpdate(item.id, 'scope_description', e.target.value)
-                    }
-                    placeholder="Opis prac remontowych do wykonania…"
-                    rows={2}
-                    className={
-                      item.is_completed ? 'line-through text-graphite-500' : ''
-                    }
-                  />
+                <div className="col-span-6 space-y-2">
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor={`scope-${item.id}`}
+                      className="text-xs text-graphite-500"
+                    >
+                      Zakres czynności
+                    </Label>
+                    <Textarea
+                      id={`scope-${item.id}`}
+                      value={item.scope_description}
+                      onChange={(e) =>
+                        handleUpdate(item.id, 'scope_description', e.target.value)
+                      }
+                      placeholder="Opis prac remontowych do wykonania…"
+                      rows={2}
+                      className={
+                        item.is_completed ? 'line-through text-graphite-500' : ''
+                      }
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor={`element-${item.id}`}
+                        className="text-xs text-graphite-500"
+                      >
+                        Element / lokalizacja
+                      </Label>
+                      <Input
+                        id={`element-${item.id}`}
+                        value={item.element_name || ''}
+                        onChange={(e) =>
+                          handleUpdate(item.id, 'element_name', e.target.value || null)
+                        }
+                        placeholder="np. Fundament, Wieża"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor={`kind-${item.id}`}
+                        className="text-xs text-graphite-500"
+                      >
+                        Rodzaj robót
+                      </Label>
+                      <select
+                        id={`kind-${item.id}`}
+                        value={item.work_kind || ''}
+                        onChange={(e) =>
+                          handleUpdate(
+                            item.id,
+                            'work_kind',
+                            (e.target.value as WorkKind) || null
+                          )
+                        }
+                        className="h-8 w-full rounded-md border border-graphite-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      >
+                        <option value="">—</option>
+                        {WORK_KIND_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor={`urgency-${item.id}`}
+                        className="text-xs text-graphite-500"
+                      >
+                        Stopień pilności
+                      </Label>
+                      <select
+                        id={`urgency-${item.id}`}
+                        value={item.urgency_level || ''}
+                        onChange={(e) =>
+                          handleUpdate(
+                            item.id,
+                            'urgency_level',
+                            (e.target.value as UrgencyLevel) || null
+                          )
+                        }
+                        className="h-8 w-full rounded-md border border-graphite-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      >
+                        <option value="">—</option>
+                        {URGENCY_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
                 <div className="col-span-3 space-y-1">
                   <Label className="text-xs text-graphite-500">
