@@ -69,6 +69,9 @@ interface Inspection {
   overall_condition_rating: ConditionRating | null
   overall_assessment: string | null
   hazard_information: string | null
+  environmental_protection_findings: string | null
+  documentation_verification_findings: string | null
+  weather_exposure_methods: string | null
   next_annual_date: string | null
   next_five_year_date: string | null
   next_electrical_date: string | null
@@ -158,8 +161,9 @@ export default function InspectionDetailPage() {
     }>
   >([])
 
-  // Tomasz pkt 5: czy sekcja "Serwis" trafia do PDF/DOCX. Default true (backward compat).
-  const [serviceIncludeInProtocol, setServiceIncludeInProtocol] = useState<boolean>(true)
+  // Tomasz pkt 5 + Waldek 2026-05-08: domyślnie OFF, sekcja w PDF/DOCX dopiero
+  // gdy checkbox + dane wypełnione.
+  const [serviceIncludeInProtocol, setServiceIncludeInProtocol] = useState<boolean>(false)
   const [serviceInfoId, setServiceInfoId] = useState<string | null>(null)
 
   const elementSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -203,6 +207,9 @@ export default function InspectionDetailPage() {
           overall_condition_rating,
           overall_assessment,
           hazard_information,
+          environmental_protection_findings,
+          documentation_verification_findings,
+          weather_exposure_methods,
           next_annual_date,
           next_five_year_date,
           next_electrical_date,
@@ -337,7 +344,7 @@ export default function InspectionDetailPage() {
         .maybeSingle()
       if (!svcErr && svcData) {
         setServiceInfoId(svcData.id)
-        setServiceIncludeInProtocol(svcData.include_in_protocol ?? true)
+        setServiceIncludeInProtocol(svcData.include_in_protocol ?? false)
       }
     } catch (err) {
       console.error('Error fetching inspection:', err)
@@ -1001,6 +1008,73 @@ export default function InspectionDetailPage() {
                   handleInspectionChange('hazard_information', e.target.value)
                 }
                 rows={4}
+              />
+            </div>
+
+            {/* Pkt 6 zakresu kontroli — instalacje ochrony środowiska */}
+            <div className="space-y-2">
+              <Label htmlFor="env-protection">
+                Stan techniczny instalacji ochrony środowiska{' '}
+                <span className="text-xs text-graphite-500">
+                  (pkt 6 zakresu kontroli)
+                </span>
+              </Label>
+              <Textarea
+                id="env-protection"
+                placeholder="W trakcie kontroli dokonano przeglądu instalacji i urządzeń służących ochronie środowiska (instalacja odgromowa, oświetlenie nawigacyjne). Nie stwierdzono uchybień ani odstępstw od wymagań ochrony środowiska."
+                value={inspection.environmental_protection_findings || ''}
+                onChange={(e) =>
+                  handleInspectionChange(
+                    'environmental_protection_findings',
+                    e.target.value
+                  )
+                }
+                rows={3}
+              />
+            </div>
+
+            {/* Pkt 7 zakresu kontroli — weryfikacja dokumentacji */}
+            <div className="space-y-2">
+              <Label htmlFor="doc-verification">
+                Weryfikacja kompletności i aktualności dokumentów{' '}
+                <span className="text-xs text-graphite-500">
+                  (pkt 7 zakresu kontroli)
+                </span>
+              </Label>
+              <Textarea
+                id="doc-verification"
+                placeholder="Zweryfikowano kompletność i aktualność dokumentów obiektu: Książka Obiektu Budowlanego (KOB), protokoły serwisowe, protokoły pomiarów elektrycznych, certyfikaty UDT urządzeń podlegających kontroli. Dokumentacja kompletna i aktualna."
+                value={inspection.documentation_verification_findings || ''}
+                onChange={(e) =>
+                  handleInspectionChange(
+                    'documentation_verification_findings',
+                    e.target.value
+                  )
+                }
+                rows={3}
+              />
+            </div>
+
+            {/* Pkt 8.6 wzorca PIIB — metody i środki użytkowania */}
+            <div className="space-y-2">
+              <Label htmlFor="weather-exposure">
+                Metody i środki użytkowania elementów narażonych na szkodliwe
+                wpływy atmosferyczne{' '}
+                <span className="text-xs text-graphite-500">
+                  (pkt 8.6 wzorca; dla turbin zwykle „Nie dotyczy")
+                </span>
+              </Label>
+              <Textarea
+                id="weather-exposure"
+                placeholder="Nie dotyczy."
+                value={inspection.weather_exposure_methods || ''}
+                onChange={(e) =>
+                  handleInspectionChange(
+                    'weather_exposure_methods',
+                    e.target.value
+                  )
+                }
+                rows={2}
               />
             </div>
 
