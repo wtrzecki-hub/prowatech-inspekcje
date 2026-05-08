@@ -528,20 +528,22 @@ export async function GET(
       ? await supabase
           .from('turbine_udt_devices')
           .select(
-            'device_type, manufacturer, model, capacity_t, is_udt_subject, inspection_frequency, certificate_number, last_inspection_date, next_inspection_date, notes, sort_order'
+            'device_type, manufacturer, model, capacity_t, is_udt_subject, inspection_frequency, certificate_number, last_inspection_date, next_inspection_date, notes, sort_order, data_status'
           )
           .eq('turbine_id', turbineId)
           .eq('is_deleted', false)
+          .neq('data_status', 'nieaktualne')
           .order('sort_order', { ascending: true })
       : { data: null }
     const { data: rescueEquipment } = turbineId
       ? await supabase
           .from('turbine_rescue_equipment')
           .select(
-            'equipment_type, manufacturer, model, inspection_frequency, last_inspection_date, next_inspection_date, description, notes, sort_order'
+            'equipment_type, manufacturer, model, inspection_frequency, last_inspection_date, next_inspection_date, description, notes, sort_order, data_status'
           )
           .eq('turbine_id', turbineId)
           .eq('is_deleted', false)
+          .neq('data_status', 'nieaktualne')
           .order('sort_order', { ascending: true })
       : { data: null }
 
