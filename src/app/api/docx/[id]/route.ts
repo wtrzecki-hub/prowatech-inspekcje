@@ -1278,25 +1278,33 @@ export async function GET(
     // ─── PODSTAWOWE DANE OBIEKTU ───────────────────────────────────────────
     // Wiersze techniczne. Wymiary turbiny (wysokość wieży, hub, średnica rotora)
     // są celowo pominięte — nie wchodzą do protokołu kontroli.
-    const techTable = new Table({
-      width: { size: USABLE_WIDTH, type: WidthType.DXA },
-      rows: [
-        metaRow('Rodzaj konstrukcji wieży', turbine?.tower_construction_type || ''),
-        metaRow(
-          'Producent / model turbiny',
-          [turbine?.manufacturer, turbine?.model].filter(Boolean).join(' ') || ''
-        ),
-        metaRow(
-          'Moc znamionowa [MW]',
-          turbine?.rated_power_mw ? `${turbine.rated_power_mw}` : ''
-        ),
-        metaRow('Nr seryjny turbiny', turbine?.serial_number || ''),
-        metaRow(
-          'Rok zakończenia budowy',
-          turbine?.commissioning_year ? `${turbine.commissioning_year}` : ''
-        ),
-        metaRow(
-          'Nr i data pozwolenia na budowę',
+    // Puste pola turbiny pomijamy całkowicie — nie chcemy wyświetlać "—" dla
+    // niewypełnionych w karcie turbiny danych w wygenerowanym protokole.
+    const techRowsData = [
+      {
+        label: 'Rodzaj konstrukcji wieży',
+        value: turbine?.tower_construction_type || '',
+      },
+      {
+        label: 'Producent / model turbiny',
+        value:
+          [turbine?.manufacturer, turbine?.model].filter(Boolean).join(' ') ||
+          '',
+      },
+      {
+        label: 'Moc znamionowa [MW]',
+        value: turbine?.rated_power_mw ? `${turbine.rated_power_mw}` : '',
+      },
+      { label: 'Nr seryjny turbiny', value: turbine?.serial_number || '' },
+      {
+        label: 'Rok zakończenia budowy',
+        value: turbine?.commissioning_year
+          ? `${turbine.commissioning_year}`
+          : '',
+      },
+      {
+        label: 'Nr i data pozwolenia na budowę',
+        value:
           [
             turbine?.building_permit_number,
             turbine?.building_permit_date
@@ -1304,14 +1312,17 @@ export async function GET(
               : null,
           ]
             .filter(Boolean)
-            .join(' z dnia ') || ''
-        ),
-        metaRow('Farma wiatrowa', windFarm?.name || ''),
-        metaRow(
-          'Adres farmy / dz. ewid.',
-          windFarm?.location_address || turbine?.location_address || ''
-        ),
-      ],
+            .join(' z dnia ') || '',
+      },
+      { label: 'Farma wiatrowa', value: windFarm?.name || '' },
+      {
+        label: 'Adres farmy / dz. ewid.',
+        value: windFarm?.location_address || turbine?.location_address || '',
+      },
+    ].filter((r) => r.value && r.value.trim())
+    const techTable = new Table({
+      width: { size: USABLE_WIDTH, type: WidthType.DXA },
+      rows: techRowsData.map((r) => metaRow(r.label, r.value)),
     })
 
     // ─── SKŁAD KOMISJI (5-letni) ───────────────────────────────────────────
