@@ -337,7 +337,7 @@ export function TurbineInspectionForm({
 
   // ── Tab 3: Serwis ─────────────────────────────────────────────────
 
-  const [includeServiceInProtocol, setIncludeServiceInProtocol] = useState(true)
+  const [includeServiceInProtocol, setIncludeServiceInProtocol] = useState(false)
   const [serviceCompany, setServiceCompany]       = useState('')
   const [udtCertificate, setUdtCertificate]       = useState('')
   const [lastServiceDate, setLastServiceDate]     = useState('')
