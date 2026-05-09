@@ -36,6 +36,7 @@ interface Client {
   contact_email: string
   contact_phone: string
   nip: string
+  address: string
 }
 
 interface WindFarm {
@@ -265,9 +266,15 @@ export default function ClientDetailPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-graphite-900">{client.name}</h1>
-          {client.short_name && (
-            <p className="text-sm text-graphite-500">{client.short_name}</p>
-          )}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm text-graphite-500 mt-0.5">
+            {client.short_name && <span>{client.short_name}</span>}
+            {client.nip && (
+              <span>
+                NIP: <span className="font-mono text-graphite-700">{client.nip}</span>
+              </span>
+            )}
+            {client.address && <span>{client.address}</span>}
+          </div>
         </div>
       </div>
 
