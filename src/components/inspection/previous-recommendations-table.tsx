@@ -358,36 +358,83 @@ export function PreviousRecommendationsTable({
       }
 
       // -------------------------------------------------------------------
-      // Warstwa 3: historical_protocols (archiwum) — PDF-only metadata
-      // Pokazujemy header z datą/protokołem + linkiem do PDF, ale strukturalnych
-      // zaleceń nie wyciągamy (są tylko w PDF — inspektor uzupełnia ręcznie).
+      // Warstwa 3: historical_protocols (archiwum) + historical_protocol_recommendations.
+      // Po sesji 2026-05-10: 1346 strukturalnych zaleceń wyekstrahowanych z xlsx
+      // dostępnych przez FK historical_protocol_recommendations -> historical_protocols.
+      // Bierzemy najnowszy hp danego typu Z ZALECENIAMI (jeśli najnowszy hp
+      // nie ma hpr, cofamy się do starszego). Gdy żaden hp tego typu nie ma
+      // hpr — zostawiamy `historical_meta` (header z PDF, brak strukturalnych)
+      // i fallback do legacy text (warstwa 4).
       // -------------------------------------------------------------------
       if (recommendations.length === 0) {
         const { data: histRows } = await sb
           .from('historical_protocols')
           .select(
-            'id, inspection_date, year, protocol_number, protocol_pdf_url'
+            `id, inspection_date, year, protocol_number, protocol_pdf_url,
+             historical_protocol_recommendations(id, item_number, recommendation_text, repair_type, urgency)`
           )
           .eq('turbine_id', turbineId)
           .eq('inspection_type', forType)
           .order('inspection_date', { ascending: false, nullsFirst: false })
           .order('year', { ascending: false })
-          .limit(1)
+          .limit(20)
 
-        const hist = histRows?.[0] as
-          | {
-              id: string
-              inspection_date: string | null
-              year: number | null
-              protocol_number: string | null
-              protocol_pdf_url: string | null
-            }
-          | undefined
+        type HistRecRow = {
+          id: string
+          item_number: number
+          recommendation_text: string
+          repair_type: string | null
+          urgency: string | null
+        }
+        type HistRow = {
+          id: string
+          inspection_date: string | null
+          year: number | null
+          protocol_number: string | null
+          protocol_pdf_url: string | null
+          historical_protocol_recommendations: HistRecRow[] | null
+        }
+        // Filtruj placeholder "BRAK ZALECEŃ" + dedup po tekście (chroni przed
+        // bugiem 65 kolizji z sesji 2026-05-10 + 195 placeholder-rekordów).
+        const cleanHistRecs = (recs: HistRecRow[] | null): HistRecRow[] => {
+          const filtered = (recs || []).filter((r) => {
+            const t = (r.recommendation_text || '').trim().toLowerCase()
+            if (!t) return false
+            if (t.startsWith('brak zalece') || t.startsWith('brak robót')) return false
+            return true
+          })
+          const seen = new Set<string>()
+          const out: HistRecRow[] = []
+          for (const r of filtered) {
+            const key = r.recommendation_text.trim().toLowerCase()
+            if (seen.has(key)) continue
+            seen.add(key)
+            out.push(r)
+          }
+          return out.sort((a, b) => a.item_number - b.item_number)
+        }
+        const hists = (histRows || []) as HistRow[]
+        const histWithRecs = hists
+          .map((h) => ({ row: h, cleaned: cleanHistRecs(h.historical_protocol_recommendations) }))
+          .find((x) => x.cleaned.length > 0)
+        const histAny = hists[0]
 
-        if (hist) {
-          fromDate = hist.inspection_date
-          fromProtocolNumber = hist.protocol_number
-          pdfUrl = hist.protocol_pdf_url
+        if (histWithRecs) {
+          // Mamy strukturalne zalecenia — używamy ich. Numer/data/PDF z TEGO
+          // protokołu (nie z najnowszego), żeby zachować spójność źródła.
+          fromDate = histWithRecs.row.inspection_date
+          fromProtocolNumber = histWithRecs.row.protocol_number
+          pdfUrl = histWithRecs.row.protocol_pdf_url
+          source = 'previous_inspection'
+          recommendations = histWithRecs.cleaned.map((r) => ({
+            text: r.recommendation_text,
+          }))
+        } else if (histAny) {
+          // Jest najnowszy hp ale bez hpr — zostawiamy meta (header + PDF link),
+          // strukturalnych zaleceń nie ekstrahujemy z PDF.
+          fromDate = histAny.inspection_date
+          fromProtocolNumber = histAny.protocol_number
+          pdfUrl = histAny.protocol_pdf_url
           source = 'historical_meta'
         }
       }

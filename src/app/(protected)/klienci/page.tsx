@@ -33,6 +33,7 @@ interface Client {
   contact_email: string
   contact_phone: string
   nip: string
+  address: string
 }
 
 export default function KlienciPage() {
@@ -68,10 +69,14 @@ function KlienciContent() {
   }, [searchParams])
 
   useEffect(() => {
+    const q = search.toLowerCase()
     const filtered = clients.filter((client) =>
-      client.name?.toLowerCase().includes(search.toLowerCase()) ||
-      client.contact_email?.toLowerCase().includes(search.toLowerCase()) ||
-      client.contact_phone?.includes(search)
+      client.name?.toLowerCase().includes(q) ||
+      client.short_name?.toLowerCase().includes(q) ||
+      client.contact_email?.toLowerCase().includes(q) ||
+      client.contact_phone?.includes(search) ||
+      client.nip?.includes(search) ||
+      client.address?.toLowerCase().includes(q)
     )
     setFilteredClients(filtered)
   }, [search, clients])
@@ -144,7 +149,7 @@ function KlienciContent() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-graphite-400" />
         <Input
-          placeholder="Szukaj po nazwie, email lub telefonie..."
+          placeholder="Szukaj po nazwie, NIP, adresie, email lub telefonie..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-10 pl-10 rounded-lg border-graphite-200"
@@ -188,6 +193,11 @@ function KlienciContent() {
                   <p className="font-mono text-sm text-graphite-500">
                     <span className="font-sans font-medium text-graphite-800">NIP:</span> {client.nip}
                   </p>
+                  {client.address && (
+                    <p className="text-sm text-graphite-500">
+                      <span className="font-medium text-graphite-800">Adres:</span> {client.address}
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -200,10 +210,11 @@ function KlienciContent() {
               <TableRow className="bg-graphite-50/50 hover:bg-graphite-50/50 border-b border-graphite-100">
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 px-5">Nazwa</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Nazwa skrócona</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">NIP</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Adres siedziby</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Osoba kontaktowa</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Email</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Telefon</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">NIP</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -215,10 +226,11 @@ function KlienciContent() {
                 >
                   <TableCell className="font-semibold text-graphite-900 px-5 text-[13px]">{client.name}</TableCell>
                   <TableCell className="text-graphite-500 text-[13px]">{client.short_name}</TableCell>
+                  <TableCell className="font-mono text-graphite-500 text-[13px]">{client.nip}</TableCell>
+                  <TableCell className="text-graphite-500 text-[13px] max-w-[280px] truncate" title={client.address || ''}>{client.address}</TableCell>
                   <TableCell className="text-graphite-500 text-[13px]">{client.contact_person}</TableCell>
                   <TableCell className="text-graphite-500 text-[13px]">{client.contact_email}</TableCell>
                   <TableCell className="font-mono text-graphite-500 text-[13px]">{client.contact_phone}</TableCell>
-                  <TableCell className="font-mono text-graphite-500 text-[13px]">{client.nip}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -15,6 +15,7 @@ interface ClientFormProps {
     contact_email: string
     contact_phone: string
     nip: string
+    address: string
   }
   onSuccess?: () => void
 }
@@ -46,6 +47,7 @@ export function ClientForm({ initialData, onSuccess }: ClientFormProps) {
       contact_email: stringOrNull(formData.get('contact_email')),
       contact_phone: stringOrNull(formData.get('contact_phone')),
       nip: stringOrNull(formData.get('nip')),
+      address: stringOrNull(formData.get('address')),
     }
 
     try {
@@ -173,6 +175,16 @@ export function ClientForm({ initialData, onSuccess }: ClientFormProps) {
           name="nip"
           defaultValue={initialData?.nip || ''}
           placeholder="NIP"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="address">Adres siedziby</Label>
+        <Input
+          id="address"
+          name="address"
+          defaultValue={initialData?.address || ''}
+          placeholder="ul. Przykładowa 1, 00-000 Miasto"
         />
       </div>
 
