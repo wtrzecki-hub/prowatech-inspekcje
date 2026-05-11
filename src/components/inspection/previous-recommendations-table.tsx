@@ -119,6 +119,118 @@ export function PreviousRecommendationsTable({
 
   const supabase = () => createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+  /**
+   * Normalizuje tekst zalecenia dla potrzeb dedupu cross-source:
+   * - usuwa leading "N. " numerator (legacy scope ma "1. Wykonać…", prev_rec nie)
+   * - usuwa trailing " (K|NB|NG)" suffix (legacy ma "(K)" na końcu, prev_rec nie)
+   * - case-insensitive
+   *
+   * Bez tego dedup nie łapie matchy gdy prev_rec wstawiony bez prefiksu/sufiksu
+   * trafia obok scope item z legacy-import format.
+   */
+  const normalizeForCarryDedup = (text: string | null | undefined): string => {
+    if (!text) return ''
+    return text
+      .trim()
+      .replace(/^\d+\.\s+/, '')
+      .replace(/\s*\((?:K|NB|NG)\)\s*$/i, '')
+      .trim()
+      .toLowerCase()
+  }
+
+  /**
+   * Auto-carry: zaznaczenie "nie wykonano" w previous_recommendations
+   * przepisuje pozycję do `repair_scope_items` bieżącej inspekcji.
+   *
+   * Dedup po znormalizowanym tekście (patrz normalizeForCarryDedup):
+   * - jeśli `source_previous_type` jest `NULL` (legacy import / element /
+   *   manual) → upgrade na `forType` — wiedza "z której kontroli" jest
+   *   wartościowa, NULL znaczy "nie wiemy", a teraz wiemy
+   * - jeśli `source_previous_type` === forType → nic
+   * - jeśli to inny typ i nie 'both' → upgrade na 'both'
+   * - jeśli 'both' → nic
+   *
+   * Brak pozycji → INSERT z source_previous_type=forType, item_number=max+1.
+   *
+   * Reverse direction (zmiana 'nie' → coś innego) nie usuwa pozycji ze scope —
+   * inspektor mógł już dopisać terminy/zdjęcia.
+   */
+  const ensureCarryToScope = async (
+    rawText: string | null,
+    forType: SourceType
+  ): Promise<void> => {
+    const text = rawText?.trim()
+    if (!text) return
+    const normText = normalizeForCarryDedup(text)
+    if (!normText) return
+
+    try {
+      const sb = supabase()
+
+      const { data: existing, error: selErr } = await sb
+        .from('repair_scope_items')
+        .select('id, scope_description, source_previous_type')
+        .eq('inspection_id', inspectionId)
+      if (selErr) throw selErr
+
+      const match = (
+        (existing || []) as Array<{
+          id: string
+          scope_description: string | null
+          source_previous_type: string | null
+        }>
+      ).find((r) => normalizeForCarryDedup(r.scope_description) === normText)
+
+      if (match) {
+        const cur = match.source_previous_type as
+          | 'annual'
+          | 'five_year'
+          | 'both'
+          | null
+        // NULL → forType: backfill informacji o pochodzeniu (legacy/manual
+        // do tej pory nie wiedziało skąd przyszło — teraz wiemy).
+        // forType→forType lub 'both' → bez zmian.
+        // Inny typ → 'both' (cross-section confirmation).
+        let nextSource: 'annual' | 'five_year' | 'both' | null = cur
+        if (cur === null) nextSource = forType
+        else if (cur !== forType && cur !== 'both') nextSource = 'both'
+
+        if (nextSource !== cur) {
+          const { error: upErr } = await sb
+            .from('repair_scope_items')
+            .update({ source_previous_type: nextSource })
+            .eq('id', match.id)
+          if (upErr) console.error('Błąd upgrade source_previous_type:', upErr)
+        }
+        return
+      }
+
+      const { data: lastRow } = await sb
+        .from('repair_scope_items')
+        .select('item_number')
+        .eq('inspection_id', inspectionId)
+        .order('item_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const nextNumber =
+        ((lastRow?.item_number as number | undefined) ?? 0) + 1
+
+      const { error: insErr } = await sb
+        .from('repair_scope_items')
+        .insert({
+          inspection_id: inspectionId,
+          item_number: nextNumber,
+          scope_description: text,
+          source_previous_type: forType,
+          is_completed: false,
+        })
+      if (insErr) throw insErr
+    } catch (err) {
+      console.error('Błąd auto-carry do repair_scope_items:', err)
+    }
+  }
+
   const loadItemsAndMaybeAutoImport = async () => {
     try {
       const { data, error } = await supabase()
@@ -559,6 +671,16 @@ export function PreviousRecommendationsTable({
       const newItems = (inserted || []) as PreviousRecommendation[]
       setItems((prev) => [...prev, ...newItems])
 
+      // Auto-carry: pozycje wstawione od razu ze statusem 'nie' (z legacy
+      // turbine_findings) liczą się jako "pierwsze zaznaczenie Nie" i lecą
+      // do repair_scope_items. Sekwencyjnie, bo ensureCarryToScope wewnątrz
+      // robi SELECT+INSERT i każdy kolejny call musi widzieć stan po poprzednim.
+      for (const it of newItems) {
+        if (it.completion_status === 'nie' && it.recommendation_text) {
+          await ensureCarryToScope(it.recommendation_text, forType)
+        }
+      }
+
       // Renumber sekcji po imporcie — pewność że numeracja jest 1..N.
       await renumberSection(sb, forType)
 
@@ -615,6 +737,18 @@ export function PreviousRecommendationsTable({
           .update({ [field]: value || null })
           .eq('id', id)
         if (error) throw error
+
+        // Auto-carry: zaznaczenie "nie wykonano" przepisuje pozycję do
+        // repair_scope_items (z dedupem po tekście). Closure-captured `items`
+        // ma aktualny tekst — wystarczy do tej operacji. Reverse (zmiana
+        // statusu z 'nie' na inny) NIE usuwa pozycji ze scope.
+        if (field === 'completion_status' && value === 'nie') {
+          const row = items.find((i) => i.id === id)
+          const sourceType = row?.source_inspection_type
+          if (sourceType && row?.recommendation_text) {
+            void ensureCarryToScope(row.recommendation_text, sourceType)
+          }
+        }
       } catch (err) {
         console.error('Błąd zapisu:', err)
       } finally {

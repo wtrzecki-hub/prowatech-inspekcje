@@ -1516,6 +1516,7 @@ export type Database = {
           is_completed: boolean | null
           item_number: number
           scope_description: string
+          source_previous_type: string | null
           updated_at: string | null
           urgency_level: string | null
           work_kind: string | null
@@ -1532,6 +1533,7 @@ export type Database = {
           is_completed?: boolean | null
           item_number: number
           scope_description: string
+          source_previous_type?: string | null
           updated_at?: string | null
           urgency_level?: string | null
           work_kind?: string | null
@@ -1548,6 +1550,7 @@ export type Database = {
           is_completed?: boolean | null
           item_number?: number
           scope_description?: string
+          source_previous_type?: string | null
           updated_at?: string | null
           urgency_level?: string | null
           work_kind?: string | null
