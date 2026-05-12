@@ -1,0 +1,191 @@
+# Propozycje sesji — Prowatech Inspekcje
+
+_Lista tematów do wyboru przy nowej sesji. Otwórz nowy chat z Claude'em i wskaż numer tematu (np. „Robimy temat 1") albo skopiuj cały blok jako brief._
+
+_Po wykonaniu tematu — zaznacz `[x]`, ewentualnie dopisz numer PR-a w sekcji „Status". Dodawaj nowe tematy poniżej, najstarsze niezamknięte na górze._
+
+---
+
+## 1. Instalator `.exe` — skróty na pulpit dla klientów i współpracowników
+
+**Status:** nie rozpoczęte (rozmowa z 2026-05-12, odłożona na rzecz cleanupu repo i zaleceń).
+
+**Cel:** Klienci i inspektorzy klikają jeden `.exe`, dostają skrót na pulpicie z logo ProWaTech, który otwiera odpowiedni URL w przeglądarce.
+
+**Zakres:**
+- **2 osobne `.exe`** (jeden dla klientów, jeden dla współpracowników)
+- **Klienci** → otwiera `https://prowatech-inspekcje.vercel.app/portal/login` *(lub docelowo `https://portal.prowatech.pl` po wykonaniu tematu 2)*
+- **Współpracownicy** → otwiera `https://prowatech-inspekcje.vercel.app/dashboard` *(lub `https://app.prowatech.pl`)*
+- Kreator w języku polskim, ikona z `public/logo-prowatech.png` (konwersja PNG → ICO przez Python Pillow)
+- Skrót na pulpicie, opcjonalnie w menu Start
+- Brak instalacji aplikacji na dysku — to tylko skrót
+
+**Plan techniczny:**
+- Stack: **Inno Setup 6** (darmowy, standard dla Windows installerów)
+- W repo: `installers/client-shortcut.iss` + `installers/inspector-shortcut.iss` + `installers/prowatech.ico` + skrypt `scripts/generate_ico.py`
+- Build: `ISCC.exe installers/client-shortcut.iss` → wypluwa `Output/SetupKlient.exe`
+
+**Co Waldek musi zrobić jednorazowo:**
+- Pobrać Inno Setup 6 z [jrsoftware.org/isdl.php](https://jrsoftware.org/isdl.php) (≈3 MB) lub `winget install JRSoftware.InnoSetup`
+
+**Decyzje do podjęcia w sesji:**
+- Czy adres docelowy to `vercel.app` (od razu działa) czy `prowatech.pl` (czekać na temat 2)?
+- Skrót w menu Start: tak / nie?
+
+---
+
+## 2. Instrukcja dla administratora domeny — podpięcie `prowatech-inspekcje` pod własną domenę
+
+**Status:** nie rozpoczęte.
+
+**Cel:** Wytworzyć dokument PDF/MD do wysłania administratorowi domeny `prowatech.pl`, który krok po kroku pozwoli mu podpiąć aplikację pod własną subdomenę (np. `portal.prowatech.pl` dla klientów, `app.prowatech.pl` dla inspektorów).
+
+**Stan obecny:**
+- Aplikacja działa na `prowatech-inspekcje.vercel.app`
+- R2 pliki pod `pub-edbf124678454e819a88cd7054401694.r2.dev`
+- Memory `project_design_decisions.md` i `prowatech-redesign.md:206` wspominają `portal.prowatech.pl` / `app.prowatech.pl` jako propozycję
+
+**Zakres dokumentu:**
+- Sekcja A — **DNS:** rekordy CNAME (np. `portal CNAME cname.vercel-dns.com`), TTL, weryfikacja przez `nslookup`
+- Sekcja B — **Vercel Project Settings → Domains:** dodanie domeny, weryfikacja przez DNS, automatyczny SSL Let's Encrypt
+- Sekcja C — **Supabase Auth → URL Configuration:** zaktualizować `Site URL` + dodać do `Redirect URLs` nowe ścieżki (`/auth/callback`, `/portal/auth/reset`)
+- Sekcja D — **R2 Custom Domain** (opcjonalnie): `files.prowatech.pl` jako CNAME do Public Development URL, zmiana `R2_PUBLIC_URL` w env Vercela
+- Sekcja E — **Test plan:** OAuth z nową domeny, reset hasła, generowanie PDF z linkami do zdjęć
+
+**Decyzje do podjęcia w sesji:**
+- Jedna domena dla obu rolei (`app.prowatech.pl`, prefiks `/portal` dla klientów) czy dwie subdomeny?
+- Czy R2 custom domain włączamy od razu (wymaga osobnego CNAME), czy zostawiamy `r2.dev` na razie?
+- Format dokumentu: MD (do przeczytania w GitHub) czy PDF (do wysłania mailem)?
+
+---
+
+## 3. Sekcja III. USTALENIA — bugi z audytu Artura (2026-05-12)
+
+**Status:** nie rozpoczęte. Źródło: `uwagi_Prowatech_12_05_2026.docx` (Artur).
+
+**Cel:** Naprawić 2 bugi w sekcji „III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego" (`inspection_elements`):
+
+**Bug 1 — numeracja nie po kolei, brak połączeń wieża/fundament:**
+- Artur: „Numeracja nie po kolei, zniknęły połączenia pomiędzy wieżą i fundamentem"
+- Sprawdzić: `inspection_elements` ↔ `element_definitions` (struktura drzewka z kategoriami)
+- Lokalizacja: ten sam komponent renderujący strukturę elementów na karcie inspekcji
+
+**Bug 2 — brak wypełnienia pola Element + brak zdjęć w sekcji „Wnioski":**
+- Artur: „W sekcji Wnioski nie wypełnia się pole Element, brak opcji wgrania zdjęć"
+- Możliwe rozwiązanie analog do PR #32: input element_name + photos (tabela `recommendation_photos` z nowym `parent_type='inspection_element'`) ALBO osobna tabela `inspection_element_photos`
+
+**Decyzje do podjęcia w sesji:**
+- Czy zdjęcia tu używają tej samej tabeli `recommendation_photos` (dodaje 3-ci parent_type), czy nowa `inspection_element_photos`?
+- Czy render w PDF/DOCX (sekcja III) — czy też dodajemy galerię?
+
+---
+
+## 4. Metryczka — bug „Wykonawca kontroli nie zaznacza się"
+
+**Status:** nie rozpoczęte. Źródło: audyt Artura.
+
+**Cel:** Naprawić zapisywanie/wczytywanie multi-selectu inspektorów w metryczce.
+
+**Symptom:** „Nie zaznacza się Wykonawca kontroli pomimo wybrania kontrolerów w momencie wypełniania pierwotnie"
+
+**Lokalizacja:** `src/components/inspection/inspection-metadata-piib.tsx` (PR #2 z 2026-05-07 — multi-select inspektorów + junction `inspection_inspectors`).
+
+**Hipoteza:** UI po reload nie ładuje aktualnego stanu z `inspection_inspectors` lub nie zapisuje zmian (debounce 800ms broken / inny bug).
+
+**Plan:**
+- Reprodukcja na EW Kamlarki / EW01
+- SQL check `inspection_inspectors` — czy są wpisy
+- Debug UI flow loadInspectors + handleToggleInspector
+
+---
+
+## 5. Metryczka layout — sekcja „Okazano"
+
+**Status:** nie rozpoczęte. Źródło: audyt Artura.
+
+**Cel:** Przebudować layout sekcji „Dokumenty obiektu okazane do wglądu" w metryczce.
+
+**Symptom:** „W oknie po lewej powinno być «Okazano», a w oknie po prawej tam, gdzie Numer protokołu / data / uwagi — «Okazano, nr 59/T/2025, z dnia 05.05.2025»"
+
+**Interpretacja:** Artur chce żeby lewy panel pokazywał tylko status („Okazano") a prawy pełną wartość („Okazano, nr X/T/YYYY, z dnia DD.MM.YYYY"). Wymaga screenshotu od Artura żeby zrozumieć dokładnie.
+
+**Decyzja:** najpierw dopytać Artura o screenshot/szkic — bez tego ryzykujemy źle zaprojektować.
+
+---
+
+## 6. Generator DOCX — błędni wykonawcy „Andrzej i Tomek"
+
+**Status:** nie rozpoczęte. Źródło: audyt Artura. **Priorytet wysoki** (błąd merytoryczny w generowanym dokumencie wysyłanym klientom).
+
+**Cel:** Naprawić logikę wyboru wykonawcy kontroli w `src/app/api/docx/[id]/route.ts`.
+
+**Symptom:** „W wygenerowanym docx błędnie wykonawca kontroli wstawia Andrzeja i Tomka"
+
+**Hipoteza:** Hardcoded fallback (legacy z bardzo wczesnych wersji) lub niepoprawne join na `inspection_inspectors` → `inspectors`.
+
+**Plan:**
+- Grep `Andrzej`, `Tomek` w `src/app/api/docx/[id]/route.ts` — czy hardcoded
+- Jeśli tak: usunąć, użyć `inspection_inspectors` z join na `inspectors`
+- Jeśli nie: zbadać czemu join wybiera tych inspektorów
+
+---
+
+## 7. Generator DOCX — pusta sekcja „Załączniki" rendererowana z 6 placeholder-punktami
+
+**Status:** nie rozpoczęte. Źródło: audyt Artura.
+
+**Cel:** Pomijać pustą sekcję „Załączniki do protokołu" lub renderować jednym wierszem „Brak załączników".
+
+**Symptom:** „Załączniki do protokołu — generuje aż 6 punktów pomimo żadnego załącznika"
+
+**Plan:**
+- Lokalizacja: `src/app/api/docx/[id]/route.ts` (sekcja Załączniki, hardcoded placeholdery)
+- Analog: PR #19 (filter pustych pól w PDF/DOCX) — globalna polityka „lepiej puste niż placeholder"
+- Decyzja: skip sekcji vs render „Brak załączników" (preferuję skip — zgodnie z PR #19)
+
+---
+
+## 8. Generator DOCX/PDF — sekcja III. USTALENIA nie zawiera zaleceń z poprzedniego roku ani opisów elementów
+
+**Status:** nie rozpoczęte. Źródło: audyt Artura.
+
+**Cel:** Naprawić render sekcji III w generatorach.
+
+**Symptom Artura:** „W Elementy → w 3. Wieża wpisałem Opis i ustalenia z kontroli, dodałem zdjęcie i nr fotografii 1 (bez wpisywania w sekcji Zalecenia/uwagi) — w wygenerowanym dokumencie nie jest to ujęte w tabeli. Dodatkowo nie są zaimplementowane zalecenia z poprzedniego roku w tabeli."
+
+**Lokalizacja:** generatory PDF + DOCX — sekcja III. USTALENIA.
+
+**Plan:**
+- Sprawdzić jakie pola z `inspection_elements` są renderowane — najwidoczniej brakuje pewnych pól (`findings`/`description`/zdjęcia)
+- Sprawdzić integrację z `previous_recommendations` w tabeli III (Artur oczekuje że zalecenia z poprzedniego roku tam się pokażą)
+
+---
+
+## 9. Pytanie/decyzja — widoczność „Następna kontrola 5-letnia" i „Następna kontrola elektryczna"
+
+**Status:** decyzja Waldka, nie task techniczny. Źródło: audyt Artura.
+
+**Pytanie Artura:** „Czy pole «Następna kontrola 5-letnia» i «następna kontrola instalacji elektrycznej» powinny być widoczne?"
+
+**Kontekst:** Karta turbiny `(protected)/turbiny/[id]/page.tsx` ma sekcję „Najbliższe przeglądy" (PR #20 — bug Dane kontroli + computed values z `inspectionsHistory`).
+
+**Decyzja:** widoczne / ukryte / widoczne tylko dla admin? Bez kodowania — najpierw konsultacja.
+
+---
+
+## 10. DOCX — niejasne uwagi Artura („chyba lepiej, żeby było odwrotnie")
+
+**Status:** wymaga dopytania Artura.
+
+**Symptom:** W DOCX-u Artura jest fraza „Chyba lepiej, żeby było odwrotnie" — bez kontekstu (pewnie screenshot się nie załączył w docx).
+
+**Plan:** dopytać Artura o screenshot lub bardziej konkretne wyjaśnienie czego dotyczy.
+
+---
+
+## Sesje wykonane
+
+_Najnowsze na górze. Format: `[x] N. Tytuł — data — PR(y)`._
+
+- [x] **Element/lokalizacja w prev_rec + auto-fill deadline z urgency + zdjęcia w sekcji VI** — **2026-05-12** — [#32](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/32) (pokrywa pkty 1+2+3 audytu Artura)
+- [x] Cleanup root + Etap 0/1/2/3 sekcji Zalecenia (audyt EW Kamlarki) — **2026-05-12** — [#28](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/28), [#29](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/29), [#31](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/31)
