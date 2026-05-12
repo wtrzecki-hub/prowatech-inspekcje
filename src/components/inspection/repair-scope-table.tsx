@@ -154,6 +154,53 @@ export function RepairScopeTable({
 
   const supabase = () => createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+  /**
+   * Jednorazowy backfill `deadline_date` dla wierszy ładowanych z bazy.
+   * Cel: naprawić wiersze sprzed PR #32 (i te wstawione przez runImport
+   * z `deadline_date: null`) tak, żeby Termin wykonania nie był pusty
+   * gdy urgency_level jest ustawione.
+   *
+   * Strzela tylko gdy mamy `inspectionDate`. Dla każdego wiersza:
+   * - jeśli `urgency_level` set i `deadline_date` puste — obliczamy i UPDATE
+   * - w przeciwnym razie zostawiamy bez zmian
+   *
+   * Zwraca listę wierszy z naniesionymi zmianami (do setItems).
+   */
+  const backfillDeadlines = async (
+    rows: RepairScopeItem[],
+  ): Promise<RepairScopeItem[]> => {
+    if (!inspectionDate || rows.length === 0) return rows
+
+    const updates: Array<{ id: string; deadline_date: string }> = []
+    const patched = rows.map((row) => {
+      if (row.urgency_level && !row.deadline_date) {
+        const computed = computeDeadlineFromUrgency(
+          inspectionDate,
+          row.urgency_level,
+        )
+        if (computed) {
+          updates.push({ id: row.id, deadline_date: computed })
+          return { ...row, deadline_date: computed }
+        }
+      }
+      return row
+    })
+
+    if (updates.length === 0) return rows
+
+    const sb = supabase()
+    await Promise.all(
+      updates.map((u) =>
+        sb
+          .from('repair_scope_items')
+          .update({ deadline_date: u.deadline_date })
+          .eq('id', u.id),
+      ),
+    )
+
+    return patched
+  }
+
   const loadItemsAndMaybeAutoImport = async () => {
     try {
       const { data, error } = await supabase()
@@ -164,12 +211,19 @@ export function RepairScopeTable({
 
       if (error) throw error
       const loaded = (data || []) as RepairScopeItem[]
-      setItems(loaded)
+
+      // Backfill: wiersze sprzed PR #32 (i wstawione przez runImport bez
+      // deadline_date) mają urgency_level ustawione ale deadline_date=NULL.
+      // Jeśli mamy inspectionDate, dolicz deadline i zapisz w bazie. Działa
+      // tylko gdy deadline_date jest puste — nie nadpisujemy świadomych
+      // edycji inspektora.
+      const backfilled = await backfillDeadlines(loaded)
+      setItems(backfilled)
 
       // Auto-import: pierwszy mount, brak wpisów. Cisza — jeśli znajdzie,
       // wstawia + ustawia banner; jeśli nie znajdzie, zostawia listę pustą
       // bez alertu (user widzi placeholder „Brak pozycji").
-      if (!autoImportTriedRef.current && loaded.length === 0) {
+      if (!autoImportTriedRef.current && backfilled.length === 0) {
         autoImportTriedRef.current = true
         await runImport({ silent: true })
       }
@@ -337,7 +391,10 @@ export function RepairScopeTable({
         work_kind: c.work_kind,
         urgency_level: c.urgency_level,
         deadline_text: null,
-        deadline_date: null,
+        deadline_date: computeDeadlineFromUrgency(
+          inspectionDate ?? null,
+          c.urgency_level,
+        ),
         is_completed: false,
       }))
       const { data: inserted, error: insErr } = await sb
