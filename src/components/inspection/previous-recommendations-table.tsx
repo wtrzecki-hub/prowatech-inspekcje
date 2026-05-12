@@ -32,6 +32,8 @@ import { COMPLETION_STATUSES } from '@/lib/constants'
  */
 
 type SourceType = 'annual' | 'five_year'
+type WorkKind = 'K' | 'NB' | 'NG'
+type UrgencyLevel = 'I' | 'II' | 'III' | 'IV'
 
 interface PreviousRecommendation {
   id: string
@@ -41,7 +43,24 @@ interface PreviousRecommendation {
   completion_status: 'tak' | 'nie' | 'w_trakcie' | null
   remarks: string | null
   source_inspection_type: SourceType | null
+  /** Rodzaj robót (K/NB/NG) — z hpr lub poprzedniego repair_scope_items. */
+  work_kind: WorkKind | null
+  /** Stopień pilności (I-IV) — z hpr lub poprzedniego repair_scope_items. */
+  urgency_level: UrgencyLevel | null
 }
+
+const WORK_KIND_OPTIONS: Array<{ value: WorkKind; label: string }> = [
+  { value: 'K', label: 'K — konserwacja' },
+  { value: 'NB', label: 'NB — naprawa bieżąca' },
+  { value: 'NG', label: 'NG — naprawa główna' },
+]
+
+const URGENCY_OPTIONS: Array<{ value: UrgencyLevel; label: string }> = [
+  { value: 'I', label: 'I — natychmiast' },
+  { value: 'II', label: 'II — do 3 mies.' },
+  { value: 'III', label: 'III — do 12 mies.' },
+  { value: 'IV', label: 'IV — do 5 lat' },
+]
 
 interface AutoImportInfo {
   count: number
@@ -157,7 +176,8 @@ export function PreviousRecommendationsTable({
    */
   const ensureCarryToScope = async (
     rawText: string | null,
-    forType: SourceType
+    forType: SourceType,
+    extra: { work_kind?: WorkKind | null; urgency_level?: UrgencyLevel | null } = {}
   ): Promise<void> => {
     const text = rawText?.trim()
     if (!text) return
@@ -169,7 +189,7 @@ export function PreviousRecommendationsTable({
 
       const { data: existing, error: selErr } = await sb
         .from('repair_scope_items')
-        .select('id, scope_description, source_previous_type')
+        .select('id, scope_description, source_previous_type, work_kind, urgency_level')
         .eq('inspection_id', inspectionId)
       if (selErr) throw selErr
 
@@ -178,6 +198,8 @@ export function PreviousRecommendationsTable({
           id: string
           scope_description: string | null
           source_previous_type: string | null
+          work_kind: WorkKind | null
+          urgency_level: UrgencyLevel | null
         }>
       ).find((r) => normalizeForCarryDedup(r.scope_description) === normText)
 
@@ -195,12 +217,23 @@ export function PreviousRecommendationsTable({
         if (cur === null) nextSource = forType
         else if (cur !== forType && cur !== 'both') nextSource = 'both'
 
-        if (nextSource !== cur) {
+        // Backfill work_kind/urgency_level dla istniejących scope items
+        // (legacy lub manual) jeśli prev_rec ma te wartości, a scope nie.
+        const updates: Record<string, unknown> = {}
+        if (nextSource !== cur) updates.source_previous_type = nextSource
+        if (match.work_kind === null && extra.work_kind) {
+          updates.work_kind = extra.work_kind
+        }
+        if (match.urgency_level === null && extra.urgency_level) {
+          updates.urgency_level = extra.urgency_level
+        }
+
+        if (Object.keys(updates).length > 0) {
           const { error: upErr } = await sb
             .from('repair_scope_items')
-            .update({ source_previous_type: nextSource })
+            .update(updates)
             .eq('id', match.id)
-          if (upErr) console.error('Błąd upgrade source_previous_type:', upErr)
+          if (upErr) console.error('Błąd upgrade scope item:', upErr)
         }
         return
       }
@@ -223,6 +256,8 @@ export function PreviousRecommendationsTable({
           item_number: nextNumber,
           scope_description: text,
           source_previous_type: forType,
+          work_kind: extra.work_kind ?? null,
+          urgency_level: extra.urgency_level ?? null,
           is_completed: false,
         })
       if (insErr) throw insErr
@@ -417,6 +452,8 @@ export function PreviousRecommendationsTable({
         text: string
         status?: 'tak' | 'nie' | 'w_trakcie' | null
         remarks?: string | null
+        work_kind?: WorkKind | null
+        urgency_level?: UrgencyLevel | null
       }
       let recommendations: ImportItem[] = []
       let source: AutoImportInfo['source'] = 'previous_inspection'
@@ -444,21 +481,25 @@ export function PreviousRecommendationsTable({
       if (prev) {
         const { data: scopeData } = await sb
           .from('repair_scope_items')
-          .select('scope_description')
+          .select('scope_description, work_kind, urgency_level')
           .eq('inspection_id', prev.id)
           .order('item_number', { ascending: true })
 
         if (scopeData && scopeData.length > 0) {
           recommendations = scopeData.map((s) => ({
             text: s.scope_description as string,
+            work_kind: (s.work_kind as WorkKind | null) ?? null,
+            urgency_level: (s.urgency_level as UrgencyLevel | null) ?? null,
           }))
         } else {
           const { data: legacyData } = await sb
             .from('repair_recommendations')
-            .select('scope_description')
+            .select('scope_description, repair_type, urgency_level')
             .eq('inspection_id', prev.id)
           recommendations = (legacyData || []).map((r) => ({
             text: r.scope_description as string,
+            work_kind: (r.repair_type as WorkKind | null) ?? null,
+            urgency_level: (r.urgency_level as UrgencyLevel | null) ?? null,
           }))
         }
 
@@ -540,6 +581,8 @@ export function PreviousRecommendationsTable({
           source = 'previous_inspection'
           recommendations = histWithRecs.cleaned.map((r) => ({
             text: r.recommendation_text,
+            work_kind: (r.repair_type as WorkKind | null) ?? null,
+            urgency_level: (r.urgency as UrgencyLevel | null) ?? null,
           }))
         } else if (histAny) {
           // Jest najnowszy hp ale bez hpr — zostawiamy meta (header + PDF link),
@@ -660,6 +703,8 @@ export function PreviousRecommendationsTable({
         completion_status: r.status ?? null,
         remarks: r.remarks ?? null,
         source_inspection_type: forType,
+        work_kind: r.work_kind ?? null,
+        urgency_level: r.urgency_level ?? null,
       }))
 
       const { data: inserted, error: insertErr } = await sb
@@ -677,7 +722,10 @@ export function PreviousRecommendationsTable({
       // robi SELECT+INSERT i każdy kolejny call musi widzieć stan po poprzednim.
       for (const it of newItems) {
         if (it.completion_status === 'nie' && it.recommendation_text) {
-          await ensureCarryToScope(it.recommendation_text, forType)
+          await ensureCarryToScope(it.recommendation_text, forType, {
+            work_kind: it.work_kind,
+            urgency_level: it.urgency_level,
+          })
         }
       }
 
@@ -708,7 +756,12 @@ export function PreviousRecommendationsTable({
 
   const handleUpdate = (
     id: string,
-    field: 'recommendation_text' | 'completion_status' | 'remarks',
+    field:
+      | 'recommendation_text'
+      | 'completion_status'
+      | 'remarks'
+      | 'work_kind'
+      | 'urgency_level',
     value: string | null
   ) => {
     setItems((prev) =>
@@ -719,7 +772,11 @@ export function PreviousRecommendationsTable({
               [field]:
                 field === 'completion_status'
                   ? (value as 'tak' | 'nie' | 'w_trakcie' | null)
-                  : value || null,
+                  : field === 'work_kind'
+                    ? (value as WorkKind | null)
+                    : field === 'urgency_level'
+                      ? (value as UrgencyLevel | null)
+                      : value || null,
             }
           : i
       )
@@ -746,7 +803,10 @@ export function PreviousRecommendationsTable({
           const row = items.find((i) => i.id === id)
           const sourceType = row?.source_inspection_type
           if (sourceType && row?.recommendation_text) {
-            void ensureCarryToScope(row.recommendation_text, sourceType)
+            void ensureCarryToScope(row.recommendation_text, sourceType, {
+              work_kind: row.work_kind,
+              urgency_level: row.urgency_level,
+            })
           }
         }
       } catch (err) {
@@ -888,7 +948,12 @@ interface SourceSectionProps {
   onImport: () => void
   onUpdate: (
     id: string,
-    field: 'recommendation_text' | 'completion_status' | 'remarks',
+    field:
+      | 'recommendation_text'
+      | 'completion_status'
+      | 'remarks'
+      | 'work_kind'
+      | 'urgency_level',
     value: string | null
   ) => void
   onDelete: (id: string) => void
@@ -1081,7 +1146,12 @@ interface RecommendationListProps {
   items: PreviousRecommendation[]
   onUpdate: (
     id: string,
-    field: 'recommendation_text' | 'completion_status' | 'remarks',
+    field:
+      | 'recommendation_text'
+      | 'completion_status'
+      | 'remarks'
+      | 'work_kind'
+      | 'urgency_level',
     value: string | null
   ) => void
   onDelete: (id: string) => void
@@ -1199,6 +1269,55 @@ function RecommendationList({
               >
                 — brak —
               </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label
+                htmlFor={`work-kind-${item.id}`}
+                className="text-xs text-graphite-500"
+              >
+                Rodzaj robót
+              </Label>
+              <select
+                id={`work-kind-${item.id}`}
+                value={item.work_kind ?? ''}
+                onChange={(e) =>
+                  onUpdate(item.id, 'work_kind', e.target.value || null)
+                }
+                className="flex h-9 w-full rounded-md border border-graphite-200 bg-white px-3 text-sm shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600"
+              >
+                <option value="">—</option>
+                {WORK_KIND_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label
+                htmlFor={`urgency-${item.id}`}
+                className="text-xs text-graphite-500"
+              >
+                Stopień pilności
+              </Label>
+              <select
+                id={`urgency-${item.id}`}
+                value={item.urgency_level ?? ''}
+                onChange={(e) =>
+                  onUpdate(item.id, 'urgency_level', e.target.value || null)
+                }
+                className="flex h-9 w-full rounded-md border border-graphite-200 bg-white px-3 text-sm shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600"
+              >
+                <option value="">—</option>
+                {URGENCY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
