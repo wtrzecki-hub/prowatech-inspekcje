@@ -15,6 +15,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { ElementNameInput } from '@/components/inspection/element-name-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { COMPLETION_STATUSES } from '@/lib/constants'
@@ -1384,12 +1385,9 @@ function RecommendationList({
               >
                 Element / lokalizacja
               </Label>
-              <Input
-                id={`element-${item.id}`}
+              <ElementNameInput
                 value={item.element_name || ''}
-                onChange={(e) =>
-                  onUpdate(item.id, 'element_name', e.target.value)
-                }
+                onChange={(v) => onUpdate(item.id, 'element_name', v)}
                 placeholder="np. Fundament, Wieża segment 2"
                 className="text-sm h-9"
               />

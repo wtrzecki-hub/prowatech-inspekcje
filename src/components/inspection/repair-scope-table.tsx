@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { ElementNameInput } from '@/components/inspection/element-name-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -741,11 +742,10 @@ export function RepairScopeTable({
                       >
                         Element / lokalizacja
                       </Label>
-                      <Input
-                        id={`element-${item.id}`}
+                      <ElementNameInput
                         value={item.element_name || ''}
-                        onChange={(e) =>
-                          handleUpdate(item.id, 'element_name', e.target.value || null)
+                        onChange={(v) =>
+                          handleUpdate(item.id, 'element_name', v || null)
                         }
                         placeholder="np. Fundament, Wieża"
                         className="h-8 text-sm"
