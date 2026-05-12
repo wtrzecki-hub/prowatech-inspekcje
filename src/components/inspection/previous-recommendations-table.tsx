@@ -15,6 +15,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { ElementNameInput } from '@/components/inspection/element-name-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { COMPLETION_STATUSES } from '@/lib/constants'
@@ -903,6 +904,38 @@ export function PreviousRecommendationsTable({
             })
           }
         }
+
+        // Propagacja do scope_item zmian element_name / work_kind /
+        // urgency_level w już-carry'owanym prev_rec. Uwaga Artura 2026-05-12:
+        // gdy inspektor uzupełnia "Element / lokalizacja" w prev_rec
+        // (legacy hpr nie ma element_name), wartość ma się pojawiać w
+        // scope_item z bieżącej kontroli. `ensureCarryToScope` ma logikę
+        // backfill NULL-only — nie nadpisuje świadomych edycji w scope.
+        if (
+          (field === 'element_name' ||
+            field === 'work_kind' ||
+            field === 'urgency_level') &&
+          value
+        ) {
+          const row = items.find((i) => i.id === id)
+          if (
+            row?.completion_status === 'nie' &&
+            row.source_inspection_type &&
+            row.recommendation_text
+          ) {
+            void ensureCarryToScope(
+              row.recommendation_text,
+              row.source_inspection_type,
+              {
+                work_kind: field === 'work_kind' ? (value as WorkKind) : row.work_kind,
+                urgency_level:
+                  field === 'urgency_level' ? (value as UrgencyLevel) : row.urgency_level,
+                element_name: field === 'element_name' ? value : row.element_name,
+                prevRecId: row.id,
+              }
+            )
+          }
+        }
       } catch (err) {
         console.error('Błąd zapisu:', err)
       } finally {
@@ -1384,12 +1417,9 @@ function RecommendationList({
               >
                 Element / lokalizacja
               </Label>
-              <Input
-                id={`element-${item.id}`}
+              <ElementNameInput
                 value={item.element_name || ''}
-                onChange={(e) =>
-                  onUpdate(item.id, 'element_name', e.target.value)
-                }
+                onChange={(v) => onUpdate(item.id, 'element_name', v)}
                 placeholder="np. Fundament, Wieża segment 2"
                 className="text-sm h-9"
               />
