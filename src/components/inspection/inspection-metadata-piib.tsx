@@ -329,12 +329,25 @@ async function loadDocumentsAutoFill(
   turbineId: string,
   currentInspectionId: string,
 ): Promise<{
-  previous_annual?: string
-  previous_5y?: string
-  electrical_measurements?: string
-  service?: string
+  previous_annual?: DocumentEntry
+  previous_5y?: DocumentEntry
+  electrical_measurements?: DocumentEntry
+  service?: DocumentEntry
 }> {
-  const out: Record<string, string> = {}
+  // Zwracamy DocumentEntry z `status: 'okazano'` + `info` BEZ prefiksu
+  // "Okazano, " — status jest renderowany w lewym Selecie, więc gdyby
+  // został w info, byłby duplikowany (uwaga Artura 2026-05-12).
+  const out: Partial<{
+    previous_annual: DocumentEntry
+    previous_5y: DocumentEntry
+    electrical_measurements: DocumentEntry
+    service: DocumentEntry
+  }> = {}
+
+  const okazanoEntry = (parts: string[]): DocumentEntry => ({
+    status: 'okazano',
+    info: parts.length > 0 ? parts.join(', ') : null,
+  })
 
   // Poprzednia roczna i 5-letnia inspekcja tej turbiny — najpierw nowe
   // inspekcje (status completed/signed), potem fallback do tabeli
@@ -402,21 +415,21 @@ async function loadDocumentsAutoFill(
   }
 
   if (prevAnnual) {
-    const parts: string[] = ['Okazano']
+    const parts: string[] = []
     if (prevAnnual.protocol_number)
       parts.push(`nr ${prevAnnual.protocol_number}`)
     const d = fmtDatePL(prevAnnual.inspection_date)
     if (d) parts.push(`z dnia ${d}`)
-    out.previous_annual = parts.join(', ')
+    out.previous_annual = okazanoEntry(parts)
   }
 
   if (prevFiveYear) {
-    const parts: string[] = ['Okazano']
+    const parts: string[] = []
     if (prevFiveYear.protocol_number)
       parts.push(`nr ${prevFiveYear.protocol_number}`)
     const d = fmtDatePL(prevFiveYear.inspection_date)
     if (d) parts.push(`z dnia ${d}`)
-    out.previous_5y = parts.join(', ')
+    out.previous_5y = okazanoEntry(parts)
   }
 
   // Pomiary elektryczne — najpierw bieżąca inspekcja (jeśli ma podsumowanie
@@ -479,11 +492,11 @@ async function loadDocumentsAutoFill(
   }
 
   if (emProto || emDate) {
-    const parts: string[] = ['Okazano']
+    const parts: string[] = []
     if (emProto) parts.push(`nr ${emProto}`)
     const d = fmtDatePL(emDate)
     if (d) parts.push(`z dnia ${d}`)
-    out.electrical_measurements = parts.join(', ')
+    out.electrical_measurements = okazanoEntry(parts)
   }
 
   // Serwis — z service_info bieżącej inspekcji (cykliczność + protokół).
@@ -508,13 +521,13 @@ async function loadDocumentsAutoFill(
       svcRow.last_service_protocol_number ||
       svcRow.last_service_date)
   ) {
-    const parts: string[] = ['Okazano']
+    const parts: string[] = []
     if (svcRow.last_service_protocol_number)
       parts.push(`nr ${svcRow.last_service_protocol_number}`)
     const d = fmtDatePL(svcRow.last_service_date)
     if (d) parts.push(`z dnia ${d}`)
     if (svcRow.service_company) parts.push(svcRow.service_company)
-    out.service = parts.join(', ')
+    out.service = okazanoEntry(parts)
   }
 
   return out
@@ -752,11 +765,16 @@ export function InspectionMetadataPiib({
             'electrical_measurements',
             'service',
           ] as const) {
-            const proposedInfo = docsAutoFill[key]
-            if (!proposedInfo) continue
+            const proposed = docsAutoFill[key]
+            if (!proposed) continue
             const existing = asEntry(currentDocs[key])
             if (existing.info && existing.info.trim()) continue
-            mergedDocs[key] = { status: existing.status, info: proposedInfo }
+            // status: zachowaj świadomy wybór inspektora (np. "nie_okazano"),
+            // inaczej weź z proposed ('okazano' z auto-fill).
+            mergedDocs[key] = {
+              status: existing.status ?? proposed.status,
+              info: proposed.info,
+            }
             docsChanged = true
           }
 
