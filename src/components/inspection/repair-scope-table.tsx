@@ -25,6 +25,14 @@ import { Textarea } from '@/components/ui/textarea'
 
 type WorkKind = 'K' | 'NB' | 'NG'
 type UrgencyLevel = 'I' | 'II' | 'III' | 'IV'
+/**
+ * Source-of-truth dla badge'a "skąd pochodzi pozycja":
+ * - 'annual' / 'five_year' = pozycja powstała przez auto-carry po zaznaczeniu
+ *   "Nie wykonano" w previous_recommendations odpowiedniego typu
+ * - 'both' = upgrade gdy ten sam tekst zaznaczono Nie w obu sekcjach
+ * - null = manual / legacy / z elementów (brak badge'a)
+ */
+type SourcePreviousType = 'annual' | 'five_year' | 'both'
 
 interface RepairScopeItem {
   id: string
@@ -39,6 +47,13 @@ interface RepairScopeItem {
   is_completed: boolean
   completion_date: string | null
   completion_notes: string | null
+  source_previous_type: SourcePreviousType | null
+}
+
+const SOURCE_PREVIOUS_LABELS: Record<SourcePreviousType, string> = {
+  annual: '↪ z kontroli rocznej',
+  five_year: '↪ z kontroli 5-letniej',
+  both: '↪ z obu poprzednich kontroli',
 }
 
 const WORK_KIND_OPTIONS: Array<{ value: WorkKind; label: string }> = [
@@ -148,7 +163,17 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
     try {
       const sb = supabase()
 
+      type ImportCandidate = {
+        text: string
+        element_name: string | null
+        work_kind: WorkKind | null
+        urgency_level: UrgencyLevel | null
+      }
+
       // 1. Z elementów inspekcji (sekcja „Zalecenia" w karcie elementu).
+      // Element name z definicji idzie do KOLUMNY `element_name` (osobny input
+      // w UI), a nie jako prefiks w opisie — żeby po imporcie inspektor od
+      // razu widział wypełnione pole „Element / lokalizacja".
       const { data: elementsData } = await sb
         .from('inspection_elements')
         .select(
@@ -161,54 +186,69 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
         recommendations: string | null
         definition: { element_number: number | null; name_pl: string | null } | null
       }
-      const fromElements: string[] = []
+      const fromElements: ImportCandidate[] = []
       for (const row of (elementsData || []) as unknown as ElRow[]) {
         const rec = row.recommendations?.trim()
         if (!rec) continue
         const num = row.definition?.element_number
         const namePl = row.definition?.name_pl
-        const prefix =
+        const elementLabel =
           num != null && namePl
-            ? `[${num}. ${namePl}] `
+            ? `${num}. ${namePl}`
             : namePl
-              ? `[${namePl}] `
-              : ''
+              ? namePl
+              : null
         // Każda linia w polu = osobna pozycja (jeśli user listuje punktami).
         const lines = rec
           .split(/\r?\n+/)
           .map((s) => s.trim())
           .filter((s) => s.length > 0)
         for (const line of lines) {
-          fromElements.push(prefix + line)
+          fromElements.push({
+            text: line,
+            element_name: elementLabel,
+            work_kind: null,
+            urgency_level: null,
+          })
         }
       }
 
-      // 2. Legacy repair_recommendations (stary formularz).
+      // 2. Legacy repair_recommendations (stary formularz). Przenosimy też
+      //    `repair_type` (K/NB/NG) i `urgency_level` (I-IV) — kolumny w tabeli
+      //    docelowej istnieją (work_kind, urgency_level), więc inspektor nie
+      //    musi ich klikać ręcznie po imporcie.
       const { data: legacyData } = await sb
         .from('repair_recommendations')
-        .select('scope_description, element_name')
+        .select('scope_description, element_name, repair_type, urgency_level')
         .eq('inspection_id', inspectionId)
 
-      const fromLegacy: string[] = []
+      const fromLegacy: ImportCandidate[] = []
       for (const row of (legacyData || []) as Array<{
         scope_description: string | null
         element_name: string | null
+        repair_type: WorkKind | null
+        urgency_level: UrgencyLevel | null
       }>) {
         const desc = row.scope_description?.trim()
         if (!desc) continue
-        const prefix = row.element_name?.trim() ? `[${row.element_name.trim()}] ` : ''
-        fromLegacy.push(prefix + desc)
+        fromLegacy.push({
+          text: desc,
+          element_name: row.element_name?.trim() || null,
+          work_kind: row.repair_type ?? null,
+          urgency_level: row.urgency_level ?? null,
+        })
       }
 
-      // Łączymy + de-duplikat (po samym tekście).
+      // Łączymy + de-duplikat (po samym tekście). Przy konflikcie pierwsze
+      // wystąpienie wygrywa — elements (z definicji) przed legacy.
       const seen = new Set<string>()
-      const candidates: string[] = []
-      for (const t of [...fromElements, ...fromLegacy]) {
-        const norm = t.trim()
+      const candidates: ImportCandidate[] = []
+      for (const c of [...fromElements, ...fromLegacy]) {
+        const norm = c.text.trim()
         if (!norm) continue
         if (seen.has(norm)) continue
         seen.add(norm)
-        candidates.push(norm)
+        candidates.push({ ...c, text: norm })
       }
 
       // Pomiń te które już są w repair_scope_items (po opisie).
@@ -221,7 +261,7 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
           (e.scope_description || '').trim(),
         ),
       )
-      const fresh = candidates.filter((c) => !existingSet.has(c))
+      const fresh = candidates.filter((c) => !existingSet.has(c.text))
 
       if (fresh.length === 0) {
         if (!options.silent) {
@@ -235,10 +275,13 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
       // INSERT
       const baseNumber =
         items.length > 0 ? Math.max(...items.map((i) => i.item_number)) : 0
-      const toInsert = fresh.map((text, idx) => ({
+      const toInsert = fresh.map((c, idx) => ({
         inspection_id: inspectionId,
         item_number: baseNumber + idx + 1,
-        scope_description: text,
+        scope_description: c.text,
+        element_name: c.element_name,
+        work_kind: c.work_kind,
+        urgency_level: c.urgency_level,
         deadline_text: null,
         deadline_date: null,
         is_completed: false,
@@ -528,12 +571,22 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
                 </div>
                 <div className="col-span-6 space-y-2">
                   <div className="space-y-1">
-                    <Label
-                      htmlFor={`scope-${item.id}`}
-                      className="text-xs text-graphite-500"
-                    >
-                      Zakres czynności
-                    </Label>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <Label
+                        htmlFor={`scope-${item.id}`}
+                        className="text-xs text-graphite-500"
+                      >
+                        Zakres czynności
+                      </Label>
+                      {item.source_previous_type && (
+                        <span
+                          className="inline-flex items-center text-[11px] font-medium px-1.5 py-0.5 rounded bg-info-50 text-info-800 border border-info-100"
+                          title="Pozycja przeniesiona automatycznie po zaznaczeniu Nie wykonano w zaleceniach z poprzedniej kontroli"
+                        >
+                          {SOURCE_PREVIOUS_LABELS[item.source_previous_type]}
+                        </span>
+                      )}
+                    </div>
                     <Textarea
                       id={`scope-${item.id}`}
                       value={item.scope_description}

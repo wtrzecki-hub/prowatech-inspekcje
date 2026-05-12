@@ -168,10 +168,9 @@ export async function GET(
           location_address, tower_height_m, hub_height_m, rotor_diameter_m,
           building_permit_number, building_permit_date, commissioning_year,
           tower_construction_type,
-          tower_segments_count, nacelle_material, blade_material,
-          foundation_diameter_m, foundation_depth_m, foundation_concrete_class,
+          tower_segments_count,
+          foundation_diameter_m, foundation_depth_m,
           pedestal_height_m, service_crane_capacity_t,
-          mv_cable_type, mv_cable_length_m,
           has_as_built_documentation, has_building_log_book,
           photo_url, photo_url_2, photo_url_3,
           wind_farms (
@@ -257,20 +256,22 @@ export async function GET(
       ? await supabase
           .from('turbine_udt_devices')
           .select(
-            'device_type, manufacturer, model, capacity_t, is_udt_subject, inspection_frequency, certificate_number, last_inspection_date, next_inspection_date, notes, sort_order'
+            'device_type, manufacturer, model, capacity_t, is_udt_subject, inspection_frequency, certificate_number, last_inspection_date, next_inspection_date, notes, sort_order, data_status'
           )
           .eq('turbine_id', turbineId)
           .eq('is_deleted', false)
+          .neq('data_status', 'nieaktualne')
           .order('sort_order', { ascending: true })
       : { data: null }
     const { data: rescueEquipment } = turbineId
       ? await supabase
           .from('turbine_rescue_equipment')
           .select(
-            'equipment_type, manufacturer, model, inspection_frequency, last_inspection_date, next_inspection_date, description, notes, sort_order'
+            'equipment_type, manufacturer, model, inspection_frequency, last_inspection_date, next_inspection_date, description, notes, sort_order, data_status'
           )
           .eq('turbine_id', turbineId)
           .eq('is_deleted', false)
+          .neq('data_status', 'nieaktualne')
           .order('sort_order', { ascending: true })
       : { data: null }
 
@@ -598,11 +599,15 @@ export async function GET(
     }
 
     const addKeyValueTable = (rows: { label: string; value: string }[]) => {
+      // Pomijamy wiersze z pustym value — nie chcemy wyświetlać niewypełnionych
+      // pól (zwłaszcza pól turbiny w sekcji "Dane techniczne") w protokole.
+      const filledRows = rows.filter((r) => r.value && r.value.trim())
+      if (filledRows.length === 0) return
       ensureSpace(40)
       ;(pdf as any).autoTable({
         startY: yPosition,
         margin: margin,
-        body: rows.map((r) => [r.label, r.value || '-']),
+        body: filledRows.map((r) => [r.label, r.value]),
         styles: {
           font: 'Roboto',
           fontSize: 9,
@@ -1155,39 +1160,11 @@ export async function GET(
           label: 'Wysokość cokołu',
           value: fmtNum(turbine.pedestal_height_m, 'm'),
         })
-      if (turbine?.foundation_concrete_class)
-        techRows.push({
-          label: 'Klasa betonu fundamentu',
-          value: turbine.foundation_concrete_class,
-        })
-      if (turbine?.nacelle_material)
-        techRows.push({
-          label: 'Materiał gondoli',
-          value: turbine.nacelle_material,
-        })
-      if (turbine?.blade_material)
-        techRows.push({
-          label: 'Materiał łopat',
-          value: turbine.blade_material,
-        })
       if (turbine?.service_crane_capacity_t)
         techRows.push({
           label: 'Udźwig dźwigu/wciągarki serwisowej',
           value: fmtNum(turbine.service_crane_capacity_t, 't'),
         })
-      if (turbine?.mv_cable_type || turbine?.mv_cable_length_m) {
-        techRows.push({
-          label: 'Wyposażenie instalacyjne — kabel SN',
-          value: [
-            turbine.mv_cable_type,
-            turbine.mv_cable_length_m
-              ? `dł. ${turbine.mv_cable_length_m} m`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(', '),
-        })
-      }
       if (techRows.length > 0) {
         addSection('Opis techniczny obiektu')
         addKeyValueTable(techRows)

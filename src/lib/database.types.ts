@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -79,6 +79,56 @@ export type Database = {
             columns: ["inspection_id"]
             isOneToOne: false
             referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_representatives: {
+        Row: {
+          client_id: string
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          is_active: boolean
+          is_deleted: boolean
+          notes: string | null
+          phone: string | null
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean
+          is_deleted?: boolean
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          is_deleted?: boolean
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_representatives_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -406,6 +456,50 @@ export type Database = {
           },
         ]
       }
+      historical_protocol_recommendations: {
+        Row: {
+          created_at: string
+          historical_protocol_id: string
+          id: string
+          item_number: number
+          recommendation_text: string
+          repair_type: string | null
+          source: string | null
+          updated_at: string
+          urgency: string | null
+        }
+        Insert: {
+          created_at?: string
+          historical_protocol_id: string
+          id?: string
+          item_number: number
+          recommendation_text: string
+          repair_type?: string | null
+          source?: string | null
+          updated_at?: string
+          urgency?: string | null
+        }
+        Update: {
+          created_at?: string
+          historical_protocol_id?: string
+          id?: string
+          item_number?: number
+          recommendation_text?: string
+          repair_type?: string | null
+          source?: string | null
+          updated_at?: string
+          urgency?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historical_protocol_recommendations_historical_protocol_id_fkey"
+            columns: ["historical_protocol_id"]
+            isOneToOne: false
+            referencedRelation: "historical_protocols"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       historical_protocols: {
         Row: {
           file_size_bytes: number | null
@@ -680,6 +774,135 @@ export type Database = {
           },
         ]
       }
+      inspection_measurement_devices: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          inspection_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          inspection_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          inspection_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_measurement_devices_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "measurement_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_measurement_devices_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_measurement_devices_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_measurement_performers: {
+        Row: {
+          created_at: string
+          id: string
+          inspection_id: string
+          inspector_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inspection_id: string
+          inspector_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inspection_id?: string
+          inspector_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_measurement_performers_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_measurement_performers_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_measurement_performers_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_participants: {
+        Row: {
+          created_at: string
+          id: string
+          inspection_id: string
+          representative_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inspection_id: string
+          representative_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inspection_id?: string
+          representative_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_participants_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_participants_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "v_inspection_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_participants_representative_id_fkey"
+            columns: ["representative_id"]
+            isOneToOne: false
+            referencedRelation: "client_representatives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspection_photos: {
         Row: {
           created_at: string
@@ -761,7 +984,19 @@ export type Database = {
           contractor_info: string | null
           created_at: string
           created_by: string | null
+          documentation_verification_findings: string | null
           documents_reviewed: Json | null
+          electrical_measurement_date: string | null
+          electrical_measurement_final_assessment: string | null
+          electrical_measurement_notes: string | null
+          electrical_measurement_protocol_number: string | null
+          electrical_measurement_protocol_url: string | null
+          electrical_measurement_verdict: string | null
+          electrical_measurement_verdict_notes: string | null
+          electrical_next_measurement_date: string | null
+          electrical_visual_inspection_notes: string | null
+          electrical_visual_inspection_result: string | null
+          environmental_protection_findings: string | null
           general_findings_intro: string | null
           generated_pdf_url: string | null
           google_drive_folder_url: string | null
@@ -774,6 +1009,8 @@ export type Database = {
           is_deleted: boolean
           kob_entries_summary: string | null
           legal_basis: string | null
+          lightning_visual_inspection_notes: string | null
+          lightning_visual_inspection_result: string | null
           manager_name: string | null
           next_annual_date: string | null
           next_electrical_date: string | null
@@ -801,6 +1038,7 @@ export type Database = {
           status: Database["public"]["Enums"]["inspection_status"]
           turbine_id: string
           updated_at: string
+          weather_exposure_methods: string | null
         }
         Insert: {
           additional_participants?: string | null
@@ -808,7 +1046,19 @@ export type Database = {
           contractor_info?: string | null
           created_at?: string
           created_by?: string | null
+          documentation_verification_findings?: string | null
           documents_reviewed?: Json | null
+          electrical_measurement_date?: string | null
+          electrical_measurement_final_assessment?: string | null
+          electrical_measurement_notes?: string | null
+          electrical_measurement_protocol_number?: string | null
+          electrical_measurement_protocol_url?: string | null
+          electrical_measurement_verdict?: string | null
+          electrical_measurement_verdict_notes?: string | null
+          electrical_next_measurement_date?: string | null
+          electrical_visual_inspection_notes?: string | null
+          electrical_visual_inspection_result?: string | null
+          environmental_protection_findings?: string | null
           general_findings_intro?: string | null
           generated_pdf_url?: string | null
           google_drive_folder_url?: string | null
@@ -821,6 +1071,8 @@ export type Database = {
           is_deleted?: boolean
           kob_entries_summary?: string | null
           legal_basis?: string | null
+          lightning_visual_inspection_notes?: string | null
+          lightning_visual_inspection_result?: string | null
           manager_name?: string | null
           next_annual_date?: string | null
           next_electrical_date?: string | null
@@ -848,6 +1100,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["inspection_status"]
           turbine_id: string
           updated_at?: string
+          weather_exposure_methods?: string | null
         }
         Update: {
           additional_participants?: string | null
@@ -855,7 +1108,19 @@ export type Database = {
           contractor_info?: string | null
           created_at?: string
           created_by?: string | null
+          documentation_verification_findings?: string | null
           documents_reviewed?: Json | null
+          electrical_measurement_date?: string | null
+          electrical_measurement_final_assessment?: string | null
+          electrical_measurement_notes?: string | null
+          electrical_measurement_protocol_number?: string | null
+          electrical_measurement_protocol_url?: string | null
+          electrical_measurement_verdict?: string | null
+          electrical_measurement_verdict_notes?: string | null
+          electrical_next_measurement_date?: string | null
+          electrical_visual_inspection_notes?: string | null
+          electrical_visual_inspection_result?: string | null
+          environmental_protection_findings?: string | null
           general_findings_intro?: string | null
           generated_pdf_url?: string | null
           google_drive_folder_url?: string | null
@@ -868,6 +1133,8 @@ export type Database = {
           is_deleted?: boolean
           kob_entries_summary?: string | null
           legal_basis?: string | null
+          lightning_visual_inspection_notes?: string | null
+          lightning_visual_inspection_result?: string | null
           manager_name?: string | null
           next_annual_date?: string | null
           next_electrical_date?: string | null
@@ -895,6 +1162,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["inspection_status"]
           turbine_id?: string
           updated_at?: string
+          weather_exposure_methods?: string | null
         }
         Relationships: [
           {
@@ -1030,6 +1298,54 @@ export type Database = {
           },
         ]
       }
+      measurement_devices: {
+        Row: {
+          calibration_certificate_number: string | null
+          calibration_date: string | null
+          calibration_expiry_date: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          is_deleted: boolean
+          manufacturer: string | null
+          model: string
+          notes: string | null
+          serial_number: string
+          updated_at: string
+        }
+        Insert: {
+          calibration_certificate_number?: string | null
+          calibration_date?: string | null
+          calibration_expiry_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_deleted?: boolean
+          manufacturer?: string | null
+          model: string
+          notes?: string | null
+          serial_number: string
+          updated_at?: string
+        }
+        Update: {
+          calibration_certificate_number?: string | null
+          calibration_date?: string | null
+          calibration_expiry_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_deleted?: boolean
+          manufacturer?: string | null
+          model?: string
+          notes?: string | null
+          serial_number?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       previous_recommendations: {
         Row: {
           completion_status: string | null
@@ -1039,6 +1355,7 @@ export type Database = {
           item_number: number
           recommendation_text: string | null
           remarks: string | null
+          source_inspection_type: string | null
         }
         Insert: {
           completion_status?: string | null
@@ -1048,6 +1365,7 @@ export type Database = {
           item_number: number
           recommendation_text?: string | null
           remarks?: string | null
+          source_inspection_type?: string | null
         }
         Update: {
           completion_status?: string | null
@@ -1057,6 +1375,7 @@ export type Database = {
           item_number?: number
           recommendation_text?: string | null
           remarks?: string | null
+          source_inspection_type?: string | null
         }
         Relationships: [
           {
@@ -1191,12 +1510,16 @@ export type Database = {
           created_at: string | null
           deadline_date: string | null
           deadline_text: string | null
+          element_name: string | null
           id: string
           inspection_id: string
           is_completed: boolean | null
           item_number: number
           scope_description: string
+          source_previous_type: string | null
           updated_at: string | null
+          urgency_level: string | null
+          work_kind: string | null
         }
         Insert: {
           completion_date?: string | null
@@ -1204,12 +1527,16 @@ export type Database = {
           created_at?: string | null
           deadline_date?: string | null
           deadline_text?: string | null
+          element_name?: string | null
           id?: string
           inspection_id: string
           is_completed?: boolean | null
           item_number: number
           scope_description: string
+          source_previous_type?: string | null
           updated_at?: string | null
+          urgency_level?: string | null
+          work_kind?: string | null
         }
         Update: {
           completion_date?: string | null
@@ -1217,12 +1544,16 @@ export type Database = {
           created_at?: string | null
           deadline_date?: string | null
           deadline_text?: string | null
+          element_name?: string | null
           id?: string
           inspection_id?: string
           is_completed?: boolean | null
           item_number?: number
           scope_description?: string
+          source_previous_type?: string | null
           updated_at?: string | null
+          urgency_level?: string | null
+          work_kind?: string | null
         }
         Relationships: [
           {
@@ -1346,10 +1677,141 @@ export type Database = {
           },
         ]
       }
+      turbine_rescue_equipment: {
+        Row: {
+          created_at: string
+          data_status: string
+          description: string | null
+          equipment_type: string
+          id: string
+          inspection_frequency: string | null
+          is_deleted: boolean
+          last_inspection_date: string | null
+          manufacturer: string | null
+          model: string | null
+          next_inspection_date: string | null
+          notes: string | null
+          sort_order: number
+          turbine_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data_status?: string
+          description?: string | null
+          equipment_type: string
+          id?: string
+          inspection_frequency?: string | null
+          is_deleted?: boolean
+          last_inspection_date?: string | null
+          manufacturer?: string | null
+          model?: string | null
+          next_inspection_date?: string | null
+          notes?: string | null
+          sort_order?: number
+          turbine_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data_status?: string
+          description?: string | null
+          equipment_type?: string
+          id?: string
+          inspection_frequency?: string | null
+          is_deleted?: boolean
+          last_inspection_date?: string | null
+          manufacturer?: string | null
+          model?: string | null
+          next_inspection_date?: string | null
+          notes?: string | null
+          sort_order?: number
+          turbine_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turbine_rescue_equipment_turbine_id_fkey"
+            columns: ["turbine_id"]
+            isOneToOne: false
+            referencedRelation: "turbines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turbine_udt_devices: {
+        Row: {
+          capacity_t: number | null
+          certificate_number: string | null
+          created_at: string
+          data_status: string
+          device_type: string
+          id: string
+          inspection_frequency: string | null
+          is_deleted: boolean
+          is_udt_subject: boolean
+          last_inspection_date: string | null
+          manufacturer: string | null
+          model: string | null
+          next_inspection_date: string | null
+          notes: string | null
+          sort_order: number
+          turbine_id: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_t?: number | null
+          certificate_number?: string | null
+          created_at?: string
+          data_status?: string
+          device_type: string
+          id?: string
+          inspection_frequency?: string | null
+          is_deleted?: boolean
+          is_udt_subject?: boolean
+          last_inspection_date?: string | null
+          manufacturer?: string | null
+          model?: string | null
+          next_inspection_date?: string | null
+          notes?: string | null
+          sort_order?: number
+          turbine_id: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_t?: number | null
+          certificate_number?: string | null
+          created_at?: string
+          data_status?: string
+          device_type?: string
+          id?: string
+          inspection_frequency?: string | null
+          is_deleted?: boolean
+          is_udt_subject?: boolean
+          last_inspection_date?: string | null
+          manufacturer?: string | null
+          model?: string | null
+          next_inspection_date?: string | null
+          notes?: string | null
+          sort_order?: number
+          turbine_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turbine_udt_devices_turbine_id_fkey"
+            columns: ["turbine_id"]
+            isOneToOne: false
+            referencedRelation: "turbines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       turbines: {
         Row: {
           access_road_length_m: number | null
           access_road_width_m: number | null
+          blade_material: string | null
           building_permit_date: string | null
           building_permit_number: string | null
           cadastral_parcel: string | null
@@ -1358,6 +1820,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           ew_designation: string | null
+          foundation_concrete_class: string | null
+          foundation_depth_m: number | null
+          foundation_diameter_m: number | null
           google_drive_folder_url: string | null
           has_as_built_documentation: boolean | null
           has_building_log_book: boolean | null
@@ -1380,10 +1845,12 @@ export type Database = {
           model: string | null
           mv_cable_length_m: number | null
           mv_cable_type: string | null
+          nacelle_material: string | null
           next_five_year_inspection_date: string | null
           next_inspection_date: string | null
           notes: string | null
           operator_name: string | null
+          pedestal_height_m: number | null
           photo_url: string | null
           photo_url_2: string | null
           photo_url_3: string | null
@@ -1392,9 +1859,11 @@ export type Database = {
           rated_power_mw: number | null
           rotor_diameter_m: number | null
           serial_number: string | null
+          service_crane_capacity_t: number | null
           switchgear_station_number: string | null
           tower_construction_type: string | null
           tower_height_m: number | null
+          tower_segments_count: number | null
           turbine_code: string
           updated_at: string
           wind_farm_id: string
@@ -1402,6 +1871,7 @@ export type Database = {
         Insert: {
           access_road_length_m?: number | null
           access_road_width_m?: number | null
+          blade_material?: string | null
           building_permit_date?: string | null
           building_permit_number?: string | null
           cadastral_parcel?: string | null
@@ -1410,6 +1880,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           ew_designation?: string | null
+          foundation_concrete_class?: string | null
+          foundation_depth_m?: number | null
+          foundation_diameter_m?: number | null
           google_drive_folder_url?: string | null
           has_as_built_documentation?: boolean | null
           has_building_log_book?: boolean | null
@@ -1432,10 +1905,12 @@ export type Database = {
           model?: string | null
           mv_cable_length_m?: number | null
           mv_cable_type?: string | null
+          nacelle_material?: string | null
           next_five_year_inspection_date?: string | null
           next_inspection_date?: string | null
           notes?: string | null
           operator_name?: string | null
+          pedestal_height_m?: number | null
           photo_url?: string | null
           photo_url_2?: string | null
           photo_url_3?: string | null
@@ -1444,9 +1919,11 @@ export type Database = {
           rated_power_mw?: number | null
           rotor_diameter_m?: number | null
           serial_number?: string | null
+          service_crane_capacity_t?: number | null
           switchgear_station_number?: string | null
           tower_construction_type?: string | null
           tower_height_m?: number | null
+          tower_segments_count?: number | null
           turbine_code: string
           updated_at?: string
           wind_farm_id: string
@@ -1454,6 +1931,7 @@ export type Database = {
         Update: {
           access_road_length_m?: number | null
           access_road_width_m?: number | null
+          blade_material?: string | null
           building_permit_date?: string | null
           building_permit_number?: string | null
           cadastral_parcel?: string | null
@@ -1462,6 +1940,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           ew_designation?: string | null
+          foundation_concrete_class?: string | null
+          foundation_depth_m?: number | null
+          foundation_diameter_m?: number | null
           google_drive_folder_url?: string | null
           has_as_built_documentation?: boolean | null
           has_building_log_book?: boolean | null
@@ -1484,10 +1965,12 @@ export type Database = {
           model?: string | null
           mv_cable_length_m?: number | null
           mv_cable_type?: string | null
+          nacelle_material?: string | null
           next_five_year_inspection_date?: string | null
           next_inspection_date?: string | null
           notes?: string | null
           operator_name?: string | null
+          pedestal_height_m?: number | null
           photo_url?: string | null
           photo_url_2?: string | null
           photo_url_3?: string | null
@@ -1496,9 +1979,11 @@ export type Database = {
           rated_power_mw?: number | null
           rotor_diameter_m?: number | null
           serial_number?: string | null
+          service_crane_capacity_t?: number | null
           switchgear_station_number?: string | null
           tower_construction_type?: string | null
           tower_height_m?: number | null
+          tower_segments_count?: number | null
           turbine_code?: string
           updated_at?: string
           wind_farm_id?: string
@@ -1859,3 +2344,4 @@ export const Constants = {
     },
   },
 } as const
+

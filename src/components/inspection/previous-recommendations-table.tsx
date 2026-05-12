@@ -119,6 +119,118 @@ export function PreviousRecommendationsTable({
 
   const supabase = () => createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+  /**
+   * Normalizuje tekst zalecenia dla potrzeb dedupu cross-source:
+   * - usuwa leading "N. " numerator (legacy scope ma "1. Wykonać…", prev_rec nie)
+   * - usuwa trailing " (K|NB|NG)" suffix (legacy ma "(K)" na końcu, prev_rec nie)
+   * - case-insensitive
+   *
+   * Bez tego dedup nie łapie matchy gdy prev_rec wstawiony bez prefiksu/sufiksu
+   * trafia obok scope item z legacy-import format.
+   */
+  const normalizeForCarryDedup = (text: string | null | undefined): string => {
+    if (!text) return ''
+    return text
+      .trim()
+      .replace(/^\d+\.\s+/, '')
+      .replace(/\s*\((?:K|NB|NG)\)\s*$/i, '')
+      .trim()
+      .toLowerCase()
+  }
+
+  /**
+   * Auto-carry: zaznaczenie "nie wykonano" w previous_recommendations
+   * przepisuje pozycję do `repair_scope_items` bieżącej inspekcji.
+   *
+   * Dedup po znormalizowanym tekście (patrz normalizeForCarryDedup):
+   * - jeśli `source_previous_type` jest `NULL` (legacy import / element /
+   *   manual) → upgrade na `forType` — wiedza "z której kontroli" jest
+   *   wartościowa, NULL znaczy "nie wiemy", a teraz wiemy
+   * - jeśli `source_previous_type` === forType → nic
+   * - jeśli to inny typ i nie 'both' → upgrade na 'both'
+   * - jeśli 'both' → nic
+   *
+   * Brak pozycji → INSERT z source_previous_type=forType, item_number=max+1.
+   *
+   * Reverse direction (zmiana 'nie' → coś innego) nie usuwa pozycji ze scope —
+   * inspektor mógł już dopisać terminy/zdjęcia.
+   */
+  const ensureCarryToScope = async (
+    rawText: string | null,
+    forType: SourceType
+  ): Promise<void> => {
+    const text = rawText?.trim()
+    if (!text) return
+    const normText = normalizeForCarryDedup(text)
+    if (!normText) return
+
+    try {
+      const sb = supabase()
+
+      const { data: existing, error: selErr } = await sb
+        .from('repair_scope_items')
+        .select('id, scope_description, source_previous_type')
+        .eq('inspection_id', inspectionId)
+      if (selErr) throw selErr
+
+      const match = (
+        (existing || []) as Array<{
+          id: string
+          scope_description: string | null
+          source_previous_type: string | null
+        }>
+      ).find((r) => normalizeForCarryDedup(r.scope_description) === normText)
+
+      if (match) {
+        const cur = match.source_previous_type as
+          | 'annual'
+          | 'five_year'
+          | 'both'
+          | null
+        // NULL → forType: backfill informacji o pochodzeniu (legacy/manual
+        // do tej pory nie wiedziało skąd przyszło — teraz wiemy).
+        // forType→forType lub 'both' → bez zmian.
+        // Inny typ → 'both' (cross-section confirmation).
+        let nextSource: 'annual' | 'five_year' | 'both' | null = cur
+        if (cur === null) nextSource = forType
+        else if (cur !== forType && cur !== 'both') nextSource = 'both'
+
+        if (nextSource !== cur) {
+          const { error: upErr } = await sb
+            .from('repair_scope_items')
+            .update({ source_previous_type: nextSource })
+            .eq('id', match.id)
+          if (upErr) console.error('Błąd upgrade source_previous_type:', upErr)
+        }
+        return
+      }
+
+      const { data: lastRow } = await sb
+        .from('repair_scope_items')
+        .select('item_number')
+        .eq('inspection_id', inspectionId)
+        .order('item_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const nextNumber =
+        ((lastRow?.item_number as number | undefined) ?? 0) + 1
+
+      const { error: insErr } = await sb
+        .from('repair_scope_items')
+        .insert({
+          inspection_id: inspectionId,
+          item_number: nextNumber,
+          scope_description: text,
+          source_previous_type: forType,
+          is_completed: false,
+        })
+      if (insErr) throw insErr
+    } catch (err) {
+      console.error('Błąd auto-carry do repair_scope_items:', err)
+    }
+  }
+
   const loadItemsAndMaybeAutoImport = async () => {
     try {
       const { data, error } = await supabase()
@@ -358,36 +470,83 @@ export function PreviousRecommendationsTable({
       }
 
       // -------------------------------------------------------------------
-      // Warstwa 3: historical_protocols (archiwum) — PDF-only metadata
-      // Pokazujemy header z datą/protokołem + linkiem do PDF, ale strukturalnych
-      // zaleceń nie wyciągamy (są tylko w PDF — inspektor uzupełnia ręcznie).
+      // Warstwa 3: historical_protocols (archiwum) + historical_protocol_recommendations.
+      // Po sesji 2026-05-10: 1346 strukturalnych zaleceń wyekstrahowanych z xlsx
+      // dostępnych przez FK historical_protocol_recommendations -> historical_protocols.
+      // Bierzemy najnowszy hp danego typu Z ZALECENIAMI (jeśli najnowszy hp
+      // nie ma hpr, cofamy się do starszego). Gdy żaden hp tego typu nie ma
+      // hpr — zostawiamy `historical_meta` (header z PDF, brak strukturalnych)
+      // i fallback do legacy text (warstwa 4).
       // -------------------------------------------------------------------
       if (recommendations.length === 0) {
         const { data: histRows } = await sb
           .from('historical_protocols')
           .select(
-            'id, inspection_date, year, protocol_number, protocol_pdf_url'
+            `id, inspection_date, year, protocol_number, protocol_pdf_url,
+             historical_protocol_recommendations(id, item_number, recommendation_text, repair_type, urgency)`
           )
           .eq('turbine_id', turbineId)
           .eq('inspection_type', forType)
           .order('inspection_date', { ascending: false, nullsFirst: false })
           .order('year', { ascending: false })
-          .limit(1)
+          .limit(20)
 
-        const hist = histRows?.[0] as
-          | {
-              id: string
-              inspection_date: string | null
-              year: number | null
-              protocol_number: string | null
-              protocol_pdf_url: string | null
-            }
-          | undefined
+        type HistRecRow = {
+          id: string
+          item_number: number
+          recommendation_text: string
+          repair_type: string | null
+          urgency: string | null
+        }
+        type HistRow = {
+          id: string
+          inspection_date: string | null
+          year: number | null
+          protocol_number: string | null
+          protocol_pdf_url: string | null
+          historical_protocol_recommendations: HistRecRow[] | null
+        }
+        // Filtruj placeholder "BRAK ZALECEŃ" + dedup po tekście (chroni przed
+        // bugiem 65 kolizji z sesji 2026-05-10 + 195 placeholder-rekordów).
+        const cleanHistRecs = (recs: HistRecRow[] | null): HistRecRow[] => {
+          const filtered = (recs || []).filter((r) => {
+            const t = (r.recommendation_text || '').trim().toLowerCase()
+            if (!t) return false
+            if (t.startsWith('brak zalece') || t.startsWith('brak robót')) return false
+            return true
+          })
+          const seen = new Set<string>()
+          const out: HistRecRow[] = []
+          for (const r of filtered) {
+            const key = r.recommendation_text.trim().toLowerCase()
+            if (seen.has(key)) continue
+            seen.add(key)
+            out.push(r)
+          }
+          return out.sort((a, b) => a.item_number - b.item_number)
+        }
+        const hists = (histRows || []) as HistRow[]
+        const histWithRecs = hists
+          .map((h) => ({ row: h, cleaned: cleanHistRecs(h.historical_protocol_recommendations) }))
+          .find((x) => x.cleaned.length > 0)
+        const histAny = hists[0]
 
-        if (hist) {
-          fromDate = hist.inspection_date
-          fromProtocolNumber = hist.protocol_number
-          pdfUrl = hist.protocol_pdf_url
+        if (histWithRecs) {
+          // Mamy strukturalne zalecenia — używamy ich. Numer/data/PDF z TEGO
+          // protokołu (nie z najnowszego), żeby zachować spójność źródła.
+          fromDate = histWithRecs.row.inspection_date
+          fromProtocolNumber = histWithRecs.row.protocol_number
+          pdfUrl = histWithRecs.row.protocol_pdf_url
+          source = 'previous_inspection'
+          recommendations = histWithRecs.cleaned.map((r) => ({
+            text: r.recommendation_text,
+          }))
+        } else if (histAny) {
+          // Jest najnowszy hp ale bez hpr — zostawiamy meta (header + PDF link),
+          // strukturalnych zaleceń nie ekstrahujemy z PDF.
+          fromDate = histAny.inspection_date
+          fromProtocolNumber = histAny.protocol_number
+          pdfUrl = histAny.protocol_pdf_url
           source = 'historical_meta'
         }
       }
@@ -512,6 +671,16 @@ export function PreviousRecommendationsTable({
       const newItems = (inserted || []) as PreviousRecommendation[]
       setItems((prev) => [...prev, ...newItems])
 
+      // Auto-carry: pozycje wstawione od razu ze statusem 'nie' (z legacy
+      // turbine_findings) liczą się jako "pierwsze zaznaczenie Nie" i lecą
+      // do repair_scope_items. Sekwencyjnie, bo ensureCarryToScope wewnątrz
+      // robi SELECT+INSERT i każdy kolejny call musi widzieć stan po poprzednim.
+      for (const it of newItems) {
+        if (it.completion_status === 'nie' && it.recommendation_text) {
+          await ensureCarryToScope(it.recommendation_text, forType)
+        }
+      }
+
       // Renumber sekcji po imporcie — pewność że numeracja jest 1..N.
       await renumberSection(sb, forType)
 
@@ -568,6 +737,18 @@ export function PreviousRecommendationsTable({
           .update({ [field]: value || null })
           .eq('id', id)
         if (error) throw error
+
+        // Auto-carry: zaznaczenie "nie wykonano" przepisuje pozycję do
+        // repair_scope_items (z dedupem po tekście). Closure-captured `items`
+        // ma aktualny tekst — wystarczy do tej operacji. Reverse (zmiana
+        // statusu z 'nie' na inny) NIE usuwa pozycji ze scope.
+        if (field === 'completion_status' && value === 'nie') {
+          const row = items.find((i) => i.id === id)
+          const sourceType = row?.source_inspection_type
+          if (sourceType && row?.recommendation_text) {
+            void ensureCarryToScope(row.recommendation_text, sourceType)
+          }
+        }
       } catch (err) {
         console.error('Błąd zapisu:', err)
       } finally {

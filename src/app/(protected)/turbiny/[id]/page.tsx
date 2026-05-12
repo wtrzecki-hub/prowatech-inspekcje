@@ -68,15 +68,10 @@ interface Turbine {
   building_permit_date: string | null
   // Opis techniczny rozszerzony (audyt 5L pkt 6)
   tower_segments_count: number | null
-  nacelle_material: string | null
-  blade_material: string | null
   foundation_diameter_m: number | null
   foundation_depth_m: number | null
-  foundation_concrete_class: string | null
   pedestal_height_m: number | null
   service_crane_capacity_t: number | null
-  mv_cable_type: string | null
-  mv_cable_length_m: number | null
   location_address: string
   cadastral_parcel: string
   latitude: number | null
@@ -137,6 +132,7 @@ interface InspectionHistoryRow {
   protocol_number: string | null
   inspection_date: string | null
   inspection_type: 'annual' | 'five_year'
+  status: 'draft' | 'in_progress' | 'completed' | 'signed' | null
   overall_condition_rating: RatingKey | null
   next_annual_date: string | null
   next_five_year_date: string | null
@@ -196,6 +192,33 @@ interface HistoricalRow {
   notes: string | null
 }
 
+// Zalecenia z archiwum (xlsx 2026-05-10) wystawione per typ kontroli na karcie turbiny.
+// FK: historical_protocol_recommendations -> historical_protocols.
+type RepairTypeKey = 'K' | 'NB' | 'NG'
+
+const REPAIR_TYPE_UI: Record<RepairTypeKey, { bg: string; text: string; label: string }> = {
+  K: { bg: 'bg-graphite-100', text: 'text-graphite-800', label: 'K · konserwacja' },
+  NB: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'NB · naprawa bieżąca' },
+  NG: { bg: 'bg-danger-50', text: 'text-danger-800', label: 'NG · naprawa główna' },
+}
+
+interface ArchiveRecItem {
+  id: string
+  item_number: number
+  recommendation_text: string
+  repair_type: RepairTypeKey | null
+  urgency: UrgencyKey | null
+}
+
+interface ArchiveProtocolWithRecs {
+  protocol_id: string
+  protocol_number: string | null
+  inspection_date: string | null
+  inspection_type: 'annual' | 'five_year'
+  protocol_pdf_url: string | null
+  recommendations: ArchiveRecItem[]
+}
+
 interface CertInspectorRow {
   id: string
   full_name: string
@@ -225,6 +248,8 @@ export default function TurbineDetailPage() {
   const [photos, setPhotos] = useState<InspectionPhotoRow[]>([])
   const [certInspectors, setCertInspectors] = useState<CertInspectorRow[]>([])
   const [historical, setHistorical] = useState<HistoricalRow[]>([])
+  const [archiveAnnual, setArchiveAnnual] = useState<ArchiveProtocolWithRecs | null>(null)
+  const [archiveFiveYear, setArchiveFiveYear] = useState<ArchiveProtocolWithRecs | null>(null)
 
   useEffect(() => {
     fetchTurbineData()
@@ -235,6 +260,7 @@ export default function TurbineDetailPage() {
     fetchPhotos()
     fetchCertInspectors()
     fetchHistorical()
+    fetchArchiveRecommendations()
   }, [turbineId])
 
   async function fetchUserRole() {
@@ -305,6 +331,7 @@ export default function TurbineDetailPage() {
           protocol_number,
           inspection_date,
           inspection_type,
+          status,
           overall_condition_rating,
           next_annual_date,
           next_five_year_date,
@@ -338,6 +365,89 @@ export default function TurbineDetailPage() {
       setHistorical((data || []) as HistoricalRow[])
     } catch (e) {
       console.error('Error fetching historical protocols:', e)
+    }
+  }
+
+  // Pobiera ostatni archiwalny protokół danego typu (annual / five_year) wraz
+  // ze strukturalnymi zaleceniami z `historical_protocol_recommendations`
+  // (xlsx 2026-05-10). Bierzemy najnowszy hp Z ZALECENIAMI — jeśli najnowszy
+  // hp jest tylko PDF-em bez ekstrakcji, cofamy się do starszego, który
+  // zalecenia ma. Sekcja w UI nie wyświetla się w ogóle gdy żaden hp tego
+  // typu nie ma `hpr` (wtedy fallback do legacy `previous_findings` zostaje).
+  async function fetchArchiveRecommendations() {
+    const supabase = createClient()
+    for (const t of ['annual', 'five_year'] as const) {
+      try {
+        const { data, error } = await supabase
+          .from('historical_protocols')
+          .select(
+            `id, protocol_number, inspection_date, inspection_type, protocol_pdf_url,
+             historical_protocol_recommendations(id, item_number, recommendation_text, repair_type, urgency)`
+          )
+          .eq('turbine_id', turbineId)
+          .eq('inspection_type', t)
+          .order('inspection_date', { ascending: false, nullsFirst: false })
+          .order('year', { ascending: false })
+          .limit(20)
+        if (error) throw error
+
+        type Row = {
+          id: string
+          protocol_number: string | null
+          inspection_date: string | null
+          inspection_type: 'annual' | 'five_year'
+          protocol_pdf_url: string | null
+          historical_protocol_recommendations: ArchiveRecItem[] | null
+        }
+        const rows = (data || []) as Row[]
+        // Czyścimy hpr per-protokół: (1) odsiewamy placeholder "BRAK ZALECEŃ"
+        // (195 wpisów na 1346 globalnie — sesja 2026-05-10 zaimportowała xlsx
+        // jak był; "Brak zaleceń" to legitymna treść w xlsx, ale w UI to szum);
+        // (2) deduplikujemy po tekście (chroni przed znanym bugiem 65 kolizji
+        // gdzie 3 różne nr protokołu w xlsx zlepiły się w 1 hp_id w DB).
+        const cleanRecs = (recs: ArchiveRecItem[] | null): ArchiveRecItem[] => {
+          const filtered = (recs || []).filter((r) => {
+            const t = (r.recommendation_text || '').trim().toLowerCase()
+            if (!t) return false
+            if (t.startsWith('brak zalece') || t.startsWith('brak robót')) return false
+            return true
+          })
+          const seen = new Set<string>()
+          const out: ArchiveRecItem[] = []
+          for (const r of filtered) {
+            const key = r.recommendation_text.trim().toLowerCase()
+            if (seen.has(key)) continue
+            seen.add(key)
+            out.push(r)
+          }
+          return out.sort((a, b) => a.item_number - b.item_number)
+        }
+
+        const firstWithRecs = rows
+          .map((r) => ({ row: r, cleaned: cleanRecs(r.historical_protocol_recommendations) }))
+          .find((x) => x.cleaned.length > 0)
+
+        if (!firstWithRecs) {
+          if (t === 'annual') setArchiveAnnual(null)
+          else setArchiveFiveYear(null)
+          continue
+        }
+
+        const recs = firstWithRecs.cleaned
+
+        const row: ArchiveProtocolWithRecs = {
+          protocol_id: firstWithRecs.row.id,
+          protocol_number: firstWithRecs.row.protocol_number,
+          inspection_date: firstWithRecs.row.inspection_date,
+          inspection_type: t,
+          protocol_pdf_url: firstWithRecs.row.protocol_pdf_url,
+          recommendations: recs,
+        }
+        if (t === 'annual') setArchiveAnnual(row)
+        else setArchiveFiveYear(row)
+      } catch (e) {
+        console.error(`Error fetching archive recs (${t}):`, e)
+      }
     }
   }
 
@@ -491,9 +601,30 @@ export default function TurbineDetailPage() {
     )
   }
 
-  const isOverdue = turbine.next_inspection_date && new Date(turbine.next_inspection_date) < new Date()
-  const daysUntilInspection = turbine.next_inspection_date
-    ? Math.ceil((new Date(turbine.next_inspection_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  // "Dane kontroli" + banner przeterminowanego przeglądu liczymy z najnowszej
+  // zakończonej inspekcji (signed/completed), nie z denormalized pól na turbines
+  // (turbines.last_*/next_inspection_date często rozjeżdżają się z rzeczywistym
+  // stanem `inspections` — bug niespójności z 2026-05-08).
+  const latestCompletedInspection = inspectionsHistory.find(
+    (i) => i.status === 'signed' || i.status === 'completed'
+  ) || null
+  const computedNextInspectionDate = latestCompletedInspection
+    ? [
+        latestCompletedInspection.next_annual_date,
+        latestCompletedInspection.next_electrical_date,
+        latestCompletedInspection.next_five_year_date,
+      ]
+        .filter((d): d is string => !!d)
+        .sort()[0] ?? null
+    : null
+  const isOverdue =
+    !!computedNextInspectionDate &&
+    new Date(computedNextInspectionDate) < new Date()
+  const daysUntilInspection = computedNextInspectionDate
+    ? Math.ceil(
+        (new Date(computedNextInspectionDate).getTime() - new Date().getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
     : null
 
   const googleMapsUrl = turbine.latitude && turbine.longitude
@@ -518,6 +649,9 @@ export default function TurbineDetailPage() {
         openRecsCount={openRecsCount}
         daysUntilInspection={daysUntilInspection}
         isOverdue={isOverdue}
+        latestInspectionDate={
+          latestCompletedInspection?.inspection_date ?? null
+        }
         canAddInspection={canUpload}
         canEdit={canUpload}
         onAddInspection={() => router.push(`/inspekcje/nowa?turbineId=${turbineId}`)}
@@ -610,7 +744,7 @@ export default function TurbineDetailPage() {
           </Card>
 
           {/* Alert inspekcji (przeterminowany / za 90 dni / OK) */}
-          {turbine.next_inspection_date && (
+          {computedNextInspectionDate && (
             <div className={`flex items-center gap-3 p-4 rounded-xl border ${
               isOverdue
                 ? 'bg-danger-50 border-danger-100 text-danger-800'
@@ -621,8 +755,8 @@ export default function TurbineDetailPage() {
               <AlertTriangle className="h-5 w-5 flex-shrink-0" />
               <p className="text-sm font-medium">
                 {isOverdue
-                  ? `Przegląd przeterminowany! Termin: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')}`
-                  : `Następny przegląd: ${new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')} (za ${daysUntilInspection} dni)`
+                  ? `Przegląd przeterminowany! Termin: ${new Date(computedNextInspectionDate).toLocaleDateString('pl-PL')}`
+                  : `Następny przegląd: ${new Date(computedNextInspectionDate).toLocaleDateString('pl-PL')} (za ${daysUntilInspection} dni)`
                 }
               </p>
             </div>
@@ -704,29 +838,8 @@ export default function TurbineDetailPage() {
                   mono
                 />
                 <InfoItem
-                  label="Klasa betonu fundamentu"
-                  value={turbine.foundation_concrete_class || '-'}
-                />
-                <InfoItem
-                  label="Materiał gondoli"
-                  value={turbine.nacelle_material || '-'}
-                />
-                <InfoItem
-                  label="Materiał łopat"
-                  value={turbine.blade_material || '-'}
-                />
-                <InfoItem
                   label="Udźwig dźwigu serwisowego"
                   value={turbine.service_crane_capacity_t ? `${turbine.service_crane_capacity_t} t` : '-'}
-                  mono
-                />
-                <InfoItem
-                  label="Typ kabla SN"
-                  value={turbine.mv_cable_type || '-'}
-                />
-                <InfoItem
-                  label="Długość kabla SN"
-                  value={turbine.mv_cable_length_m ? `${turbine.mv_cable_length_m} m` : '-'}
                   mono
                 />
               </div>
@@ -790,21 +903,31 @@ export default function TurbineDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 <InfoItem
                   label="Data ostatniego przeglądu"
-                  value={turbine.last_inspection_date
-                    ? new Date(turbine.last_inspection_date).toLocaleDateString('pl-PL')
-                    : 'Brak danych'}
+                  value={
+                    latestCompletedInspection?.inspection_date
+                      ? new Date(
+                          latestCompletedInspection.inspection_date
+                        ).toLocaleDateString('pl-PL')
+                      : 'Brak danych'
+                  }
                   mono
                 />
                 <InfoItem
                   label="Nr protokołu"
-                  value={turbine.last_inspection_protocol || 'Brak danych'}
+                  value={
+                    latestCompletedInspection?.protocol_number || 'Brak danych'
+                  }
                   mono
                 />
                 <InfoItem
                   label="Data następnego przeglądu"
-                  value={turbine.next_inspection_date
-                    ? new Date(turbine.next_inspection_date).toLocaleDateString('pl-PL')
-                    : 'Brak danych'}
+                  value={
+                    computedNextInspectionDate
+                      ? new Date(
+                          computedNextInspectionDate
+                        ).toLocaleDateString('pl-PL')
+                      : 'Brak danych'
+                  }
                   mono
                   danger={!!isOverdue}
                 />
@@ -823,8 +946,24 @@ export default function TurbineDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Ustalenia i zalecenia z ostatniej kontroli (legacy text, zachowane do migracji na repair_recommendations) */}
-          {turbine.previous_findings && turbine.previous_findings !== 'Brak robót' && (
+          {/* Zalecenia z archiwum (xlsx 2026-05-10) — 2 sekcje per typ kontroli.
+              Dane: historical_protocol_recommendations FK → historical_protocols.
+              Sekcja widoczna tylko gdy mamy strukturalne zalecenia w archiwum
+              dla danego typu. Fallback do legacy `previous_findings` poniżej. */}
+          {archiveAnnual && (
+            <ArchiveRecommendationsCard data={archiveAnnual} title="Zalecenia z ostatniej kontroli rocznej" />
+          )}
+          {archiveFiveYear && (
+            <ArchiveRecommendationsCard data={archiveFiveYear} title="Zalecenia z ostatniej kontroli 5-letniej" />
+          )}
+
+          {/* Fallback legacy: pokazujemy tylko gdy ŻADEN z hpr nie wystąpił.
+              218 turbin ma `previous_findings` (text \n-separated), 0 nie ma
+              hpr ale ma legacy → dla tych użytkowników nadal coś widać.
+              Po wgraniu 12 brakujących PDF + sprzątaniu duplikatów `protocol_number`
+              ten fallback w większości zniknie sam. */}
+          {!archiveAnnual && !archiveFiveYear &&
+           turbine.previous_findings && turbine.previous_findings !== 'Brak robót' && (
             <Card className="rounded-xl border border-graphite-200 shadow-xs">
               <CardHeader className="border-b border-graphite-100 pb-4">
                 <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2">
@@ -920,6 +1059,7 @@ function TurbineHero({
   openRecsCount,
   daysUntilInspection,
   isOverdue,
+  latestInspectionDate,
   canAddInspection,
   canEdit,
   onAddInspection,
@@ -929,6 +1069,7 @@ function TurbineHero({
   openRecsCount: number
   daysUntilInspection: number | null
   isOverdue: boolean | null
+  latestInspectionDate: string | null
   canAddInspection: boolean
   canEdit: boolean
   onAddInspection: () => void
@@ -980,7 +1121,7 @@ function TurbineHero({
                     : `Aktywne zalecenia · ${openRecsCount}`}
                 </span>
               )}
-              {turbine.next_inspection_date && daysUntilInspection !== null && (
+              {daysUntilInspection !== null && (
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold font-mono ${
                     isOverdue
@@ -1055,15 +1196,10 @@ function TurbineHero({
                 building_permit_date: turbine.building_permit_date,
                 // Opis techniczny rozszerzony
                 tower_segments_count: turbine.tower_segments_count,
-                nacelle_material: turbine.nacelle_material,
-                blade_material: turbine.blade_material,
                 foundation_diameter_m: turbine.foundation_diameter_m,
                 foundation_depth_m: turbine.foundation_depth_m,
-                foundation_concrete_class: turbine.foundation_concrete_class,
                 pedestal_height_m: turbine.pedestal_height_m,
                 service_crane_capacity_t: turbine.service_crane_capacity_t,
-                mv_cable_type: turbine.mv_cable_type,
-                mv_cable_length_m: turbine.mv_cable_length_m,
               }}
               onSuccess={() => {
                 setIsEditOpen(false)
@@ -1083,9 +1219,11 @@ function TurbineHero({
         <HeroSpec label="Nr seryjny" value={turbine.serial_number || '—'} mono />
         <HeroSpec
           label="Ostatnia kontrola"
-          value={turbine.last_inspection_date
-            ? new Date(turbine.last_inspection_date).toLocaleDateString('pl-PL')
-            : '—'}
+          value={
+            latestInspectionDate
+              ? new Date(latestInspectionDate).toLocaleDateString('pl-PL')
+              : '—'
+          }
           mono
         />
       </div>
@@ -2039,5 +2177,76 @@ function InfoItem({ label, value, mono, danger }: { label: string; value?: strin
         {value || '-'}
       </span>
     </div>
+  )
+}
+
+function ArchiveRecommendationsCard({
+  data,
+  title,
+}: {
+  data: ArchiveProtocolWithRecs
+  title: string
+}) {
+  const dateStr = data.inspection_date
+    ? new Date(data.inspection_date).toLocaleDateString('pl-PL')
+    : null
+
+  return (
+    <Card className="rounded-xl border border-graphite-200 shadow-xs">
+      <CardHeader className="border-b border-graphite-100 pb-4">
+        <CardTitle className="text-[15px] font-bold text-graphite-900 flex items-center gap-2 flex-wrap">
+          <FileText className="h-4 w-4 text-primary-600 shrink-0" />
+          <span>{title}</span>
+          {(data.protocol_number || dateStr) && (
+            <span className="text-[12px] font-normal text-graphite-500 font-mono">
+              {data.protocol_number && <>{data.protocol_number}</>}
+              {data.protocol_number && dateStr && <> · </>}
+              {dateStr && <>{dateStr}</>}
+            </span>
+          )}
+          {data.protocol_pdf_url && (
+            <a
+              href={data.protocol_pdf_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-primary-700 hover:text-primary-800 hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" />
+              otwórz PDF
+            </a>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <ol className="space-y-3">
+          {data.recommendations.map((r) => (
+            <li key={r.id} className="flex gap-3 items-start">
+              <span className="mt-1 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-graphite-100 text-graphite-700 tabular-nums">
+                {r.item_number}
+              </span>
+              <div className="flex-1 min-w-0 space-y-1">
+                <p className="text-sm text-graphite-800">{r.recommendation_text}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {r.repair_type && REPAIR_TYPE_UI[r.repair_type] && (
+                    <span
+                      className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded ${REPAIR_TYPE_UI[r.repair_type].bg} ${REPAIR_TYPE_UI[r.repair_type].text}`}
+                    >
+                      {REPAIR_TYPE_UI[r.repair_type].label}
+                    </span>
+                  )}
+                  {r.urgency && URGENCY_UI[r.urgency] && (
+                    <span
+                      className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded ${URGENCY_UI[r.urgency].bg} ${URGENCY_UI[r.urgency].text}`}
+                    >
+                      Pilność {URGENCY_UI[r.urgency].label}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
   )
 }

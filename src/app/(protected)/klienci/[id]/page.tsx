@@ -68,13 +68,23 @@ function groupFarmsByArea(farms: WindFarm[]): { area: string | null; farms: Wind
   return [...known, ...others, ...noArea]
 }
 
-interface Inspection {
+// Wpis na liście "Ostatnie inspekcje". Łączy nowe `inspections` (3 wpisy w 2026)
+// z archiwum `historical_protocols` (1759 wpisów) — bez archiwum karta
+// klienta dla 99% klientów dziś pokazywałaby "Brak inspekcji" mimo że
+// w bazie są protokoły z 2020-2025.
+type RecentEntrySource = 'inspection' | 'archive'
+
+interface RecentEntry {
+  source: RecentEntrySource
   id: string
-  protocol_number: string
-  inspection_date: string
-  inspection_type: string
-  status: string
-  overall_condition_rating: string
+  protocol_number: string | null
+  inspection_date: string | null
+  inspection_type: string | null
+  status: string | null
+  overall_condition_rating: string | null
+  protocol_pdf_url: string | null
+  turbine_id: string
+  turbine_code: string | null
 }
 
 export default function ClientDetailPage() {
@@ -84,7 +94,7 @@ export default function ClientDetailPage() {
 
   const [client, setClient] = useState<Client | null>(null)
   const [windFarms, setWindFarms] = useState<WindFarm[]>([])
-  const [inspections, setInspections] = useState<Inspection[]>([])
+  const [inspections, setInspections] = useState<RecentEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [isWindFarmDialogOpen, setIsWindFarmDialogOpen] = useState(false)
 
@@ -159,17 +169,91 @@ export default function ClientDetailPage() {
       if (farmsError) throw farmsError
       setWindFarms(farmsData || [])
 
-      const { data: inspectionsData, error: inspectionsError } = await supabase
-        .from('inspections')
-        .select(
-          'id, protocol_number, inspection_date, inspection_type, status, overall_condition_rating'
-        )
-        .in('turbine_id', farmsData?.flatMap(f => (f.turbines || []).map((t: { id: string }) => t.id)) || [])
-        .order('inspection_date', { ascending: false })
-        .limit(5)
+      const turbineIds = farmsData?.flatMap(f => (f.turbines || []).map((t: { id: string }) => t.id)) || []
 
-      if (inspectionsError) throw inspectionsError
-      setInspections(inspectionsData || [])
+      // Łączymy nowe inspekcje + archiwum w jedną listę 5 ostatnich. Każde
+      // źródło fetchowane osobno (różne kolumny) i mergowane po dacie.
+      // Pobieramy więcej niż 5 z każdej strony bo po sortowaniu union-a
+      // może wypaść mieszanka.
+      const [inspectionsResult, historicalResult, turbinesResult] = await Promise.all([
+        supabase
+          .from('inspections')
+          .select('id, protocol_number, inspection_date, inspection_type, status, overall_condition_rating, turbine_id, is_deleted')
+          .in('turbine_id', turbineIds.length ? turbineIds : ['00000000-0000-0000-0000-000000000000'])
+          .order('inspection_date', { ascending: false })
+          .limit(10),
+        supabase
+          .from('historical_protocols')
+          .select('id, protocol_number, inspection_date, inspection_type, protocol_pdf_url, turbine_id')
+          .in('turbine_id', turbineIds.length ? turbineIds : ['00000000-0000-0000-0000-000000000000'])
+          .order('inspection_date', { ascending: false, nullsFirst: false })
+          .limit(10),
+        supabase
+          .from('turbines')
+          .select('id, turbine_code')
+          .in('id', turbineIds.length ? turbineIds : ['00000000-0000-0000-0000-000000000000']),
+      ])
+
+      if (inspectionsResult.error) throw inspectionsResult.error
+      if (historicalResult.error) throw historicalResult.error
+      if (turbinesResult.error) throw turbinesResult.error
+
+      const turbineMap = new Map<string, string>(
+        (turbinesResult.data || []).map((t: { id: string; turbine_code: string | null }) => [t.id, t.turbine_code || ''])
+      )
+
+      const fromInspections: RecentEntry[] = (inspectionsResult.data || [])
+        .filter((r: { is_deleted?: boolean | null }) => !r.is_deleted)
+        .map((r: {
+          id: string
+          protocol_number: string | null
+          inspection_date: string | null
+          inspection_type: string | null
+          status: string | null
+          overall_condition_rating: string | null
+          turbine_id: string
+        }) => ({
+          source: 'inspection' as const,
+          id: r.id,
+          protocol_number: r.protocol_number,
+          inspection_date: r.inspection_date,
+          inspection_type: r.inspection_type,
+          status: r.status,
+          overall_condition_rating: r.overall_condition_rating,
+          protocol_pdf_url: null,
+          turbine_id: r.turbine_id,
+          turbine_code: turbineMap.get(r.turbine_id) || null,
+        }))
+
+      const fromHistorical: RecentEntry[] = (historicalResult.data || []).map((r: {
+        id: string
+        protocol_number: string | null
+        inspection_date: string | null
+        inspection_type: string | null
+        protocol_pdf_url: string | null
+        turbine_id: string
+      }) => ({
+        source: 'archive' as const,
+        id: r.id,
+        protocol_number: r.protocol_number,
+        inspection_date: r.inspection_date,
+        inspection_type: r.inspection_type,
+        status: null,
+        overall_condition_rating: null,
+        protocol_pdf_url: r.protocol_pdf_url,
+        turbine_id: r.turbine_id,
+        turbine_code: turbineMap.get(r.turbine_id) || null,
+      }))
+
+      const merged = [...fromInspections, ...fromHistorical]
+        .sort((a, b) => {
+          const da = a.inspection_date ? new Date(a.inspection_date).getTime() : 0
+          const db = b.inspection_date ? new Date(b.inspection_date).getTime() : 0
+          return db - da
+        })
+        .slice(0, 5)
+
+      setInspections(merged)
 
       // Check if portal account exists for this client
       const { data: existingPortal } = await supabase
@@ -541,40 +625,76 @@ export default function ClientDetailPage() {
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5 px-5">Nr protokołu</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Data</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Typ</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Status</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Ocena</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Turbina</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Źródło</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 py-2.5">Status / Ocena</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inspections.map((inspection) => (
-                  <TableRow
-                    key={inspection.id}
-                    className="cursor-pointer hover:bg-graphite-50/50 transition-colors border-b border-graphite-100 h-[52px]"
-                    onClick={() => router.push(`/inspekcje/${inspection.id}`)}
-                  >
-                    <TableCell className="font-mono font-semibold text-graphite-900 px-5 text-[13px]">
-                      {inspection.protocol_number || '-'}
-                    </TableCell>
-                    <TableCell className="font-mono text-graphite-500 text-[13px]">
-                      {new Date(inspection.inspection_date).toLocaleDateString('pl-PL')}
-                    </TableCell>
-                    <TableCell className="text-graphite-500 text-[13px]">
-                      {inspection.inspection_type === 'annual' ? 'Roczna' : 'Pięcioletnia'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={STATUS_COLORS[inspection.status] || 'bg-graphite-100 text-graphite-800'}>
-                        {INSPECTION_STATUSES.find(s => s.value === inspection.status)?.label || inspection.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {inspection.overall_condition_rating ? (
-                        <RatingBadge rating={inspection.overall_condition_rating as 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny'} />
-                      ) : (
-                        <span className="text-graphite-400 text-sm">-</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {inspections.map((entry) => {
+                  const handleClick = () => {
+                    if (entry.source === 'inspection') {
+                      router.push(`/inspekcje/${entry.id}`)
+                    } else if (entry.protocol_pdf_url) {
+                      window.open(entry.protocol_pdf_url, '_blank', 'noopener,noreferrer')
+                    } else {
+                      router.push(`/turbiny/${entry.turbine_id}`)
+                    }
+                  }
+                  return (
+                    <TableRow
+                      key={`${entry.source}:${entry.id}`}
+                      className="cursor-pointer hover:bg-graphite-50/50 transition-colors border-b border-graphite-100 h-[52px]"
+                      onClick={handleClick}
+                    >
+                      <TableCell className="font-mono font-semibold text-graphite-900 px-5 text-[13px]">
+                        {entry.protocol_number || '-'}
+                      </TableCell>
+                      <TableCell className="font-mono text-graphite-500 text-[13px]">
+                        {entry.inspection_date
+                          ? new Date(entry.inspection_date).toLocaleDateString('pl-PL')
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-graphite-500 text-[13px]">
+                        {entry.inspection_type === 'annual'
+                          ? 'Roczna'
+                          : entry.inspection_type === 'five_year'
+                          ? 'Pięcioletnia'
+                          : entry.inspection_type === 'electrical_measurement'
+                          ? 'Elektryczna'
+                          : entry.inspection_type || '-'}
+                      </TableCell>
+                      <TableCell className="font-mono text-graphite-700 text-[13px]">
+                        {entry.turbine_code || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {entry.source === 'archive' ? (
+                          <Badge className="bg-graphite-100 text-graphite-700 hover:bg-graphite-100">
+                            {entry.protocol_pdf_url ? 'Archiwum' : 'Archiwum (bez PDF)'}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-primary-50 text-primary-700 hover:bg-primary-50">
+                            Inspekcja
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {entry.source === 'inspection' && entry.status ? (
+                          <div className="flex items-center gap-2">
+                            <Badge className={STATUS_COLORS[entry.status] || 'bg-graphite-100 text-graphite-800'}>
+                              {INSPECTION_STATUSES.find(s => s.value === entry.status)?.label || entry.status}
+                            </Badge>
+                            {entry.overall_condition_rating && (
+                              <RatingBadge rating={entry.overall_condition_rating as 'dobry' | 'zadowalajacy' | 'sredni' | 'zly' | 'awaryjny'} />
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-graphite-400 text-sm">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}
