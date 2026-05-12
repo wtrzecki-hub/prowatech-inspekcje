@@ -1,17 +1,22 @@
 /**
  * Buduje nazwę pliku protokołu PDF/DOCX zgodną z konwencją archiwum
  * Prowatech, np.:
+ *   `001_R_2026 Protokół_kontroli_rocznej WTG EW01 Bieganowo 16-04-2026.pdf`
  *   `003_P_2026 Protokół_kontroli_5-letniej WTG EW03 Żeńsko 04-05-2026.pdf`
- *   `58_T_2025 Protokół_kontroli_rocznej WTG EW01 Bieganowo 16-04-2025.pdf`
+ *   `Szkic Protokół_kontroli_rocznej WTG EW Kamlarki 12-05-2026.pdf`
  *
- * Komponenty:
- *   - numer protokołu (z `inspections.protocol_number`), `/` zamienione na `_`
+ * Standard numeru protokołu (kolumna `inspections.protocol_number`):
+ *   `NNN/T/RRRR` gdzie T = R (roczna) lub P (pięcioletnia), NNN = kolejny
+ *   numer w roku zaczynający od 001, RRRR = rok. Przykład: `005/R/2026`.
+ *
+ * Komponenty nazwy:
+ *   - numer protokołu lub `Szkic` gdy brak `protocol_number` (draft)
  *   - „Protokół_kontroli_rocznej" lub „Protokół_kontroli_5-letniej"
  *   - „WTG " + `ew_designation` (preferowane) albo `turbine_code`
- *   - miejscowość (`turbines.location_address`)
+ *   - miejscowość (`turbines.location_address`) — pomijana gdy już jest
+ *     w identyfikatorze turbiny (np. "EW Kamlarki" + "Kamlarki")
  *   - data kontroli w formacie dd-mm-yyyy
  *
- * Brakujące komponenty są pomijane (np. inspekcja bez `protocol_number`).
  * Niedozwolone znaki w nazwach plików są zamieniane na `_`.
  */
 export interface InspectionForFilename {
