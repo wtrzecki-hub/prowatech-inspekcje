@@ -344,8 +344,12 @@ async function loadDocumentsAutoFill(
     service: DocumentEntry
   }> = {}
 
-  const okazanoEntry = (parts: string[]): DocumentEntry => ({
-    status: 'okazano',
+  // Auto-status='okazano' tylko gdy plik PDF faktycznie istnieje w R2 —
+  // inaczej `status=null` (inspektor sam zaznaczy po fizycznym sprawdzeniu).
+  // Uwaga Artura 2026-05-12: "Automatyczny wybór okazano w przypadku istnienia
+  // dokumentu w bazie R2".
+  const autoEntry = (parts: string[], hasFile: boolean): DocumentEntry => ({
+    status: hasFile ? 'okazano' : null,
     info: parts.length > 0 ? parts.join(', ') : null,
   })
 
@@ -354,7 +358,9 @@ async function loadDocumentsAutoFill(
   // `historical_protocols` z archiwum (zwykle pokrywa przed wdrożeniem appki).
   const { data: prevs } = await sb
     .from('inspections')
-    .select('id, inspection_date, inspection_type, protocol_number, status')
+    .select(
+      'id, inspection_date, inspection_type, protocol_number, status, generated_pdf_url'
+    )
     .eq('turbine_id', turbineId)
     .neq('id', currentInspectionId)
     .in('status', ['completed', 'signed'])
@@ -366,6 +372,7 @@ async function loadDocumentsAutoFill(
     inspection_date: string | null
     inspection_type: 'annual' | 'five_year' | null
     protocol_number: string | null
+    generated_pdf_url: string | null
   }
   const prevList = (prevs || []) as PrevRow[]
   let prevAnnual = prevList.find((p) => p.inspection_type === 'annual')
@@ -378,7 +385,9 @@ async function loadDocumentsAutoFill(
   if (needHistoricalAnnual || needHistoricalFiveYear) {
     const { data: histRows } = await sb
       .from('historical_protocols')
-      .select('id, inspection_date, inspection_type, protocol_number, year')
+      .select(
+        'id, inspection_date, inspection_type, protocol_number, year, protocol_pdf_url'
+      )
       .eq('turbine_id', turbineId)
       .order('inspection_date', { ascending: false, nullsFirst: false })
       .order('year', { ascending: false })
@@ -388,6 +397,7 @@ async function loadDocumentsAutoFill(
       inspection_date: string | null
       inspection_type: string | null
       protocol_number: string | null
+      protocol_pdf_url: string | null
     }
     const histList = (histRows || []) as HistRow[]
     if (needHistoricalAnnual) {
@@ -398,6 +408,7 @@ async function loadDocumentsAutoFill(
           inspection_date: h.inspection_date,
           inspection_type: 'annual',
           protocol_number: h.protocol_number,
+          generated_pdf_url: h.protocol_pdf_url,
         }
       }
     }
@@ -409,6 +420,7 @@ async function loadDocumentsAutoFill(
           inspection_date: h.inspection_date,
           inspection_type: 'five_year',
           protocol_number: h.protocol_number,
+          generated_pdf_url: h.protocol_pdf_url,
         }
       }
     }
@@ -420,7 +432,7 @@ async function loadDocumentsAutoFill(
       parts.push(`nr ${prevAnnual.protocol_number}`)
     const d = fmtDatePL(prevAnnual.inspection_date)
     if (d) parts.push(`z dnia ${d}`)
-    out.previous_annual = okazanoEntry(parts)
+    out.previous_annual = autoEntry(parts, !!prevAnnual.generated_pdf_url)
   }
 
   if (prevFiveYear) {
@@ -429,7 +441,7 @@ async function loadDocumentsAutoFill(
       parts.push(`nr ${prevFiveYear.protocol_number}`)
     const d = fmtDatePL(prevFiveYear.inspection_date)
     if (d) parts.push(`z dnia ${d}`)
-    out.previous_5y = okazanoEntry(parts)
+    out.previous_5y = autoEntry(parts, !!prevFiveYear.generated_pdf_url)
   }
 
   // Pomiary elektryczne — najpierw bieżąca inspekcja (jeśli ma podsumowanie
@@ -437,7 +449,7 @@ async function loadDocumentsAutoFill(
   const { data: currentInsp } = await sb
     .from('inspections')
     .select(
-      'electrical_measurement_protocol_number, electrical_measurement_date'
+      'electrical_measurement_protocol_number, electrical_measurement_date, electrical_measurement_protocol_url'
     )
     .eq('id', currentInspectionId)
     .maybeSingle()
@@ -445,19 +457,22 @@ async function loadDocumentsAutoFill(
     | {
         electrical_measurement_protocol_number: string | null
         electrical_measurement_date: string | null
+        electrical_measurement_protocol_url: string | null
       }
     | null
 
   let emProto: string | null = null
   let emDate: string | null = null
+  let emFileUrl: string | null = null
   if (cur?.electrical_measurement_protocol_number || cur?.electrical_measurement_date) {
     emProto = cur.electrical_measurement_protocol_number ?? null
     emDate = cur.electrical_measurement_date ?? null
+    emFileUrl = cur.electrical_measurement_protocol_url ?? null
   } else if (prevFiveYear) {
     const { data: prevEm } = await sb
       .from('inspections')
       .select(
-        'electrical_measurement_protocol_number, electrical_measurement_date'
+        'electrical_measurement_protocol_number, electrical_measurement_date, electrical_measurement_protocol_url'
       )
       .eq('id', prevFiveYear.id)
       .maybeSingle()
@@ -465,10 +480,12 @@ async function loadDocumentsAutoFill(
       | {
           electrical_measurement_protocol_number: string | null
           electrical_measurement_date: string | null
+          electrical_measurement_protocol_url: string | null
         }
       | null
     emProto = pem?.electrical_measurement_protocol_number ?? null
     emDate = pem?.electrical_measurement_date ?? null
+    emFileUrl = pem?.electrical_measurement_protocol_url ?? null
   }
 
   // Fallback do archiwum: protokoły pomiarów elektrycznych zalegują w
@@ -476,18 +493,23 @@ async function loadDocumentsAutoFill(
   if (!emProto && !emDate) {
     const { data: histEm } = await sb
       .from('historical_protocols')
-      .select('protocol_number, inspection_date, year')
+      .select('protocol_number, inspection_date, year, protocol_pdf_url')
       .eq('turbine_id', turbineId)
       .eq('inspection_type', 'electrical_measurement')
       .order('inspection_date', { ascending: false, nullsFirst: false })
       .order('year', { ascending: false })
       .limit(1)
     const h = (histEm || [])[0] as
-      | { protocol_number: string | null; inspection_date: string | null }
+      | {
+          protocol_number: string | null
+          inspection_date: string | null
+          protocol_pdf_url: string | null
+        }
       | undefined
     if (h) {
       emProto = h.protocol_number ?? null
       emDate = h.inspection_date ?? null
+      emFileUrl = h.protocol_pdf_url ?? null
     }
   }
 
@@ -496,7 +518,7 @@ async function loadDocumentsAutoFill(
     if (emProto) parts.push(`nr ${emProto}`)
     const d = fmtDatePL(emDate)
     if (d) parts.push(`z dnia ${d}`)
-    out.electrical_measurements = okazanoEntry(parts)
+    out.electrical_measurements = autoEntry(parts, !!emFileUrl)
   }
 
   // Serwis — z service_info bieżącej inspekcji (cykliczność + protokół).
@@ -527,7 +549,9 @@ async function loadDocumentsAutoFill(
     const d = fmtDatePL(svcRow.last_service_date)
     if (d) parts.push(`z dnia ${d}`)
     if (svcRow.service_company) parts.push(svcRow.service_company)
-    out.service = okazanoEntry(parts)
+    // Brak kolumny URL dla serwisu — inspektor sam zaznacza status po
+    // fizycznym sprawdzeniu protokołu serwisowego.
+    out.service = autoEntry(parts, false)
   }
 
   return out
