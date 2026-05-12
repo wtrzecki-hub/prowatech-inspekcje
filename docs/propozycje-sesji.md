@@ -95,17 +95,18 @@ _Po wykonaniu tematu — zaznacz `[x]`, ewentualnie dopisz numer PR-a w sekcji �
 
 ---
 
-## 5. Metryczka layout — sekcja „Okazano"
+## 5. Metryczka — duplikacja słowa „Okazano"
 
-**Status:** nie rozpoczęte. Źródło: audyt Artura.
+**Status:** ✅ wykonane 2026-05-12 → PR [#36](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/36). Źródło: audyt Artura + screenshot.
 
-**Cel:** Przebudować layout sekcji „Dokumenty obiektu okazane do wglądu" w metryczce.
+**Bug:** w sekcji „Dokumenty przedstawione do wglądu" słowo „Okazano" pojawiało się dwa razy — w Selecie statusu (lewa kolumna) ORAZ jako prefix w polu „Numer protokołu / data / uwagi" (prawa kolumna, np. „Okazano, nr 59/T/2025, z dnia 05.05.2025").
 
-**Symptom:** „W oknie po lewej powinno być «Okazano», a w oknie po prawej tam, gdzie Numer protokołu / data / uwagi — «Okazano, nr 59/T/2025, z dnia 05.05.2025»"
+**Przyczyna:** `loadDocumentsAutoFill` budował `info` jako pełny string z prefixem „Okazano, " i ustawiał `status` na null. Inspektor potem ręcznie ustawiał status w Selecie → duplikacja.
 
-**Interpretacja:** Artur chce żeby lewy panel pokazywał tylko status („Okazano") a prawy pełną wartość („Okazano, nr X/T/YYYY, z dnia DD.MM.YYYY"). Wymaga screenshotu od Artura żeby zrozumieć dokładnie.
-
-**Decyzja:** najpierw dopytać Artura o screenshot/szkic — bez tego ryzykujemy źle zaprojektować.
+**Fix:**
+- `loadDocumentsAutoFill` zwraca teraz `DocumentEntry` z `status='okazano'` + `info` bez prefiksu
+- Call site auto-fill zachowuje świadomy wybór statusu inspektora (`existing.status ?? proposed.status`)
+- Migracja `2026-05-12_strip_okazano_prefix_from_docs.sql` — backfill 6 istniejących inspekcji w bazie (już zaaplikowany)
 
 ---
 
@@ -195,6 +196,7 @@ _Po wykonaniu tematu — zaznacz `[x]`, ewentualnie dopisz numer PR-a w sekcji �
 
 _Najnowsze na górze. Format: `[x] N. Tytuł — data — PR(y)`._
 
+- [x] **5. Duplikacja słowa „Okazano" w metryczce (auto-fill prefix + Select)** — **2026-05-12** — [#36](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/36)
 - [x] **3. Numeracja sekcji III nie po kolei — sortowanie po element_number** — **2026-05-12** — [#35](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/35) (bug 2 z T3 był pokryty już PR #32)
 - [x] **6 + 7. Wykonawca kontroli z multi-selectu (zamiast legacy "Andrzej i Tomek") + pomiń puste załączniki w DOCX/PDF + miejsce na pieczątkę/podpis + rozdzielenie sygnariusz/branżowy** — **2026-05-12** — [#34](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/34)
 - [x] **Auto-fill deadline z urgency (kontynuacja #32) — runImport + backfill on-load + TZ off-by-day fix** — **2026-05-12** — [#33](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/33)
