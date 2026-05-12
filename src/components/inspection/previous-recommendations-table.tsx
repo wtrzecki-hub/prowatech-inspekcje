@@ -22,6 +22,7 @@ import {
   uploadRecommendationPhoto,
   type UploadedRecommendationPhoto,
 } from '@/lib/storage/upload-recommendation-photo'
+import { computeDeadlineFromUrgency } from '@/lib/zalecenia/deadlines'
 
 /**
  * PIIB sekcja II — Sprawdzenie wykonania zaleceń z poprzednich kontroli.
@@ -59,6 +60,8 @@ interface PreviousRecommendation {
   work_kind: WorkKind | null
   /** Stopień pilności (I-IV) — z hpr lub poprzedniego repair_scope_items. */
   urgency_level: UrgencyLevel | null
+  /** Element / lokalizacja — wpisywany ręcznie lub z poprzedniego repair_scope_items. */
+  element_name: string | null
 }
 
 const WORK_KIND_OPTIONS: Array<{ value: WorkKind; label: string }> = [
@@ -99,6 +102,9 @@ interface PreviousRecommendationsTableProps {
   inspectionId: string
   /** Opcjonalnie: ID turbiny — używane do auto-fill z poprzedniej inspekcji. */
   turbineId?: string
+  /** Data bieżącej inspekcji — używana do obliczenia deadline z urgency_level
+   *  przy auto-carry do repair_scope_items. */
+  inspectionDate?: string | null
 }
 
 const SUPABASE_URL = 'https://lhxhsprqoecepojrxepf.supabase.co'
@@ -126,6 +132,7 @@ const formatDate = (iso: string | null): string => {
 export function PreviousRecommendationsTable({
   inspectionId,
   turbineId,
+  inspectionDate,
 }: PreviousRecommendationsTableProps) {
   const [items, setItems] = useState<PreviousRecommendation[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -192,6 +199,7 @@ export function PreviousRecommendationsTable({
     extra: {
       work_kind?: WorkKind | null
       urgency_level?: UrgencyLevel | null
+      element_name?: string | null
       /** ID wpisu prev_rec — używane do skopiowania wskaźników zdjęć na scope. */
       prevRecId?: string
     } = {}
@@ -206,7 +214,7 @@ export function PreviousRecommendationsTable({
 
       const { data: existing, error: selErr } = await sb
         .from('repair_scope_items')
-        .select('id, scope_description, source_previous_type, work_kind, urgency_level')
+        .select('id, scope_description, source_previous_type, work_kind, urgency_level, element_name, deadline_date')
         .eq('inspection_id', inspectionId)
       if (selErr) throw selErr
 
@@ -217,6 +225,8 @@ export function PreviousRecommendationsTable({
           source_previous_type: string | null
           work_kind: WorkKind | null
           urgency_level: UrgencyLevel | null
+          element_name: string | null
+          deadline_date: string | null
         }>
       ).find((r) => normalizeForCarryDedup(r.scope_description) === normText)
 
@@ -234,8 +244,9 @@ export function PreviousRecommendationsTable({
         if (cur === null) nextSource = forType
         else if (cur !== forType && cur !== 'both') nextSource = 'both'
 
-        // Backfill work_kind/urgency_level dla istniejących scope items
-        // (legacy lub manual) jeśli prev_rec ma te wartości, a scope nie.
+        // Backfill work_kind/urgency_level/element_name/deadline_date dla
+        // istniejących scope items (legacy lub manual) jeśli prev_rec ma te
+        // wartości, a scope nie. Nie nadpisujemy świadomych edycji.
         const updates: Record<string, unknown> = {}
         if (nextSource !== cur) updates.source_previous_type = nextSource
         if (match.work_kind === null && extra.work_kind) {
@@ -243,6 +254,20 @@ export function PreviousRecommendationsTable({
         }
         if (match.urgency_level === null && extra.urgency_level) {
           updates.urgency_level = extra.urgency_level
+        }
+        if (match.element_name === null && extra.element_name) {
+          updates.element_name = extra.element_name
+        }
+        // Auto-fill deadline z urgency (tylko gdy puste — nie nadpisujemy).
+        // Bierzemy nowy urgency (jeśli właśnie go ustawiamy) albo z existing.
+        const effectiveUrgency =
+          extra.urgency_level ?? match.urgency_level ?? null
+        if (match.deadline_date === null && effectiveUrgency) {
+          const computed = computeDeadlineFromUrgency(
+            inspectionDate ?? null,
+            effectiveUrgency,
+          )
+          if (computed) updates.deadline_date = computed
         }
 
         if (Object.keys(updates).length > 0) {
@@ -266,6 +291,10 @@ export function PreviousRecommendationsTable({
       const nextNumber =
         ((lastRow?.item_number as number | undefined) ?? 0) + 1
 
+      const computedDeadline = computeDeadlineFromUrgency(
+        inspectionDate ?? null,
+        extra.urgency_level ?? null,
+      )
       const { data: insertedScope, error: insErr } = await sb
         .from('repair_scope_items')
         .insert({
@@ -275,6 +304,8 @@ export function PreviousRecommendationsTable({
           source_previous_type: forType,
           work_kind: extra.work_kind ?? null,
           urgency_level: extra.urgency_level ?? null,
+          element_name: extra.element_name ?? null,
+          deadline_date: computedDeadline,
           is_completed: false,
         })
         .select('id')
@@ -508,6 +539,7 @@ export function PreviousRecommendationsTable({
         remarks?: string | null
         work_kind?: WorkKind | null
         urgency_level?: UrgencyLevel | null
+        element_name?: string | null
       }
       let recommendations: ImportItem[] = []
       let source: AutoImportInfo['source'] = 'previous_inspection'
@@ -535,7 +567,7 @@ export function PreviousRecommendationsTable({
       if (prev) {
         const { data: scopeData } = await sb
           .from('repair_scope_items')
-          .select('scope_description, work_kind, urgency_level')
+          .select('scope_description, work_kind, urgency_level, element_name')
           .eq('inspection_id', prev.id)
           .order('item_number', { ascending: true })
 
@@ -544,16 +576,18 @@ export function PreviousRecommendationsTable({
             text: s.scope_description as string,
             work_kind: (s.work_kind as WorkKind | null) ?? null,
             urgency_level: (s.urgency_level as UrgencyLevel | null) ?? null,
+            element_name: (s.element_name as string | null) ?? null,
           }))
         } else {
           const { data: legacyData } = await sb
             .from('repair_recommendations')
-            .select('scope_description, repair_type, urgency_level')
+            .select('scope_description, repair_type, urgency_level, element_name')
             .eq('inspection_id', prev.id)
           recommendations = (legacyData || []).map((r) => ({
             text: r.scope_description as string,
             work_kind: (r.repair_type as WorkKind | null) ?? null,
             urgency_level: (r.urgency_level as UrgencyLevel | null) ?? null,
+            element_name: (r.element_name as string | null) ?? null,
           }))
         }
 
@@ -759,6 +793,7 @@ export function PreviousRecommendationsTable({
         source_inspection_type: forType,
         work_kind: r.work_kind ?? null,
         urgency_level: r.urgency_level ?? null,
+        element_name: r.element_name ?? null,
       }))
 
       const { data: inserted, error: insertErr } = await sb
@@ -779,6 +814,7 @@ export function PreviousRecommendationsTable({
           await ensureCarryToScope(it.recommendation_text, forType, {
             work_kind: it.work_kind,
             urgency_level: it.urgency_level,
+            element_name: it.element_name,
             prevRecId: it.id,
           })
         }
@@ -816,7 +852,8 @@ export function PreviousRecommendationsTable({
       | 'completion_status'
       | 'remarks'
       | 'work_kind'
-      | 'urgency_level',
+      | 'urgency_level'
+      | 'element_name',
     value: string | null
   ) => {
     setItems((prev) =>
@@ -861,6 +898,7 @@ export function PreviousRecommendationsTable({
             void ensureCarryToScope(row.recommendation_text, sourceType, {
               work_kind: row.work_kind,
               urgency_level: row.urgency_level,
+              element_name: row.element_name,
               prevRecId: row.id,
             })
           }
@@ -1013,7 +1051,8 @@ interface SourceSectionProps {
       | 'completion_status'
       | 'remarks'
       | 'work_kind'
-      | 'urgency_level',
+      | 'urgency_level'
+      | 'element_name',
     value: string | null
   ) => void
   onDelete: (id: string) => void
@@ -1214,7 +1253,8 @@ interface RecommendationListProps {
       | 'completion_status'
       | 'remarks'
       | 'work_kind'
-      | 'urgency_level',
+      | 'urgency_level'
+      | 'element_name',
     value: string | null
   ) => void
   onDelete: (id: string) => void
@@ -1336,7 +1376,24 @@ function RecommendationList({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label
+                htmlFor={`element-${item.id}`}
+                className="text-xs text-graphite-500"
+              >
+                Element / lokalizacja
+              </Label>
+              <Input
+                id={`element-${item.id}`}
+                value={item.element_name || ''}
+                onChange={(e) =>
+                  onUpdate(item.id, 'element_name', e.target.value)
+                }
+                placeholder="np. Fundament, Wieża segment 2"
+                className="text-sm h-9"
+              />
+            </div>
             <div className="space-y-1">
               <Label
                 htmlFor={`work-kind-${item.id}`}

@@ -1,7 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, Check, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import {
+  Calendar,
+  Camera,
+  Check,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +18,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  uploadRecommendationPhoto,
+  type UploadedRecommendationPhoto,
+} from '@/lib/storage/upload-recommendation-photo'
+import { computeDeadlineFromUrgency } from '@/lib/zalecenia/deadlines'
 
 /**
  * PIIB sekcja IV (roczny) / VI (5-letni) — Określenie zakresu robót
@@ -71,6 +85,8 @@ const URGENCY_OPTIONS: Array<{ value: UrgencyLevel; label: string }> = [
 
 interface RepairScopeTableProps {
   inspectionId: string
+  /** Data bieżącej inspekcji — używana do auto-fill `deadline_date` z urgency_level. */
+  inspectionDate?: string | null
 }
 
 /**
@@ -116,7 +132,10 @@ interface ImportInfo {
   source: 'elements' | 'legacy' | 'mixed'
 }
 
-export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
+export function RepairScopeTable({
+  inspectionId,
+  inspectionDate,
+}: RepairScopeTableProps) {
   const [items, setItems] = useState<RepairScopeItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -385,8 +404,29 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
     field: keyof RepairScopeItem,
     value: string | boolean | null
   ) => {
+    // Auto-fill deadline_date przy zmianie urgency_level — tylko gdy
+    // deadline_date jest pusty (nie nadpisuje świadomych edycji inspektora).
+    let autoDeadline: string | null = null
+    if (field === 'urgency_level' && value && inspectionDate) {
+      const current = items.find((i) => i.id === id)
+      if (current && !current.deadline_date) {
+        autoDeadline = computeDeadlineFromUrgency(
+          inspectionDate,
+          value as UrgencyLevel,
+        )
+      }
+    }
+
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: value } : i))
+      prev.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              [field]: value,
+              ...(autoDeadline ? { deadline_date: autoDeadline } : {}),
+            }
+          : i,
+      )
     )
 
     if (debounceTimers.current[id]) {
@@ -397,6 +437,7 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
       setIsSaving(true)
       try {
         const updateData: Record<string, unknown> = { [field]: value }
+        if (autoDeadline) updateData.deadline_date = autoDeadline
 
         // Auto-set completion_date gdy is_completed = true
         if (field === 'is_completed') {
@@ -771,6 +812,15 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
                     <Trash2 size={14} />
                   </Button>
                 </div>
+                {/* Zdjęcia per pozycja zakresu robót. Carry-over z prev_rec
+                    "Nie wykonano" wpisuje tu kopię wskaźników (parent_type
+                    'repair_scope_item'). Inspektor może też wgrywać nowe. */}
+                <div className="col-span-12 border-t border-graphite-100 pt-2 mt-1">
+                  <ScopeItemPhotos
+                    inspectionId={inspectionId}
+                    scopeItemId={item.id}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -810,6 +860,180 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// ─── Photo gallery per scope item ────────────────────────────────────────
+
+interface ScopeItemPhotosProps {
+  inspectionId: string
+  scopeItemId: string
+}
+
+interface PhotoRow {
+  id: string
+  file_url: string
+  caption: string | null
+  sort_order: number
+}
+
+/**
+ * Galeria zdjęć przypiętych do pozycji zakresu robót (parent_type='repair_scope_item').
+ * Wskaźniki kopiowane przez auto-carry z previous_recommendations przy zaznaczeniu
+ * "Nie wykonano" w prev_rec; inspektor może też wgrywać nowe zdjęcia bezpośrednio
+ * w tej sekcji (np. dokumentujące nowe usterki niezwiązane z poprzednią kontrolą).
+ *
+ * Render w PDF/DOCX: sekcja "Dokumentacja fotograficzna zaleceń" pod tabelą VI/IV.
+ */
+function ScopeItemPhotos({ inspectionId, scopeItemId }: ScopeItemPhotosProps) {
+  const [photos, setPhotos] = useState<PhotoRow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const supabase = () => createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeItemId])
+
+  const load = async () => {
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase()
+        .from('recommendation_photos')
+        .select('id, file_url, caption, sort_order')
+        .eq('parent_type', 'repair_scope_item')
+        .eq('parent_id', scopeItemId)
+        .order('sort_order', { ascending: true })
+        .order('uploaded_at', { ascending: true })
+      if (error) throw error
+      setPhotos((data || []) as PhotoRow[])
+    } catch (err) {
+      console.error('Błąd ładowania zdjęć scope:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setIsUploading(true)
+    setUploadError(null)
+    try {
+      const baseSort =
+        photos.length > 0 ? Math.max(...photos.map((p) => p.sort_order)) : 0
+      const fresh: UploadedRecommendationPhoto[] = []
+      for (let i = 0; i < files.length; i++) {
+        const uploaded = await uploadRecommendationPhoto({
+          file: files[i],
+          inspectionId,
+          parentType: 'repair_scope_item',
+          parentId: scopeItemId,
+          sortOrder: baseSort + i + 1,
+        })
+        fresh.push(uploaded)
+      }
+      setPhotos((prev) => [
+        ...prev,
+        ...fresh.map((f) => ({
+          id: f.id,
+          file_url: f.file_url,
+          caption: f.caption,
+          sort_order: f.sort_order,
+        })),
+      ])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Nieznany błąd uploadu'
+      setUploadError(msg)
+      console.error('Błąd uploadu zdjęcia scope:', err)
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== id))
+    try {
+      const { error } = await supabase()
+        .from('recommendation_photos')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    } catch (err) {
+      console.error('Błąd usuwania zdjęcia:', err)
+      void load()
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="text-xs text-graphite-400">Ładowanie zdjęć…</div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-graphite-500 flex items-center gap-1.5">
+          <Camera size={13} />
+          Zdjęcia ({photos.length})
+        </Label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFiles(e.target.files)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="h-7 text-xs"
+        >
+          {isUploading ? 'Wgrywanie…' : '+ Dodaj zdjęcie'}
+        </Button>
+      </div>
+
+      {uploadError && (
+        <p className="text-xs text-danger-700">{uploadError}</p>
+      )}
+
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+          {photos.map((p) => (
+            <div
+              key={p.id}
+              className="relative aspect-square rounded-md overflow-hidden border border-graphite-200 group bg-graphite-50"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.file_url}
+                alt={p.caption || ''}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <button
+                type="button"
+                onClick={() => handleDelete(p.id)}
+                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-danger-600 text-white text-xs opacity-0 group-hover:opacity-100 transition flex items-center justify-center shadow"
+                title="Usuń zdjęcie"
+                aria-label="Usuń zdjęcie"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
