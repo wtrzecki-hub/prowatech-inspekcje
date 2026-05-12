@@ -19,6 +19,7 @@ import {
   buildProtocolFilename,
   contentDispositionAttachment,
 } from '@/lib/protocol-filename'
+import { hasValidLicense } from '@/lib/inspectors/license'
 
 // =============================================================================
 // PROTOKÓŁ KONTROLI OKRESOWEJ - PDF (układ PIIB)
@@ -238,11 +239,11 @@ export async function GET(
     // podpisują protokół; pozostali (np. uprawnienia tylko SEP/GWO) figurują
     // w protokole jako inspektorzy branżowi bez podpisu. Uwaga Waldka
     // 2026-05-12: typowy zespół to "PIIB + branżowy".
-    const signingInspectors = inspectors.filter(
-      (i: any) => i.license_number && String(i.license_number).trim() !== '',
+    const signingInspectors = inspectors.filter((i: any) =>
+      hasValidLicense(i.license_number),
     )
     const assistingInspectors = inspectors.filter(
-      (i: any) => !i.license_number || String(i.license_number).trim() === '',
+      (i: any) => !hasValidLicense(i.license_number),
     )
 
     // Przedstawiciele klienta uczestniczacy w kontroli ("Przy udziale").
