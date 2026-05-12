@@ -996,14 +996,18 @@ export async function GET(
       { label: 'Zarządca obiektu', value: insp.manager_name || '' },
       {
         label: 'Wykonawca KONTROLI',
+        // Priorytet: aktualna lista inspektorów (multi-select PR #2) →
+        // legacy `contractor_info` (stary wolny tekst, np. "Andrzej i Tomek"
+        // sprzed multi-selectu — uwaga Artura 2026-05-12).
         value:
-          insp.contractor_info ||
-          inspectors
-            .map(
-              (i: any) =>
-                `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}`
-            )
-            .join('; '),
+          (inspectors.length > 0
+            ? inspectors
+                .map(
+                  (i: any) =>
+                    `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}`
+                )
+                .join('; ')
+            : insp.contractor_info) || '',
       },
       {
         label: 'Przy udziale',
@@ -2402,7 +2406,6 @@ export async function GET(
       yPosition += 8
     }
 
-    addSubHeading('Załączniki do protokołu')
     // Auto-dorzucamy protokół pomiarów PDF (z `inspections.electrical_measurement_protocol_url`)
     // jako kolejny załącznik, żeby user nie musiał go ręcznie wpisywać.
     const attachItems: Array<{ item_number: number; description: string }> =
@@ -2427,11 +2430,18 @@ export async function GET(
         a.item_number = i + 1
       })
     }
-    const attachBody =
-      attachItems.length > 0
-        ? attachItems.map((a) => [String(a.item_number), a.description])
-        : [1, 2, 3, 4, 5, 6].map((n) => [String(n), ''])
-    addAutoTable(['Lp.', 'Załącznik do protokołu'], attachBody, [10, 170])
+    // Brak załączników → pomijamy całą sekcję (heading + table). Polityka
+    // "lepiej puste niż placeholder" zgodnie z PR #19; uwaga Artura 2026-05-12:
+    // stary fallback `[1..6]` generował 6 pustych punktów w protokołach
+    // bez załączników.
+    if (attachItems.length > 0) {
+      addSubHeading('Załączniki do protokołu')
+      const attachBody = attachItems.map((a) => [
+        String(a.item_number),
+        a.description,
+      ])
+      addAutoTable(['Lp.', 'Załącznik do protokołu'], attachBody, [10, 170])
+    }
 
     // ─── PAGE FOOTERS ──────────────────────────────────────────────────────
     const pageCount = (pdf as any).internal.getNumberOfPages()

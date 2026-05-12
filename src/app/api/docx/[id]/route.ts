@@ -1250,14 +1250,17 @@ export async function GET(
         metaRow('Zarządca obiektu budowlanego:', insp.manager_name || ''),
         metaRow(
           'Wykonawca KONTROLI:',
-          insp.contractor_info ||
-            inspectors
-              .map(
-                (i: any) =>
-                  `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}`
-              )
-              .join('; ') ||
-            ''
+          // Priorytet: aktualna lista inspektorów (multi-select PR #2) →
+          // legacy `contractor_info` (stary wolny tekst, np. "Andrzej i Tomek"
+          // sprzed multi-selectu — uwaga Artura 2026-05-12).
+          (inspectors.length > 0
+            ? inspectors
+                .map(
+                  (i: any) =>
+                    `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}`
+                )
+                .join('; ')
+            : insp.contractor_info) || ''
         ),
         metaRow(
           'Przy udziale:',
@@ -2669,10 +2672,12 @@ export async function GET(
         a.item_number = i + 1
       })
     }
-    const attachmentsList =
-      baseAttachments.length > 0
-        ? baseAttachments
-        : [1, 2, 3, 4, 5, 6].map((n) => ({ item_number: n, description: '' }))
+    // Brak załączników → pomijamy całą sekcję (sectionChildren.push warunkowo
+    // poniżej). Polityka "lepiej puste niż placeholder" zgodnie z PR #19;
+    // uwaga Artura 2026-05-12: stary fallback `[1..6]` generował 6 pustych
+    // punktów w protokołach bez załączników.
+    const attachmentsList = baseAttachments
+    const hasAttachments = attachmentsList.length > 0
     const attachCols = [
       Math.floor(USABLE_WIDTH * 0.06),
       USABLE_WIDTH - Math.floor(USABLE_WIDTH * 0.06),
@@ -3388,8 +3393,9 @@ export async function GET(
       ),
       signaturesTable,
 
-      subHeading('Załączniki do protokołu'),
-      attachmentsTable
+      ...(hasAttachments
+        ? [subHeading('Załączniki do protokołu'), attachmentsTable]
+        : [])
     )
 
     const doc = new Document({
