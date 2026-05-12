@@ -61,22 +61,18 @@ _Po wykonaniu tematu — zaznacz `[x]`, ewentualnie dopisz numer PR-a w sekcji �
 
 ## 3. Sekcja III. USTALENIA — bugi z audytu Artura (2026-05-12)
 
-**Status:** nie rozpoczęte. Źródło: `uwagi_Prowatech_12_05_2026.docx` (Artur).
+**Status:** ✅ wykonane 2026-05-12 (zob. sesje wykonane). Źródło: `uwagi_Prowatech_12_05_2026.docx` (Artur).
 
-**Cel:** Naprawić 2 bugi w sekcji „III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego" (`inspection_elements`):
+**Bug 1 — numeracja nie po kolei** → PR [#35](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/35).
+- Przyczyna: fetch `inspection_elements` szedł z `.order('element_definition_id')` — UUID, więc kolejność pseudolosowa
+- Fix: client-side sort po `element_number` po fetchu (dwa miejsca w `(protected)/inspekcje/[id]/page.tsx`)
 
-**Bug 1 — numeracja nie po kolei, brak połączeń wieża/fundament:**
-- Artur: „Numeracja nie po kolei, zniknęły połączenia pomiędzy wieżą i fundamentem"
-- Sprawdzić: `inspection_elements` ↔ `element_definitions` (struktura drzewka z kategoriami)
-- Lokalizacja: ten sam komponent renderujący strukturę elementów na karcie inspekcji
+**„Brak połączeń wieża/fundament"** — to NIE bug, tylko świadoma decyzja merytoryczna z migracji `annual_scope_consolidation_2026_05_05`:
+- Elementy 2 (Flansze), 5 (Wieża–gondola), 7 (Gondola–wirnik) wyłączone z rocznej (PB art. 62 ust. 1)
+- Ich scope scalony do `scope_annual` Elementu 3 (Wieża) i 4 (Gondola) — inspektor ma te połączenia do oceny tam
+- Luki w numeracji rocznej (brak 2, 5, 7, 12, 16) są zgodne z PB i celowe
 
-**Bug 2 — brak wypełnienia pola Element + brak zdjęć w sekcji „Wnioski":**
-- Artur: „W sekcji Wnioski nie wypełnia się pole Element, brak opcji wgrania zdjęć"
-- Możliwe rozwiązanie analog do PR #32: input element_name + photos (tabela `recommendation_photos` z nowym `parent_type='inspection_element'`) ALBO osobna tabela `inspection_element_photos`
-
-**Decyzje do podjęcia w sesji:**
-- Czy zdjęcia tu używają tej samej tabeli `recommendation_photos` (dodaje 3-ci parent_type), czy nowa `inspection_element_photos`?
-- Czy render w PDF/DOCX (sekcja III) — czy też dodajemy galerię?
+**Bug 2 — pole Element + zdjęcia w „Wnioski"** → rozwiązany w PR #32 (`element_name` w prev_rec i scope, `ScopeItemPhotos` per pozycja zakresu robót, render zdjęć w sekcji VI generatora).
 
 ---
 
@@ -199,7 +195,8 @@ _Po wykonaniu tematu — zaznacz `[x]`, ewentualnie dopisz numer PR-a w sekcji �
 
 _Najnowsze na górze. Format: `[x] N. Tytuł — data — PR(y)`._
 
-- [x] **6 + 7. Wykonawca kontroli z multi-selectu (zamiast legacy "Andrzej i Tomek") + pomiń puste załączniki w DOCX/PDF** — **2026-05-12** — [#34](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/34)
+- [x] **3. Numeracja sekcji III nie po kolei — sortowanie po element_number** — **2026-05-12** — [#35](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/35) (bug 2 z T3 był pokryty już PR #32)
+- [x] **6 + 7. Wykonawca kontroli z multi-selectu (zamiast legacy "Andrzej i Tomek") + pomiń puste załączniki w DOCX/PDF + miejsce na pieczątkę/podpis + rozdzielenie sygnariusz/branżowy** — **2026-05-12** — [#34](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/34)
 - [x] **Auto-fill deadline z urgency (kontynuacja #32) — runImport + backfill on-load + TZ off-by-day fix** — **2026-05-12** — [#33](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/33)
 - [x] **Element/lokalizacja w prev_rec + auto-fill deadline z urgency + zdjęcia w sekcji VI** — **2026-05-12** — [#32](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/32) (pokrywa pkty 1+2+3 audytu Artura)
 - [x] Cleanup root + Etap 0/1/2/3 sekcji Zalecenia (audyt EW Kamlarki) — **2026-05-12** — [#28](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/28), [#29](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/29), [#31](https://github.com/wtrzecki-hub/prowatech-inspekcje/pull/31)
