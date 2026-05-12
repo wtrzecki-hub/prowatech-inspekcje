@@ -73,6 +73,36 @@ interface RepairScopeTableProps {
   inspectionId: string
 }
 
+/**
+ * Strip legacy artifacts from `repair_recommendations.scope_description`
+ * przed wstawieniem do `repair_scope_items.scope_description`:
+ * - prefiks `^N. ` — stary format trzymał numer pozycji w tekście, teraz
+ *   numer jest w osobnej kolumnie `item_number` (renumber per-section)
+ * - sufiks ` (K|NB|NG)` — stary format trzymał rodzaj robót jako sufiks
+ *   w opisie, teraz w osobnej kolumnie `work_kind`
+ *
+ * Audyt EW Kamlarki 2026-05-12: bez tego strippa items 2-5 lecą do scope
+ * jako "2. Wykonać... (K)" — podwójna numeracja w UI (kółko z item_number
+ * obok prefiksu w tekście) i wizualny śmieć.
+ *
+ * Zwraca `{ text, workKindFromSuffix }`: jeśli wyłapaliśmy "(K|NB|NG)" jako
+ * sufiks, zwracamy też kod żeby caller mógł fallback'iem wypełnić work_kind
+ * gdy legacy `repair_type` jest NULL ale sufiks w tekście był.
+ */
+const normalizeScopeText = (
+  raw: string
+): { text: string; workKindFromSuffix: WorkKind | null } => {
+  const suffixMatch = raw.match(/\s*\((K|NB|NG)\)\s*$/)
+  const workKindFromSuffix = (suffixMatch?.[1] as WorkKind | undefined) ?? null
+  return {
+    text: raw
+      .replace(/\s*\((K|NB|NG)\)\s*$/, '')
+      .replace(/^\d+\.\s+/, '')
+      .trim(),
+    workKindFromSuffix,
+  }
+}
+
 const SUPABASE_URL = 'https://lhxhsprqoecepojrxepf.supabase.co'
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeGhzcHJxb2VjZXBvanJ4ZXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTE0NTksImV4cCI6MjA5MDYyNzQ1OX0.sb8WzlwpPAl4tj6CQgIH34PAQRklUmLeDFOMOS2kUi0'
@@ -231,10 +261,15 @@ export function RepairScopeTable({ inspectionId }: RepairScopeTableProps) {
       }>) {
         const desc = row.scope_description?.trim()
         if (!desc) continue
+        const { text: cleanText, workKindFromSuffix } = normalizeScopeText(desc)
+        if (!cleanText) continue
         fromLegacy.push({
-          text: desc,
+          text: cleanText,
           element_name: row.element_name?.trim() || null,
-          work_kind: row.repair_type ?? null,
+          // Preferuj kolumnę repair_type; fallback do sufiksu "(K|NB|NG)"
+          // wyłapanego z opisu (legacy dane bywały niespójne — sufiks w
+          // tekście, kolumna NULL lub odwrotnie).
+          work_kind: row.repair_type ?? workKindFromSuffix,
           urgency_level: row.urgency_level ?? null,
         })
       }
