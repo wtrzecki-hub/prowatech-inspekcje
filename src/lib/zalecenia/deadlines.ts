@@ -37,18 +37,21 @@ export function computeDeadlineFromUrgency(
 
   const result = new Date(base.getTime())
 
+  // setUTC* (nie set*) — parseIsoDate buduje Date przez Date.UTC, więc
+  // musimy operować w UTC end-to-end. Inaczej w TZ z DST (CET/CEST) data
+  // przesuwa się o dzień na granicach miesięcy/lat.
   switch (urgency) {
     case 'I':
-      result.setDate(result.getDate() + 7)
+      result.setUTCDate(result.getUTCDate() + 7)
       break
     case 'II':
-      result.setMonth(result.getMonth() + 3)
+      result.setUTCMonth(result.getUTCMonth() + 3)
       break
     case 'III':
-      result.setMonth(result.getMonth() + 12)
+      result.setUTCMonth(result.getUTCMonth() + 12)
       break
     case 'IV':
-      result.setFullYear(result.getFullYear() + 5)
+      result.setUTCFullYear(result.getUTCFullYear() + 5)
       break
   }
 
