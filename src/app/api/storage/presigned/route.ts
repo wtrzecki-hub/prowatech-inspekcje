@@ -52,6 +52,7 @@ const VALID_CONTEXTS: StorageContext[] = [
   "turbine-photo",
   "inspector-doc",
   "historical-protocol",
+  "recommendation-photo",
 ];
 
 const MAX_FILENAME_LENGTH = 200;
@@ -165,6 +166,14 @@ export async function POST(request: NextRequest) {
       if (!body.inspectionId) {
         return NextResponse.json(
           { error: "inspectionId required for context=inspection-attachment" },
+          { status: 400 }
+        );
+      }
+      buildParams.inspectionId = body.inspectionId;
+    } else if (context === "recommendation-photo") {
+      if (!body.inspectionId) {
+        return NextResponse.json(
+          { error: "inspectionId required for context=recommendation-photo" },
           { status: 400 }
         );
       }

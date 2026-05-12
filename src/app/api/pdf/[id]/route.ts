@@ -292,7 +292,7 @@ export async function GET(
     let { data: repairScope } = await supabase
       .from('repair_scope_items')
       .select(
-        'item_number, scope_description, element_name, work_kind, urgency_level, deadline_text, deadline_date, is_completed, completion_date'
+        'id, item_number, scope_description, element_name, work_kind, urgency_level, deadline_text, deadline_date, is_completed, completion_date'
       )
       .eq('inspection_id', inspectionId)
       .order('item_number')
@@ -1928,6 +1928,119 @@ export async function GET(
       repairBody,
       [12, 22, 75, 18, 18, 35]
     )
+
+    // ─── DOKUMENTACJA FOTOGRAFICZNA ZALECEŃ ─────────────────────────────────
+    // Zdjęcia per pozycja zakresu robót (parent_type='repair_scope_item').
+    // Wskaźniki kopiowane przez auto-carry z `previous_recommendations` przy
+    // zaznaczeniu "Nie wykonano" — patrz previous-recommendations-table.tsx.
+    if (repairScope && repairScope.length > 0) {
+      const scopeIds = (
+        repairScope as Array<{ id?: string }>
+      )
+        .map((r) => r.id)
+        .filter((id): id is string => Boolean(id))
+
+      if (scopeIds.length > 0) {
+        const { data: recPhotosData } = await supabase
+          .from('recommendation_photos')
+          .select('parent_id, file_url, caption, sort_order')
+          .eq('inspection_id', inspectionId)
+          .eq('parent_type', 'repair_scope_item')
+          .in('parent_id', scopeIds)
+          .order('sort_order', { ascending: true })
+
+        const photosByScopeId = new Map<
+          string,
+          Array<{ file_url: string; caption: string | null }>
+        >()
+        for (const p of (recPhotosData || []) as Array<{
+          parent_id: string
+          file_url: string
+          caption: string | null
+        }>) {
+          if (!photosByScopeId.has(p.parent_id)) {
+            photosByScopeId.set(p.parent_id, [])
+          }
+          photosByScopeId.get(p.parent_id)!.push({
+            file_url: p.file_url,
+            caption: p.caption,
+          })
+        }
+
+        const scopesWithPhotos = (
+          repairScope as Array<{
+            id?: string
+            item_number: number
+            scope_description: string | null
+          }>
+        ).filter((r) => r.id && (photosByScopeId.get(r.id)?.length ?? 0) > 0)
+
+        if (scopesWithPhotos.length > 0) {
+          addSubHeading('Dokumentacja fotograficzna zaleceń')
+          addBody(
+            '(stan zaleceń niewykonanych z poprzedniej kontroli, udokumentowany podczas niniejszej kontroli)',
+            { italic: true }
+          )
+
+          const recPhotoGap = 4
+          const recPhotoWidth = (pageWidth - 2 * margin - recPhotoGap) / 2
+          const recPhotoHeight = (recPhotoWidth * 2) / 3
+
+          for (const scope of scopesWithPhotos) {
+            const photos = photosByScopeId.get(scope.id!)!
+            // Nagłówek pozycji
+            ensureSpace(8)
+            pdf.setFontSize(FONT_PT.body)
+            pdf.setFont('Roboto', 'bold')
+            const headerText = `Poz. ${scope.item_number}. ${
+              (scope.scope_description || '').slice(0, 100)
+            }${(scope.scope_description?.length || 0) > 100 ? '…' : ''}`
+            const headerLines = pdf.splitTextToSize(
+              headerText,
+              pageWidth - 2 * margin
+            )
+            pdf.text(headerLines, margin, yPosition)
+            yPosition += headerLines.length * 4.5 + 2
+            pdf.setFont('Roboto', 'normal')
+
+            const photoImages = await Promise.all(
+              photos.map((p) => fetchImageAsBase64(p.file_url))
+            )
+
+            for (let i = 0; i < photos.length; i += 2) {
+              ensureSpace(recPhotoHeight + 10)
+              const yStart = yPosition
+              for (let j = 0; j < 2 && i + j < photos.length; j++) {
+                const img = photoImages[i + j]
+                const x = margin + j * (recPhotoWidth + recPhotoGap)
+                if (img) {
+                  const fmt = img.format === 'WEBP' ? 'JPEG' : img.format
+                  try {
+                    pdf.addImage(
+                      img.base64,
+                      fmt,
+                      x,
+                      yStart,
+                      recPhotoWidth,
+                      recPhotoHeight
+                    )
+                  } catch (e) {
+                    console.error('[PDF] Nie udało się wstawić zdjęcia zalecenia:', e)
+                    pdf.setDrawColor(...RGB.graphite200)
+                    pdf.rect(x, yStart, recPhotoWidth, recPhotoHeight)
+                  }
+                } else {
+                  pdf.setDrawColor(...RGB.graphite200)
+                  pdf.rect(x, yStart, recPhotoWidth, recPhotoHeight)
+                }
+              }
+              yPosition = yStart + recPhotoHeight + 5
+            }
+            yPosition += 2
+          }
+        }
+      }
+    }
 
     // ─── 3 TABELE-LEGENDY ───────────────────────────────────────────────────
     addSubHeading('Definicje rodzajów robót remontowych')
