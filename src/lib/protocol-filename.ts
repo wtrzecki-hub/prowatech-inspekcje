@@ -52,17 +52,25 @@ export function buildProtocolFilename(
   inspection: InspectionForFilename,
   turbine: TurbineForFilename | null | undefined,
   ext: 'pdf' | 'docx',
-  /** Fallback gdy brak `protocol_number` — np. `id` inspekcji do unikalności. */
-  fallbackId?: string,
+  /**
+   * @deprecated Parametr ignorowany od 2026-05-12 — zamiast UUID dla drafta
+   *   prefix `DRAFT` jest czytelniejszy. Trzymany w sygnaturze dla
+   *   backward compat z istniejącymi call sites.
+   */
+  _fallbackId?: string,
 ): string {
   const parts: string[] = []
 
-  // 1. Numer protokołu (z `/` → `_`) lub fallbackId
+  // 1. Numer protokołu (z `/` → `_`) lub prefix DRAFT dla inspekcji bez
+  // nadanego numeru (status=draft). Wcześniej wstawialiśmy UUID inspekcji
+  // jako fallback — to dawało brzydkie nazwy typu
+  // `92a0d535-b278-4ee5-848e-624dec707105 Protokół_kontroli_rocznej...`
+  // (uwaga Waldka 2026-05-12).
   const protoNo = trim(inspection.protocol_number)
   if (protoNo) {
     parts.push(protoNo.replace(/\//g, '_'))
-  } else if (fallbackId) {
-    parts.push(fallbackId)
+  } else {
+    parts.push('DRAFT')
   }
 
   // 2. Typ kontroli
@@ -76,9 +84,14 @@ export function buildProtocolFilename(
     parts.push(`WTG ${turbineId}`)
   }
 
-  // 4. Miejscowość
+  // 4. Miejscowość — pomijamy gdy nazwa jest już zawarta w `turbineId`
+  // (np. turbina pojedyncza w farmie ma ew_designation="EW Kamlarki",
+  // a location_address="Kamlarki" — bez tego strippa wychodziłoby
+  // "WTG EW Kamlarki Kamlarki"). Match case-insensitive.
   const loc = trim(turbine?.location_address)
-  if (loc) parts.push(loc)
+  if (loc && !turbineId.toLowerCase().includes(loc.toLowerCase())) {
+    parts.push(loc)
+  }
 
   // 5. Data
   const dateStr = formatDateDmy(inspection.inspection_date)
