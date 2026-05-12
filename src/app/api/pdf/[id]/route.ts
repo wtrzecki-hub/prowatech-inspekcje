@@ -2380,8 +2380,11 @@ export async function GET(
       'Oświadczam, iż ustalenia zawarte w protokole są zgodne ze stanem faktycznym.'
     )
 
-    ensureSpace(50)
-    yPosition += 15
+    // Pieczątka inspektora (~4×2.5cm) + odręczny podpis wymagają minimum
+    // ~40mm pionowego miejsca PRZED linią podpisu. Uwaga Artura 2026-05-12:
+    // "trochę mało miejsca na pieczątkę inspektora i podpis".
+    ensureSpace(80)
+    yPosition += 40
     const sigW = (pageWidth - 2 * margin) / 2
     if (isFiveYear) {
       // Podpisują tylko sygnariusze (uprawnienia budowlane PIIB) — branżowi

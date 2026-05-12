@@ -2616,7 +2616,11 @@ export async function GET(
         borders: noBorder,
         children: [
           new Paragraph({
-            spacing: { before: 800 },
+            // 2800 twipów ≈ 5cm pionowego miejsca przed linią podpisu —
+            // wystarczy na pieczątkę inspektora (~4×2.5cm) + odręczny podpis.
+            // Uwaga Artura 2026-05-12: poprzednio 800 twipów (~1.4cm) było
+            // za mało, pieczątka się nie mieściła.
+            spacing: { before: 2800 },
             border: {
               top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
             },
