@@ -1,17 +1,22 @@
 /**
  * Buduje nazwę pliku protokołu PDF/DOCX zgodną z konwencją archiwum
  * Prowatech, np.:
+ *   `001_R_2026 Protokół_kontroli_rocznej WTG EW01 Bieganowo 16-04-2026.pdf`
  *   `003_P_2026 Protokół_kontroli_5-letniej WTG EW03 Żeńsko 04-05-2026.pdf`
- *   `58_T_2025 Protokół_kontroli_rocznej WTG EW01 Bieganowo 16-04-2025.pdf`
+ *   `Szkic Protokół_kontroli_rocznej WTG EW Kamlarki 12-05-2026.pdf`
  *
- * Komponenty:
- *   - numer protokołu (z `inspections.protocol_number`), `/` zamienione na `_`
+ * Standard numeru protokołu (kolumna `inspections.protocol_number`):
+ *   `NNN/T/RRRR` gdzie T = R (roczna) lub P (pięcioletnia), NNN = kolejny
+ *   numer w roku zaczynający od 001, RRRR = rok. Przykład: `005/R/2026`.
+ *
+ * Komponenty nazwy:
+ *   - numer protokołu lub `Szkic` gdy brak `protocol_number` (draft)
  *   - „Protokół_kontroli_rocznej" lub „Protokół_kontroli_5-letniej"
  *   - „WTG " + `ew_designation` (preferowane) albo `turbine_code`
- *   - miejscowość (`turbines.location_address`)
+ *   - miejscowość (`turbines.location_address`) — pomijana gdy już jest
+ *     w identyfikatorze turbiny (np. "EW Kamlarki" + "Kamlarki")
  *   - data kontroli w formacie dd-mm-yyyy
  *
- * Brakujące komponenty są pomijane (np. inspekcja bez `protocol_number`).
  * Niedozwolone znaki w nazwach plików są zamieniane na `_`.
  */
 export interface InspectionForFilename {
@@ -52,17 +57,26 @@ export function buildProtocolFilename(
   inspection: InspectionForFilename,
   turbine: TurbineForFilename | null | undefined,
   ext: 'pdf' | 'docx',
-  /** Fallback gdy brak `protocol_number` — np. `id` inspekcji do unikalności. */
-  fallbackId?: string,
+  /**
+   * @deprecated Parametr ignorowany od 2026-05-12 — zamiast UUID dla drafta
+   *   prefix `DRAFT` jest czytelniejszy. Trzymany w sygnaturze dla
+   *   backward compat z istniejącymi call sites.
+   */
+  _fallbackId?: string,
 ): string {
   const parts: string[] = []
 
-  // 1. Numer protokołu (z `/` → `_`) lub fallbackId
+  // 1. Numer protokołu (z `/` → `_`) lub prefix "Szkic" dla inspekcji bez
+  // nadanego numeru (status=draft). Wcześniej wstawialiśmy UUID inspekcji
+  // jako fallback — to dawało brzydkie nazwy typu
+  // `92a0d535-b278-4ee5-848e-624dec707105 Protokół_kontroli_rocznej...`
+  // (uwaga Waldka 2026-05-12). Etykieta "Szkic" zgodna z UI listy inspekcji
+  // (src/lib/constants.ts: STATUS_LABELS.draft).
   const protoNo = trim(inspection.protocol_number)
   if (protoNo) {
     parts.push(protoNo.replace(/\//g, '_'))
-  } else if (fallbackId) {
-    parts.push(fallbackId)
+  } else {
+    parts.push('Szkic')
   }
 
   // 2. Typ kontroli
@@ -76,9 +90,14 @@ export function buildProtocolFilename(
     parts.push(`WTG ${turbineId}`)
   }
 
-  // 4. Miejscowość
+  // 4. Miejscowość — pomijamy gdy nazwa jest już zawarta w `turbineId`
+  // (np. turbina pojedyncza w farmie ma ew_designation="EW Kamlarki",
+  // a location_address="Kamlarki" — bez tego strippa wychodziłoby
+  // "WTG EW Kamlarki Kamlarki"). Match case-insensitive.
   const loc = trim(turbine?.location_address)
-  if (loc) parts.push(loc)
+  if (loc && !turbineId.toLowerCase().includes(loc.toLowerCase())) {
+    parts.push(loc)
+  }
 
   // 5. Data
   const dateStr = formatDateDmy(inspection.inspection_date)
