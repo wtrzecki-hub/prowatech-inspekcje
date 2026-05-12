@@ -904,6 +904,38 @@ export function PreviousRecommendationsTable({
             })
           }
         }
+
+        // Propagacja do scope_item zmian element_name / work_kind /
+        // urgency_level w już-carry'owanym prev_rec. Uwaga Artura 2026-05-12:
+        // gdy inspektor uzupełnia "Element / lokalizacja" w prev_rec
+        // (legacy hpr nie ma element_name), wartość ma się pojawiać w
+        // scope_item z bieżącej kontroli. `ensureCarryToScope` ma logikę
+        // backfill NULL-only — nie nadpisuje świadomych edycji w scope.
+        if (
+          (field === 'element_name' ||
+            field === 'work_kind' ||
+            field === 'urgency_level') &&
+          value
+        ) {
+          const row = items.find((i) => i.id === id)
+          if (
+            row?.completion_status === 'nie' &&
+            row.source_inspection_type &&
+            row.recommendation_text
+          ) {
+            void ensureCarryToScope(
+              row.recommendation_text,
+              row.source_inspection_type,
+              {
+                work_kind: field === 'work_kind' ? (value as WorkKind) : row.work_kind,
+                urgency_level:
+                  field === 'urgency_level' ? (value as UrgencyLevel) : row.urgency_level,
+                element_name: field === 'element_name' ? value : row.element_name,
+                prevRecId: row.id,
+              }
+            )
+          }
+        }
       } catch (err) {
         console.error('Błąd zapisu:', err)
       } finally {
