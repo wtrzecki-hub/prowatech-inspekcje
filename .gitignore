@@ -57,3 +57,6 @@ generate-icons.ps1
 
 # Output skryptu migracji historycznych protokołów
 scripts/output/
+
+# Archiwum luźnych plików w root (raporty PDF, konwersacje, dane jednorazowe)
+archive/
