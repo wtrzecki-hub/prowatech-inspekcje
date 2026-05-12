@@ -41,6 +41,7 @@ import {
   contentDispositionAttachment,
 } from '@/lib/protocol-filename'
 import { hasValidLicense } from '@/lib/inspectors/license'
+import { buildOwnerLine } from '@/lib/protocol-formatters'
 
 // =============================================================================
 // PROTOKÓŁ KONTROLI OKRESOWEJ — DOCX (układ PIIB)
@@ -800,7 +801,9 @@ export async function GET(
     }
 
     // ─── METADATA ──────────────────────────────────────────────────────────
-    const protocolNumber = insp.protocol_number || inspectionId.slice(0, 8)
+    // Brak protocol_number (status=draft) → "Szkic" w nagłówku zamiast UUID 8-char.
+    // Etykieta spójna z listą inspekcji (STATUS_LABELS.draft) i nazwą pliku.
+    const protocolNumber = insp.protocol_number || 'Szkic'
     const inspectionDate = formatDate(insp.inspection_date)
     const artPoint = isFiveYear ? '2' : '1'
 
@@ -1261,7 +1264,7 @@ export async function GET(
             isFiveYear ? insp.next_five_year_date : insp.next_annual_date
           )
         ),
-        metaRow('Właściciel obiektu:', insp.owner_name || client?.name || ''),
+        metaRow('Właściciel obiektu:', buildOwnerLine(insp.owner_name, client)),
         metaRow('Zarządca obiektu budowlanego:', insp.manager_name || ''),
         metaRow(
           'Wykonawca KONTROLI:',

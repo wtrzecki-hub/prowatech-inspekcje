@@ -20,6 +20,7 @@ import {
   contentDispositionAttachment,
 } from '@/lib/protocol-filename'
 import { hasValidLicense } from '@/lib/inspectors/license'
+import { buildOwnerLine } from '@/lib/protocol-formatters'
 
 // =============================================================================
 // PROTOKÓŁ KONTROLI OKRESOWEJ - PDF (układ PIIB)
@@ -524,7 +525,9 @@ export async function GET(
       other: typeof rawDocs.other === 'string' ? rawDocs.other : '',
     }
 
-    const protocolNumber = insp.protocol_number || inspectionId.slice(0, 8)
+    // Brak protocol_number (status=draft) → "Szkic" w nagłówku zamiast UUID 8-char.
+    // Etykieta spójna z listą inspekcji (STATUS_LABELS.draft) i nazwą pliku.
+    const protocolNumber = insp.protocol_number || 'Szkic'
     const inspectionDate = formatDate(insp.inspection_date)
     const artPoint = isFiveYear ? '2' : '1'
 
@@ -1004,7 +1007,7 @@ export async function GET(
       },
       {
         label: 'Właściciel obiektu',
-        value: insp.owner_name || client?.name || '',
+        value: buildOwnerLine(insp.owner_name, client),
       },
       { label: 'Zarządca obiektu', value: insp.manager_name || '' },
       {
