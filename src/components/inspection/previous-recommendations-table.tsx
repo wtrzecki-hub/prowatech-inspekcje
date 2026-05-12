@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ExternalLink, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import {
+  Camera,
+  ExternalLink,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
@@ -10,6 +18,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { COMPLETION_STATUSES } from '@/lib/constants'
+import {
+  uploadRecommendationPhoto,
+  type UploadedRecommendationPhoto,
+} from '@/lib/storage/upload-recommendation-photo'
 
 /**
  * PIIB sekcja II — Sprawdzenie wykonania zaleceń z poprzednich kontroli.
@@ -177,7 +189,12 @@ export function PreviousRecommendationsTable({
   const ensureCarryToScope = async (
     rawText: string | null,
     forType: SourceType,
-    extra: { work_kind?: WorkKind | null; urgency_level?: UrgencyLevel | null } = {}
+    extra: {
+      work_kind?: WorkKind | null
+      urgency_level?: UrgencyLevel | null
+      /** ID wpisu prev_rec — używane do skopiowania wskaźników zdjęć na scope. */
+      prevRecId?: string
+    } = {}
   ): Promise<void> => {
     const text = rawText?.trim()
     if (!text) return
@@ -249,7 +266,7 @@ export function PreviousRecommendationsTable({
       const nextNumber =
         ((lastRow?.item_number as number | undefined) ?? 0) + 1
 
-      const { error: insErr } = await sb
+      const { data: insertedScope, error: insErr } = await sb
         .from('repair_scope_items')
         .insert({
           inspection_id: inspectionId,
@@ -260,7 +277,44 @@ export function PreviousRecommendationsTable({
           urgency_level: extra.urgency_level ?? null,
           is_completed: false,
         })
+        .select('id')
+        .single()
       if (insErr) throw insErr
+
+      // Carry zdjęć: skopiuj wskaźniki (file_url + r2_key) z prev_rec na
+      // nowo utworzony scope_item. To wskazania na ten sam plik R2 — bez
+      // duplikacji binarnej. Render w PDF/DOCX zobaczy zdjęcia per scope_item.
+      if (extra.prevRecId && insertedScope?.id) {
+        const { data: srcPhotos } = await sb
+          .from('recommendation_photos')
+          .select('file_url, r2_key, caption, sort_order')
+          .eq('parent_type', 'previous_recommendation')
+          .eq('parent_id', extra.prevRecId)
+        if (srcPhotos && srcPhotos.length > 0) {
+          const toInsert = (
+            srcPhotos as Array<{
+              file_url: string
+              r2_key: string
+              caption: string | null
+              sort_order: number
+            }>
+          ).map((p) => ({
+            parent_type: 'repair_scope_item',
+            parent_id: insertedScope.id as string,
+            inspection_id: inspectionId,
+            file_url: p.file_url,
+            r2_key: p.r2_key,
+            caption: p.caption,
+            sort_order: p.sort_order,
+          }))
+          const { error: photoErr } = await sb
+            .from('recommendation_photos')
+            .insert(toInsert)
+          if (photoErr) {
+            console.error('Błąd carry zdjęć na scope item:', photoErr)
+          }
+        }
+      }
     } catch (err) {
       console.error('Błąd auto-carry do repair_scope_items:', err)
     }
@@ -725,6 +779,7 @@ export function PreviousRecommendationsTable({
           await ensureCarryToScope(it.recommendation_text, forType, {
             work_kind: it.work_kind,
             urgency_level: it.urgency_level,
+            prevRecId: it.id,
           })
         }
       }
@@ -806,6 +861,7 @@ export function PreviousRecommendationsTable({
             void ensureCarryToScope(row.recommendation_text, sourceType, {
               work_kind: row.work_kind,
               urgency_level: row.urgency_level,
+              prevRecId: row.id,
             })
           }
         }
@@ -871,6 +927,7 @@ export function PreviousRecommendationsTable({
       <SourceSection
         type="five_year"
         items={itemsByType.five_year}
+        inspectionId={inspectionId}
         meta={sourceMeta.five_year}
         autoImportInfo={autoImportInfo.five_year}
         importing={importingType === 'five_year'}
@@ -889,6 +946,7 @@ export function PreviousRecommendationsTable({
       <SourceSection
         type="annual"
         items={itemsByType.annual}
+        inspectionId={inspectionId}
         meta={sourceMeta.annual}
         autoImportInfo={autoImportInfo.annual}
         importing={importingType === 'annual'}
@@ -919,6 +977,7 @@ export function PreviousRecommendationsTable({
           <CardContent className="space-y-4">
             <RecommendationList
               items={itemsUngrouped}
+              inspectionId={inspectionId}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
               onUpdateNumber={handleNumberChange}
@@ -939,6 +998,7 @@ export function PreviousRecommendationsTable({
 interface SourceSectionProps {
   type: SourceType
   items: PreviousRecommendation[]
+  inspectionId: string
   meta: SourceMeta | undefined
   autoImportInfo: AutoImportInfo | undefined
   importing: boolean
@@ -964,6 +1024,7 @@ interface SourceSectionProps {
 function SourceSection({
   type,
   items,
+  inspectionId,
   meta,
   autoImportInfo,
   importing,
@@ -1107,6 +1168,7 @@ function SourceSection({
         ) : (
           <RecommendationList
             items={items}
+            inspectionId={inspectionId}
             onUpdate={onUpdate}
             onDelete={onDelete}
             onUpdateNumber={onUpdateNumber}
@@ -1144,6 +1206,7 @@ function SourceSection({
 
 interface RecommendationListProps {
   items: PreviousRecommendation[]
+  inspectionId: string
   onUpdate: (
     id: string,
     field:
@@ -1160,6 +1223,7 @@ interface RecommendationListProps {
 
 function RecommendationList({
   items,
+  inspectionId,
   onUpdate,
   onDelete,
   onUpdateNumber,
@@ -1336,8 +1400,201 @@ function RecommendationList({
               className="text-sm"
             />
           </div>
+
+          {/* Zdjęcia: widoczne dla każdego wpisu — ale szczególnie ważne gdy
+              inspektor zaznacza "Nie wykonano" (dowód stanu). Przy carry-over
+              do scope_items wskaźniki kopiują się automatycznie. */}
+          <RecommendationPhotos
+            inspectionId={inspectionId}
+            parentType="previous_recommendation"
+            parentId={item.id}
+          />
         </li>
       ))}
     </ul>
+  )
+}
+
+// ─── Photo gallery per recommendation ─────────────────────────────────────
+
+interface RecommendationPhotosProps {
+  inspectionId: string
+  parentType: 'previous_recommendation' | 'repair_scope_item'
+  parentId: string
+}
+
+interface PhotoRow {
+  id: string
+  file_url: string
+  caption: string | null
+  sort_order: number
+}
+
+/**
+ * Wgrywanie i podgląd zdjęć dowodowych przypiętych do jednej pozycji
+ * z `previous_recommendations` (a po carry-over także do `repair_scope_items`).
+ *
+ * Pipeline jak w PhotoGallery dla inspekcji: kompresja → presigned PUT R2 →
+ * INSERT do `recommendation_photos`. Carry zdjęć na scope obsłuży
+ * `ensureCarryToScope` (po INSERT scope_item kopiuje wskaźniki).
+ */
+function RecommendationPhotos({
+  inspectionId,
+  parentType,
+  parentId,
+}: RecommendationPhotosProps) {
+  const [photos, setPhotos] = useState<PhotoRow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const supabase = () => createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parentId, parentType])
+
+  const load = async () => {
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase()
+        .from('recommendation_photos')
+        .select('id, file_url, caption, sort_order')
+        .eq('parent_type', parentType)
+        .eq('parent_id', parentId)
+        .order('sort_order', { ascending: true })
+        .order('uploaded_at', { ascending: true })
+      if (error) throw error
+      setPhotos((data || []) as PhotoRow[])
+    } catch (err) {
+      console.error('Błąd ładowania zdjęć zalecenia:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setIsUploading(true)
+    setUploadError(null)
+    try {
+      const baseSort =
+        photos.length > 0
+          ? Math.max(...photos.map((p) => p.sort_order))
+          : 0
+      const fresh: UploadedRecommendationPhoto[] = []
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i]
+        const uploaded = await uploadRecommendationPhoto({
+          file: f,
+          inspectionId,
+          parentType,
+          parentId,
+          sortOrder: baseSort + i + 1,
+        })
+        fresh.push(uploaded)
+      }
+      setPhotos((prev) => [
+        ...prev,
+        ...fresh.map((f) => ({
+          id: f.id,
+          file_url: f.file_url,
+          caption: f.caption,
+          sort_order: f.sort_order,
+        })),
+      ])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Nieznany błąd uploadu'
+      setUploadError(msg)
+      console.error('Błąd uploadu zdjęcia zalecenia:', err)
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== id))
+    try {
+      const { error } = await supabase()
+        .from('recommendation_photos')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+      // Uwaga: nie usuwamy pliku z R2 — może być nadal użyty przez kopię
+      // na scope_item (carry-over kopiuje wskaźnik, nie plik).
+    } catch (err) {
+      console.error('Błąd usuwania zdjęcia:', err)
+      void load() // resync UI
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="text-xs text-graphite-400">Ładowanie zdjęć…</div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 pt-1">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-graphite-500 flex items-center gap-1.5">
+          <Camera size={13} />
+          Zdjęcia ({photos.length})
+        </Label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFiles(e.target.files)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="h-7 text-xs"
+        >
+          {isUploading ? 'Wgrywanie…' : '+ Dodaj zdjęcie'}
+        </Button>
+      </div>
+
+      {uploadError && (
+        <p className="text-xs text-danger-700">{uploadError}</p>
+      )}
+
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+          {photos.map((p) => (
+            <div
+              key={p.id}
+              className="relative aspect-square rounded-md overflow-hidden border border-graphite-200 group bg-graphite-50"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.file_url}
+                alt={p.caption || ''}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <button
+                type="button"
+                onClick={() => handleDelete(p.id)}
+                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-danger-600 text-white text-xs opacity-0 group-hover:opacity-100 transition flex items-center justify-center shadow"
+                title="Usuń zdjęcie"
+                aria-label="Usuń zdjęcie"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

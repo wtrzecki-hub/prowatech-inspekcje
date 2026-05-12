@@ -564,7 +564,7 @@ export async function GET(
     let { data: repairScope } = await supabase
       .from('repair_scope_items')
       .select(
-        'item_number, scope_description, element_name, work_kind, urgency_level, deadline_text, deadline_date, is_completed, completion_date'
+        'id, item_number, scope_description, element_name, work_kind, urgency_level, deadline_text, deadline_date, is_completed, completion_date'
       )
       .eq('inspection_id', inspectionId)
       .order('item_number')
@@ -3040,12 +3040,136 @@ export async function GET(
       )
     }
 
+    // ─── DOKUMENTACJA FOTOGRAFICZNA ZALECEŃ ─────────────────────────────────
+    // Zdjęcia per pozycja zakresu robót (recommendation_photos z
+    // parent_type='repair_scope_item'). Wskaźniki kopiowane przez auto-carry
+    // z previous_recommendations przy zaznaczeniu "Nie wykonano".
+    const recommendationPhotosSection: (Table | Paragraph)[] = []
+    if (repairScope && repairScope.length > 0) {
+      const scopeIds = (
+        repairScope as Array<{ id?: string }>
+      )
+        .map((r) => r.id)
+        .filter((id): id is string => Boolean(id))
+
+      if (scopeIds.length > 0) {
+        const { data: recPhotosData } = await supabase
+          .from('recommendation_photos')
+          .select('parent_id, file_url, caption, sort_order')
+          .eq('inspection_id', inspectionId)
+          .eq('parent_type', 'repair_scope_item')
+          .in('parent_id', scopeIds)
+          .order('sort_order', { ascending: true })
+
+        const photosByScopeId = new Map<
+          string,
+          Array<{ file_url: string; caption: string | null }>
+        >()
+        for (const p of (recPhotosData || []) as Array<{
+          parent_id: string
+          file_url: string
+          caption: string | null
+        }>) {
+          if (!photosByScopeId.has(p.parent_id)) {
+            photosByScopeId.set(p.parent_id, [])
+          }
+          photosByScopeId.get(p.parent_id)!.push({
+            file_url: p.file_url,
+            caption: p.caption,
+          })
+        }
+
+        const scopesWithPhotos = (
+          repairScope as Array<{
+            id?: string
+            item_number: number
+            scope_description: string | null
+          }>
+        ).filter((r) => r.id && (photosByScopeId.get(r.id)?.length ?? 0) > 0)
+
+        if (scopesWithPhotos.length > 0) {
+          recommendationPhotosSection.push(
+            subHeading('Dokumentacja fotograficzna zaleceń'),
+            bodyParagraph(
+              '(stan zaleceń niewykonanych z poprzedniej kontroli, udokumentowany podczas niniejszej kontroli)',
+              { italic: true }
+            )
+          )
+
+          const cellWidth = Math.floor(USABLE_WIDTH / 2)
+          for (const scope of scopesWithPhotos) {
+            const photos = photosByScopeId.get(scope.id!)!
+            const headerText = `Poz. ${scope.item_number}. ${
+              (scope.scope_description || '').slice(0, 120)
+            }${(scope.scope_description?.length || 0) > 120 ? '…' : ''}`
+            recommendationPhotosSection.push(
+              bodyParagraph(headerText, { bold: true })
+            )
+
+            const photoBuffers = await Promise.all(
+              photos.map((p) => fetchImageAsBuffer(p.file_url))
+            )
+
+            const photoTableRows: TableRow[] = []
+            for (let i = 0; i < photos.length; i += 2) {
+              const cells: TableCell[] = []
+              for (let j = 0; j < 2; j++) {
+                const buf = i + j < photos.length ? photoBuffers[i + j] : null
+                if (buf) {
+                  const imageType: 'jpg' | 'png' =
+                    buf.format === 'png' ? 'png' : 'jpg'
+                  cells.push(
+                    new TableCell({
+                      width: { size: cellWidth, type: WidthType.DXA },
+                      children: [
+                        new Paragraph({
+                          alignment: AlignmentType.CENTER,
+                          children: [
+                            new ImageRun({
+                              type: imageType,
+                              data: buf.buffer,
+                              transformation: { width: 280, height: 187 },
+                              altText: {
+                                title: `Zalecenie poz. ${scope.item_number} zdjęcie ${i + j + 1}`,
+                                description: photos[i + j].caption ?? '',
+                                name: `rec-photo-${scope.id}-${i + j}`,
+                              },
+                            }),
+                          ],
+                        }),
+                      ],
+                    })
+                  )
+                } else {
+                  // Pusta lub brakująca komórka
+                  cells.push(
+                    new TableCell({
+                      width: { size: cellWidth, type: WidthType.DXA },
+                      children: [new Paragraph({ children: [] })],
+                    })
+                  )
+                }
+              }
+              photoTableRows.push(new TableRow({ children: cells }))
+            }
+            recommendationPhotosSection.push(
+              new Table({
+                width: { size: USABLE_WIDTH, type: WidthType.DXA },
+                rows: photoTableRows,
+              })
+            )
+          }
+        }
+      }
+    }
+
     sectionChildren.push(
       sectionHeading(
         isFiveYear ? 'VI. Zalecenia' : 'IV. Zalecenia'
       ),
       bodyParagraph('Określenie zakresu robót remontowych i kolejności ich wykonywania:'),
       repairTable,
+      ...recommendationPhotosSection,
       subHeading('Definicje rodzajów robót remontowych'),
       workKindLegendTable,
       subHeading('Zalecany czas wykonania robót remontowych — stopień pilności'),

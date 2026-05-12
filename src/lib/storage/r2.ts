@@ -176,7 +176,8 @@ export type StorageContext =
   | "inspection-attachment"
   | "turbine-photo"
   | "inspector-doc"
-  | "historical-protocol";
+  | "historical-protocol"
+  | "recommendation-photo";
 
 export interface BuildKeyParams {
   context: StorageContext;
@@ -249,6 +250,17 @@ export function buildKey(params: BuildKeyParams): string {
         );
       }
       return `historical/${params.turbineId}/${params.year}_${params.inspectionType}_${ts}_${rand}.${ext}`;
+    }
+
+    case "recommendation-photo": {
+      if (!params.inspectionId) {
+        throw new Error(
+          "inspectionId required for context=recommendation-photo"
+        );
+      }
+      // Trzymamy razem ze zdjęciami inspekcji ale w podkatalogu — łatwo
+      // odróżnić w listing R2 i cleanup gdy inspekcja zostanie skasowana.
+      return `inspections/${params.inspectionId}/recommendation-photos/${ts}_${rand}.${ext}`;
     }
 
     default: {
