@@ -909,6 +909,7 @@ export default function InspectionDetailPage() {
             <PreviousRecommendationsTable
               inspectionId={inspection.id}
               turbineId={inspection.turbine?.id}
+              inspectionDate={inspection.inspection_date}
             />
             <EmergencyStateTable inspectionId={inspection.id} />
           </div>
@@ -919,7 +920,10 @@ export default function InspectionDetailPage() {
               {inspection.inspection_type === 'five_year' ? 'VI' : 'IV'}.
               Zalecenia (zakres robót remontowych)
             </h3>
-            <RepairScopeTable inspectionId={inspection.id} />
+            <RepairScopeTable
+              inspectionId={inspection.id}
+              inspectionDate={inspection.inspection_date}
+            />
           </div>
 
           {/* Legacy: stary RepairTable (NG/NB/K + I-IV) — collapsible dla dawnych inspekcji */}
