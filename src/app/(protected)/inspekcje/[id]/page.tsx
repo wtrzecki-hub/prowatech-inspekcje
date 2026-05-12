@@ -282,7 +282,6 @@ export default function InspectionDetailPage() {
         `
         )
         .eq('inspection_id', id)
-        .order('element_definition_id', { ascending: true })
 
       if (elementsError) throw elementsError
 
@@ -290,28 +289,35 @@ export default function InspectionDetailPage() {
         await createElementsFromDefinitions(id)
         await fetchInspectionElements(id)
       } else {
+        // Sort po `element_number` (z joined definition). Wcześniej order
+        // szedł po `element_definition_id` (UUID) → kolejność wyświetlania
+        // była pseudolosowa, np. 14, 11, 1, 10, 8, 9, 15, 6, 13, 3, 18, 4, 17.
+        // Uwaga Artura 2026-05-12: "numeracja nie po kolei".
         setElements(
-          (elementsData || []).map((el: any) => ({
-            id: el.id,
-            element_number: el.definition?.element_number ?? 0,
-            condition_rating: el.condition_rating ?? null,
-            wear_percentage: el.wear_percentage ?? 0,
-            notes: el.notes ?? null,
-            recommendations: el.recommendations ?? null,
-            photo_numbers: el.photo_numbers ?? null,
-            detailed_description: el.detailed_description ?? null,
-            not_applicable: el.is_not_applicable ?? false,
-            usage_suitability: el.usage_suitability ?? null,
-            recommendation_completion_date: el.recommendation_completion_date ?? null,
-            definition: {
-              id: el.definition?.id ?? '',
-              name_pl: el.definition?.name_pl ?? '',
-              section_code: el.definition?.section_code ?? null,
-              scope_annual: el.definition?.scope_annual ?? null,
-              scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
-              applicable_standards: el.definition?.applicable_standards ?? null,
-            },
-          }))
+          (elementsData || [])
+            .map((el: any) => ({
+              id: el.id,
+              element_number: el.definition?.element_number ?? 0,
+              condition_rating: el.condition_rating ?? null,
+              wear_percentage: el.wear_percentage ?? 0,
+              notes: el.notes ?? null,
+              recommendations: el.recommendations ?? null,
+              photo_numbers: el.photo_numbers ?? null,
+              detailed_description: el.detailed_description ?? null,
+              not_applicable: el.is_not_applicable ?? false,
+              usage_suitability: el.usage_suitability ?? null,
+              recommendation_completion_date: el.recommendation_completion_date ?? null,
+              definition: {
+                id: el.definition?.id ?? '',
+                name_pl: el.definition?.name_pl ?? '',
+                section_code: el.definition?.section_code ?? null,
+                scope_annual: el.definition?.scope_annual ?? null,
+                scope_five_year_additional:
+                  el.definition?.scope_five_year_additional ?? null,
+                applicable_standards: el.definition?.applicable_standards ?? null,
+              },
+            }))
+            .sort((a, b) => a.element_number - b.element_number)
         )
       }
 
@@ -413,28 +419,34 @@ export default function InspectionDetailPage() {
       .eq('inspection_id', inspectionId)
 
     if (!elementsError && elementsData) {
+      // Sort po `element_number` (z joined definition). PostgREST nie wspiera
+      // order po polach joined, więc sort client-side. Bez tego kolejność
+      // jest pseudolosowa (insertion order = UUID).
       setElements(
-        elementsData.map((el: any) => ({
-          id: el.id,
-          element_number: el.definition?.element_number ?? 0,
-          condition_rating: el.condition_rating ?? null,
-          wear_percentage: el.wear_percentage ?? 0,
-          notes: el.notes ?? null,
-          recommendations: el.recommendations ?? null,
-          photo_numbers: el.photo_numbers ?? null,
-          detailed_description: el.detailed_description ?? null,
-          not_applicable: el.is_not_applicable ?? false,
-          usage_suitability: el.usage_suitability ?? null,
-          recommendation_completion_date: el.recommendation_completion_date ?? null,
-          definition: {
-            id: el.definition?.id ?? '',
-            name_pl: el.definition?.name_pl ?? '',
-            section_code: el.definition?.section_code ?? null,
-            scope_annual: el.definition?.scope_annual ?? null,
-            scope_five_year_additional: el.definition?.scope_five_year_additional ?? null,
-            applicable_standards: el.definition?.applicable_standards ?? null,
-          },
-        }))
+        elementsData
+          .map((el: any) => ({
+            id: el.id,
+            element_number: el.definition?.element_number ?? 0,
+            condition_rating: el.condition_rating ?? null,
+            wear_percentage: el.wear_percentage ?? 0,
+            notes: el.notes ?? null,
+            recommendations: el.recommendations ?? null,
+            photo_numbers: el.photo_numbers ?? null,
+            detailed_description: el.detailed_description ?? null,
+            not_applicable: el.is_not_applicable ?? false,
+            usage_suitability: el.usage_suitability ?? null,
+            recommendation_completion_date: el.recommendation_completion_date ?? null,
+            definition: {
+              id: el.definition?.id ?? '',
+              name_pl: el.definition?.name_pl ?? '',
+              section_code: el.definition?.section_code ?? null,
+              scope_annual: el.definition?.scope_annual ?? null,
+              scope_five_year_additional:
+                el.definition?.scope_five_year_additional ?? null,
+              applicable_standards: el.definition?.applicable_standards ?? null,
+            },
+          }))
+          .sort((a, b) => a.element_number - b.element_number)
       )
     }
   }
