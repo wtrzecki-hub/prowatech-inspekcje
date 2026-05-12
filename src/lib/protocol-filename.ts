@@ -61,16 +61,17 @@ export function buildProtocolFilename(
 ): string {
   const parts: string[] = []
 
-  // 1. Numer protokołu (z `/` → `_`) lub prefix DRAFT dla inspekcji bez
+  // 1. Numer protokołu (z `/` → `_`) lub prefix "Szkic" dla inspekcji bez
   // nadanego numeru (status=draft). Wcześniej wstawialiśmy UUID inspekcji
   // jako fallback — to dawało brzydkie nazwy typu
   // `92a0d535-b278-4ee5-848e-624dec707105 Protokół_kontroli_rocznej...`
-  // (uwaga Waldka 2026-05-12).
+  // (uwaga Waldka 2026-05-12). Etykieta "Szkic" zgodna z UI listy inspekcji
+  // (src/lib/constants.ts: STATUS_LABELS.draft).
   const protoNo = trim(inspection.protocol_number)
   if (protoNo) {
     parts.push(protoNo.replace(/\//g, '_'))
   } else {
-    parts.push('DRAFT')
+    parts.push('Szkic')
   }
 
   // 2. Typ kontroli
