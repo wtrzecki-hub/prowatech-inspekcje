@@ -221,7 +221,8 @@ export async function GET(
         is_lead, specialty,
         inspector:inspector_id (
           id, full_name, license_number, specialty,
-          chamber_membership, chamber_certificate_number
+          chamber_membership, chamber_certificate_number,
+          sep_certificate_number, gwo_certificate_number
         )
         `
       )
@@ -232,6 +233,17 @@ export async function GET(
       is_lead: item.is_lead,
       rel_specialty: item.specialty,
     }))
+
+    // Podział: inspektorzy z uprawnieniami budowlanymi (PIIB, `license_number`)
+    // podpisują protokół; pozostali (np. uprawnienia tylko SEP/GWO) figurują
+    // w protokole jako inspektorzy branżowi bez podpisu. Uwaga Waldka
+    // 2026-05-12: typowy zespół to "PIIB + branżowy".
+    const signingInspectors = inspectors.filter(
+      (i: any) => i.license_number && String(i.license_number).trim() !== '',
+    )
+    const assistingInspectors = inspectors.filter(
+      (i: any) => !i.license_number || String(i.license_number).trim() === '',
+    )
 
     // Przedstawiciele klienta uczestniczacy w kontroli ("Przy udziale").
     // Fallback do legacy `additional_participants` gdy brak.
@@ -996,12 +1008,14 @@ export async function GET(
       { label: 'Zarządca obiektu', value: insp.manager_name || '' },
       {
         label: 'Wykonawca KONTROLI',
-        // Priorytet: aktualna lista inspektorów (multi-select PR #2) →
-        // legacy `contractor_info` (stary wolny tekst, np. "Andrzej i Tomek"
-        // sprzed multi-selectu — uwaga Artura 2026-05-12).
+        // Priorytet: inspektorzy z uprawnieniami budowlanymi PIIB
+        // (`license_number`) jako sygnariusze; fallback do legacy
+        // `contractor_info` tylko dla starych inspekcji. Inspektorzy
+        // branżowi (SEP/GWO) bez PIIB w osobnym wierszu poniżej.
+        // Uwagi Artura/Waldka 2026-05-12.
         value:
-          (inspectors.length > 0
-            ? inspectors
+          (signingInspectors.length > 0
+            ? signingInspectors
                 .map(
                   (i: any) =>
                     `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}`
@@ -1009,6 +1023,25 @@ export async function GET(
                 .join('; ')
             : insp.contractor_info) || '',
       },
+      // Inspektor branżowy — uczestnik z uprawnieniami branżowymi (SEP/GWO)
+      // ale bez uprawnień budowlanych PIIB. Nie podpisuje protokołu.
+      ...(assistingInspectors.length > 0
+        ? [
+            {
+              label: 'Inspektor branżowy',
+              value: assistingInspectors
+                .map((i: any) => {
+                  const certs: string[] = []
+                  if (i.sep_certificate_number) certs.push('SEP')
+                  if (i.gwo_certificate_number) certs.push('GWO')
+                  const certSuffix =
+                    certs.length > 0 ? ` (${certs.join(', ')})` : ''
+                  return `${i.full_name || ''}${certSuffix}`
+                })
+                .join('; '),
+            },
+          ]
+        : []),
       {
         label: 'Przy udziale',
         value:
@@ -1076,12 +1109,13 @@ export async function GET(
       addBody(
         'Niniejszy protokół sporządzono przy udziale osób posiadających uprawnienia w branży konstrukcyjno-budowlanej i elektrycznej (zgodnie z art. 62 ust. 5 PB).'
       )
-      const konstrInsp = inspectors.find(
+      // Skład komisji = tylko sygnariusze (uprawnienia budowlane PIIB).
+      const konstrInsp = signingInspectors.find(
         (i: any) =>
           i.rel_specialty === 'konstrukcyjna' ||
           i.specialty === 'konstrukcyjna'
       )
-      const elektrInsp = inspectors.find(
+      const elektrInsp = signingInspectors.find(
         (i: any) =>
           i.rel_specialty === 'elektryczna' || i.specialty === 'elektryczna'
       )
@@ -2350,11 +2384,13 @@ export async function GET(
     yPosition += 15
     const sigW = (pageWidth - 2 * margin) / 2
     if (isFiveYear) {
-      const konstr = inspectors.find(
+      // Podpisują tylko sygnariusze (uprawnienia budowlane PIIB) — branżowi
+      // (SEP/GWO bez PIIB) nie składają podpisu pod protokołem PIIB.
+      const konstr = signingInspectors.find(
         (i: any) =>
           i.rel_specialty === 'konstrukcyjna' || i.specialty === 'konstrukcyjna'
       )
-      const elektr = inspectors.find(
+      const elektr = signingInspectors.find(
         (i: any) =>
           i.rel_specialty === 'elektryczna' || i.specialty === 'elektryczna'
       )
@@ -2391,7 +2427,8 @@ export async function GET(
       pdf.text('Właściciel / Zarządca obiektu', margin + sigW + 5, yPosition)
       yPosition += 5
       pdf.setFontSize(8)
-      const inspNames = inspectors
+      // Tylko sygnariusze, branżowi nie składają podpisu.
+      const inspNames = signingInspectors
         .map((i: any) => i.full_name)
         .filter(Boolean)
         .join(', ')
