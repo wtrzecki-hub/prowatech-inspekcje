@@ -1881,15 +1881,14 @@ export async function GET(
                 ],
               }),
               multilineCell(
-                (def.scope_annual || '').split('\n').filter(Boolean).slice(0, 12),
+                (def.scope_annual || '').split('\n').filter(Boolean),
                 colsFY[1],
                 { fill, color: textColor }
               ),
               multilineCell(
                 (def.scope_five_year_additional || '')
                   .split('\n')
-                  .filter(Boolean)
-                  .slice(0, 12),
+                  .filter(Boolean),
                 colsFY[2],
                 { fill: HEX.brand50, color: HEX.graphite900 }
               ),
@@ -2015,10 +2014,7 @@ export async function GET(
               }),
               multilineCell(
                 [
-                  ...(def.scope_annual || '')
-                    .split('\n')
-                    .filter(Boolean)
-                    .slice(0, 8),
+                  ...(def.scope_annual || '').split('\n').filter(Boolean),
                   ...(el.notes ? ['', '— Opis: ' + el.notes] : []),
                 ],
                 colsAN[1],
