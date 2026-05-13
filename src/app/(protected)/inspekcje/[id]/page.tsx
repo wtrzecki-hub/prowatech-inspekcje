@@ -459,19 +459,25 @@ export default function InspectionDetailPage() {
   const createElementsFromDefinitions = async (inspectionId: string) => {
     const supabase = createClient()
 
-    // Pobierz typ inspekcji + flagę turbiny czy ma stację kontenerową pomiarową
-    // (poz. 17 jest opcjonalna — pojawia się tylko jeśli turbina ma SN).
+    // Pobierz typ inspekcji + flagi opcjonalnych elementów per-turbina:
+    // - poz. 17 „Stacja kontenerowa pomiarowa" → turbines.has_measurement_station
+    // - poz. 18 „Panele fotowoltaiczne (instalacja PV)" → turbines.has_pv_panels
+    //   (2 turbiny na FW Działoszyn, decyzja Waldka 2026-05-13)
     const { data: inspMeta } = await supabase
       .from('inspections')
-      .select('inspection_type, turbines(has_measurement_station)')
+      .select('inspection_type, turbines(has_measurement_station, has_pv_panels)')
       .eq('id', inspectionId)
       .single<{
         inspection_type: 'annual' | 'five_year'
-        turbines: { has_measurement_station: boolean | null } | null
+        turbines: {
+          has_measurement_station: boolean | null
+          has_pv_panels: boolean | null
+        } | null
       }>()
 
     const isFiveYear = inspMeta?.inspection_type === 'five_year'
     const hasStation = inspMeta?.turbines?.has_measurement_station === true
+    const hasPvPanels = inspMeta?.turbines?.has_pv_panels === true
 
     // Filtr: aktywne (PIIB) definicje pasujące do typu inspekcji
     let query = supabase
@@ -486,6 +492,7 @@ export default function InspectionDetailPage() {
     if (definitions) {
       const elementsToCreate = definitions
         .filter((def) => def.section_code !== 'stacja_pomiarowa' || hasStation)
+        .filter((def) => def.section_code !== 'panele_pv' || hasPvPanels)
         .map((def) => ({
           inspection_id: inspectionId,
           element_definition_id: def.id,

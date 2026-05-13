@@ -139,6 +139,7 @@ export interface TurbineOption {
   rated_power_mw?: number | null
   hub_height_m?: number | null
   wind_farm_id: string
+  has_pv_panels?: boolean | null
   wind_farms: { name: string }
 }
 
@@ -327,13 +328,23 @@ export function TurbineInspectionForm({
     }))
   )
 
-  // Filtr widocznosci elementow na podstawie typu inspekcji (PB art. 62 ust. 1)
-  // - roczna (pkt 1): elementy budowlane bez instalacji elektrycznej i piorunochronnej
-  // - 5-letnia (pkt 2): wszystkie elementy + pomiary elektryczne
+  // Filtr widocznosci elementow:
+  // - typ inspekcji (PB art. 62 ust. 1): roczna (pkt 1) — budowlane bez elektrycznej
+  //   i piorunochronnej; 5-letnia (pkt 2) — wszystkie + pomiary elektryczne
+  // - panele PV (section_code='panele_pv', element 18): tylko gdy turbina ma
+  //   has_pv_panels=true (decyzja Waldka 2026-05-13 — w bazie tylko 2 turbiny
+  //   na FW Działoszyn mają PV)
   // State zachowuje wszystkie elementy zeby user nie tracil danych przy zmianie typu.
-  const visibleElements = elements.filter((el) =>
-    inspectionType === 'five_year' ? el.appliesToFiveYear : el.appliesToAnnual
-  )
+  const selectedTurbine =
+    preselectedTurbine?.id === selectedTurbineId
+      ? preselectedTurbine
+      : turbines.find((t) => t.id === selectedTurbineId) ?? null
+  const hasPvPanels = selectedTurbine?.has_pv_panels === true
+  const visibleElements = elements
+    .filter((el) =>
+      inspectionType === 'five_year' ? el.appliesToFiveYear : el.appliesToAnnual
+    )
+    .filter((el) => el.sectionCode !== 'panele_pv' || hasPvPanels)
 
   // ── Tab 3: Serwis ─────────────────────────────────────────────────
 

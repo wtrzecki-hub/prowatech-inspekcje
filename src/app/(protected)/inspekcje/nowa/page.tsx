@@ -42,7 +42,7 @@ function NewInspectionContent() {
     const [turbinesRes, defsRes, sessionRes, inspectorsRes, defectsRes] = await Promise.all([
       supabase
         .from('turbines')
-        .select('id, turbine_code, serial_number, manufacturer, model, location_address, rated_power_mw, hub_height_m, wind_farm_id, wind_farms(name)')
+        .select('id, turbine_code, serial_number, manufacturer, model, location_address, rated_power_mw, hub_height_m, wind_farm_id, has_pv_panels, wind_farms(name)')
         .not('is_deleted', 'is', true)
         .order('turbine_code'),
       supabase
