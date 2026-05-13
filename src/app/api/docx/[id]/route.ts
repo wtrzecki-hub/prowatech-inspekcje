@@ -3271,16 +3271,25 @@ export async function GET(
     // Pobieramy zdjęcia z OBU tabel — globalna numeracja od 2026-05-13:
     // zaleceniowe (recommendation_photos, parent_type='repair_scope_item') idą
     // pierwsze (1..N), potem usterki bieżącej kontroli (inspection_photos).
-    // Wszystkie renderują się tu jako „Zdjęcie nr X" — jedna sekcja.
+    // Wszystkie renderują się tu jako „Zdjęcie nr X — nazwa elementu" — uwaga
+    // Artura 2026-05-14: brak kontekstu utrudnia identyfikację o jaki element chodzi.
     const [{ data: ipData, error: ipErr }, { data: rpData, error: rpErr }] =
       await Promise.all([
         supabase
           .from('inspection_photos')
-          .select('id, photo_number, file_url, description')
+          .select(
+            `id, photo_number, file_url, description,
+             element:element_id (
+               element_definition:element_definition_id (name_short, name_pl)
+             )`
+          )
           .eq('inspection_id', inspectionId),
         supabase
           .from('recommendation_photos')
-          .select('id, photo_number, file_url, caption')
+          .select(
+            `id, photo_number, file_url, caption,
+             scope_item:parent_id (element_name)`
+          )
           .eq('inspection_id', inspectionId)
           .eq('parent_type', 'repair_scope_item'),
       ])
@@ -3292,28 +3301,36 @@ export async function GET(
       photo_number: number | null
       file_url: string
       description: string | null
+      element_label: string | null
     }> = [
       ...((ipData || []) as Array<{
         photo_number: number | null
         file_url: string | null
         description: string | null
+        element?: { element_definition?: { name_short?: string | null; name_pl?: string | null } | null } | null
       }>)
         .filter((p) => p.file_url)
         .map((p) => ({
           photo_number: p.photo_number,
           file_url: p.file_url as string,
           description: p.description,
+          element_label:
+            p.element?.element_definition?.name_short ||
+            p.element?.element_definition?.name_pl ||
+            null,
         })),
       ...((rpData || []) as Array<{
         photo_number: number | null
         file_url: string | null
         caption: string | null
+        scope_item?: { element_name?: string | null } | null
       }>)
         .filter((p) => p.file_url)
         .map((p) => ({
           photo_number: p.photo_number,
           file_url: p.file_url as string,
           description: p.caption,
+          element_label: p.scope_item?.element_name || null,
         })),
     ]
 
@@ -3413,24 +3430,41 @@ export async function GET(
           }
 
           if (photo) {
+            const captionChildren: Paragraph[] = [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 60, after: photo.element_label ? 40 : 200 },
+                children: [
+                  new TextRun({
+                    text: `Zdjęcie nr ${photo.photo_number ?? i + j + 1}`,
+                    italics: true,
+                    font: 'Arial',
+                    size: FONT_DXA.small,
+                    color: HEX.graphite800,
+                  }),
+                ],
+              }),
+            ]
+            if (photo.element_label) {
+              captionChildren.push(
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 200 },
+                  children: [
+                    new TextRun({
+                      text: photo.element_label,
+                      font: 'Arial',
+                      size: 14,
+                      color: HEX.graphite500,
+                    }),
+                  ],
+                })
+              )
+            }
             captionCells.push(
               new TableCell({
                 width: { size: cellWidth, type: WidthType.DXA },
-                children: [
-                  new Paragraph({
-                    alignment: AlignmentType.CENTER,
-                    spacing: { before: 60, after: 200 },
-                    children: [
-                      new TextRun({
-                        text: `Zdjęcie nr ${photo.photo_number ?? i + j + 1}`,
-                        italics: true,
-                        font: 'Arial',
-                        size: FONT_DXA.small,
-                        color: HEX.graphite800,
-                      }),
-                    ],
-                  }),
-                ],
+                children: captionChildren,
               })
             )
           } else {

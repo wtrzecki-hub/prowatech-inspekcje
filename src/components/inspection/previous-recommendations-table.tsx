@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  AlertCircle,
   Camera,
   ExternalLink,
   Plus,
@@ -1452,13 +1453,43 @@ function SourceSection({
             </p>
           )
         ) : (
-          <RecommendationList
-            items={items}
-            inspectionId={inspectionId}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-            onUpdateNumber={onUpdateNumber}
-          />
+          <>
+            {/* Banner ostrzegawczy gdy są niewykonane zalecenia bez przypisanego
+                elementu — uwaga Artura/Waldka 2026-05-14: bez wskazania elementu
+                zalecenie nie propaguje się do tabeli III. USTALENIA w protokole
+                (Faza A wymaga match po element_name z listy element_definitions). */}
+            {(() => {
+              const missing = items.filter(
+                (i) => i.completion_status === 'nie' && !i.element_name?.trim(),
+              )
+              if (missing.length === 0) return null
+              return (
+                <div className="rounded-md border border-warning-200 bg-warning-50 p-3 text-sm text-warning-800 flex gap-2 mb-3">
+                  <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium mb-0.5">
+                      {missing.length === 1
+                        ? '1 niewykonane zalecenie nie ma wybranego elementu'
+                        : `${missing.length} niewykonanych zaleceń nie ma wybranych elementów`}
+                    </p>
+                    <p>
+                      Wybierz element w polu „Element / lokalizacja" przy każdym
+                      zaleceniu z „Nie wykonano" — wtedy treść zalecenia
+                      automatycznie pojawi się w sekcji III. USTALENIA w protokole
+                      przy odpowiednim elemencie konstrukcji.
+                    </p>
+                  </div>
+                </div>
+              )
+            })()}
+            <RecommendationList
+              items={items}
+              inspectionId={inspectionId}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              onUpdateNumber={onUpdateNumber}
+            />
+          </>
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">
