@@ -473,7 +473,39 @@ export async function GET(
       const aNum = a.element_definition?.element_number ?? 999
       const bNum = b.element_definition?.element_number ?? 999
       return aNum - bNum
-    })
+    }) as Array<{ id: string; [k: string]: unknown }>
+
+    // ─── FETCH ZDJĘĆ PER ELEMENT ──────────────────────────────────────────
+    // Mapa element_id → "1, 3, 5" (numery zdjęć z inspection_photos.element_id)
+    // używana jako fallback dla kolumny "Nr fot." w tabeli III, gdy inspektor
+    // nie wpisał ręcznie `el.photo_numbers`. Zdjęcia carry'ed z prev_rec
+    // (Faza A — PR #42) mają element_id i tu wpadają automatycznie.
+    const { data: elemPhotosData } = await supabase
+      .from('inspection_photos')
+      .select('element_id, photo_number')
+      .eq('inspection_id', inspectionId)
+      .not('element_id', 'is', null)
+      .order('photo_number', { ascending: true, nullsFirst: false })
+
+    const photoNumbersByElement = new Map<string, string>()
+    for (const p of (elemPhotosData || []) as Array<{
+      element_id: string | null
+      photo_number: number | null
+    }>) {
+      if (!p.element_id || p.photo_number == null) continue
+      const cur = photoNumbersByElement.get(p.element_id) || ''
+      photoNumbersByElement.set(
+        p.element_id,
+        cur ? `${cur}, ${p.photo_number}` : String(p.photo_number)
+      )
+    }
+
+    // Helper: fallback do auto-numeracji z inspection_photos gdy pole puste.
+    const photoNumbersFor = (el: { id: string; photo_numbers?: string | null }) => {
+      const manual = (el.photo_numbers || '').trim()
+      if (manual) return manual
+      return photoNumbersByElement.get(el.id) || ''
+    }
 
     // ─── FETCH INSPECTORS ──────────────────────────────────────────────────
     const { data: inspectorRels } = await supabase
@@ -1898,7 +1930,7 @@ export async function GET(
                 [el.notes, el.recommendations].filter(Boolean).join(' • ') || '',
                 colsFY[4]
               ),
-              dataCell(el.photo_numbers || '', colsFY[5]),
+              dataCell(photoNumbersFor(el), colsFY[5]),
               dataCell(formatDate(el.recommendation_completion_date), colsFY[6]),
             ],
           })
@@ -2014,7 +2046,7 @@ export async function GET(
                 ],
               }),
               dataCell(el.recommendations || '', colsAN[3]),
-              dataCell(el.photo_numbers || '', colsAN[4]),
+              dataCell(photoNumbersFor(el), colsAN[4]),
               dataCell(formatDate(el.recommendation_completion_date), colsAN[5]),
             ],
           })
