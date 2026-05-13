@@ -348,6 +348,7 @@ export async function GET(
         protocol_number,
         inspection_date,
         inspection_type,
+        annual_variant,
         status,
         overall_condition_rating,
         overall_assessment,
@@ -442,6 +443,8 @@ export async function GET(
     const windFarm = turbine?.wind_farms
     const client = windFarm?.clients
     const isFiveYear = insp.inspection_type === 'five_year'
+    const isSimplifiedAnnual =
+      insp.inspection_type === 'annual' && insp.annual_variant === 'simplified'
 
     // ─── FETCH ELEMENTS ────────────────────────────────────────────────────
     const { data: elementsData } = await supabase
@@ -461,6 +464,7 @@ export async function GET(
           element_number,
           name_pl,
           scope_annual,
+          scope_annual_simplified,
           scope_five_year_additional,
           applicable_standards,
           sort_order
@@ -2014,7 +2018,12 @@ export async function GET(
               }),
               multilineCell(
                 [
-                  ...(def.scope_annual || '').split('\n').filter(Boolean),
+                  ...(isSimplifiedAnnual
+                    ? (def.scope_annual_simplified || def.scope_annual || '')
+                    : (def.scope_annual || '')
+                  )
+                    .split('\n')
+                    .filter(Boolean),
                   ...(el.notes ? ['', '— Opis: ' + el.notes] : []),
                 ],
                 colsAN[1],
@@ -3172,6 +3181,10 @@ export async function GET(
 
       sectionHeading('III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego'),
       bodyParagraph('W trakcie kontroli ustalono:'),
+      // Brak akapitu wstępnego o wariancie — `annual_variant` to flaga wewnętrzna
+      // dla inspektora (steruje treścią `scope_annual` w kolumnie „Opis i ustalenia
+      // z kontroli"), nie jest komunikowana klientowi w protokole.
+      // Decyzja Waldka 2026-05-14.
       ustaleniaTable
     )
 
