@@ -2213,7 +2213,10 @@ export async function GET(
     // Etykieta elementu (uwaga Artura 2026-05-14):
     // - dla inspection_photos: nazwa z `element_definitions.name_short` przez
     //   join `inspection_elements → element_definitions`
-    // - dla recommendation_photos: nazwa z `repair_scope_items.element_name`
+    // - dla recommendation_photos: nazwa z `repair_scope_items.element_name`,
+    //   pobierane osobnym zapytaniem (parent_id jest polimorficzny → bez FK,
+    //   więc PostgREST embed `scope_item:parent_id (...)` zwraca błąd i całe
+    //   zapytanie się wywala. Bug E Waldka 2026-05-13.
     const [{ data: ipData, error: ipErr }, { data: rpData, error: rpErr }] =
       await Promise.all([
         supabase
@@ -2227,16 +2230,35 @@ export async function GET(
           .eq('inspection_id', inspectionId),
         supabase
           .from('recommendation_photos')
-          .select(
-            `id, photo_number, file_url, caption,
-             scope_item:parent_id (element_name)`
-          )
+          .select('id, photo_number, file_url, caption, parent_id')
           .eq('inspection_id', inspectionId)
           .eq('parent_type', 'repair_scope_item'),
       ])
 
     if (ipErr) console.error('[PDF] Błąd ładowania inspection_photos:', ipErr)
     if (rpErr) console.error('[PDF] Błąd ładowania recommendation_photos:', rpErr)
+
+    // Dociągamy nazwy elementów dla scope_item z osobnego zapytania.
+    const rpParentIds = Array.from(
+      new Set(
+        ((rpData || []) as Array<{ parent_id: string | null }>)
+          .map((p) => p.parent_id)
+          .filter((v): v is string => !!v)
+      )
+    )
+    const scopeNameById = new Map<string, string | null>()
+    if (rpParentIds.length > 0) {
+      const { data: scopeRows, error: scopeErr } = await supabase
+        .from('repair_scope_items')
+        .select('id, element_name')
+        .in('id', rpParentIds)
+      if (scopeErr) {
+        console.error('[PDF] Błąd ładowania repair_scope_items dla zdjęć zaleceń:', scopeErr)
+      }
+      for (const r of (scopeRows || []) as Array<{ id: string; element_name: string | null }>) {
+        scopeNameById.set(r.id, r.element_name)
+      }
+    }
 
     const allPhotos: Array<{
       photo_number: number | null
@@ -2264,14 +2286,14 @@ export async function GET(
         photo_number: number | null
         file_url: string | null
         caption: string | null
-        scope_item?: { element_name?: string | null } | null
+        parent_id: string | null
       }>)
         .filter((p) => p.file_url)
         .map((p) => ({
           photo_number: p.photo_number,
           file_url: p.file_url as string,
           description: p.caption,
-          element_label: p.scope_item?.element_name || null,
+          element_label: (p.parent_id && scopeNameById.get(p.parent_id)) || null,
         })),
     ]
 
