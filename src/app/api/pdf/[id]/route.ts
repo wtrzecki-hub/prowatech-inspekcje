@@ -20,6 +20,7 @@ import {
   contentDispositionAttachment,
 } from '@/lib/protocol-filename'
 import { hasValidLicense } from '@/lib/inspectors/license'
+import { formatExtraCertsSuffix } from '@/lib/inspectors/format-certs'
 import { buildOwnerLine } from '@/lib/protocol-formatters'
 
 // =============================================================================
@@ -224,7 +225,7 @@ export async function GET(
         inspector:inspector_id (
           id, full_name, license_number, specialty,
           chamber_membership, chamber_certificate_number,
-          sep_certificate_number, gwo_certificate_number
+          sep_certificate_number, gwo_certificate_number, udt_certificate_number
         )
         `
       )
@@ -240,12 +241,23 @@ export async function GET(
     // podpisują protokół; pozostali (np. uprawnienia tylko SEP/GWO) figurują
     // w protokole jako inspektorzy branżowi bez podpisu. Uwaga Waldka
     // 2026-05-12: typowy zespół to "PIIB + branżowy".
-    const signingInspectors = inspectors.filter((i: any) =>
-      hasValidLicense(i.license_number),
-    )
-    const assistingInspectors = inspectors.filter(
-      (i: any) => !hasValidLicense(i.license_number),
-    )
+    // Kolejność branż w metryczce „Wykonawca kontroli" (Waldek 2026-05-13):
+    // konstrukcyjna PIIB zawsze pierwsza — kierownik komisji, sygnariusz.
+    const SPECIALTY_ORDER: Record<string, number> = {
+      konstrukcyjna: 0,
+      elektryczna: 1,
+      sanitarna: 2,
+      inna: 3,
+    }
+    const inspectorSortKey = (i: any) =>
+      SPECIALTY_ORDER[i.rel_specialty || i.specialty || ''] ?? 99
+
+    const signingInspectors = inspectors
+      .filter((i: any) => hasValidLicense(i.license_number))
+      .sort((a: any, b: any) => inspectorSortKey(a) - inspectorSortKey(b))
+    const assistingInspectors = inspectors
+      .filter((i: any) => !hasValidLicense(i.license_number))
+      .sort((a: any, b: any) => inspectorSortKey(a) - inspectorSortKey(b))
 
     // Przedstawiciele klienta uczestniczacy w kontroli ("Przy udziale").
     // Fallback do legacy `additional_participants` gdy brak.
@@ -1022,26 +1034,21 @@ export async function GET(
             ? signingInspectors
                 .map(
                   (i: any) =>
-                    `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}`
+                    `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}${formatExtraCertsSuffix(i)}`
                 )
                 .join('; ')
             : insp.contractor_info) || '',
       },
-      // Inspektor branżowy — uczestnik z uprawnieniami branżowymi (SEP/GWO)
+      // Inspektor branżowy — uczestnik z uprawnieniami branżowymi (GWO/SEP/UDT)
       // ale bez uprawnień budowlanych PIIB. Nie podpisuje protokołu.
       ...(assistingInspectors.length > 0
         ? [
             {
               label: 'Inspektor branżowy',
               value: assistingInspectors
-                .map((i: any) => {
-                  const certs: string[] = []
-                  if (i.sep_certificate_number) certs.push('SEP')
-                  if (i.gwo_certificate_number) certs.push('GWO')
-                  const certSuffix =
-                    certs.length > 0 ? ` (${certs.join(', ')})` : ''
-                  return `${i.full_name || ''}${certSuffix}`
-                })
+                .map(
+                  (i: any) => `${i.full_name || ''}${formatExtraCertsSuffix(i)}`
+                )
                 .join('; '),
             },
           ]
