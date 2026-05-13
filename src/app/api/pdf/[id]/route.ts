@@ -2421,6 +2421,29 @@ export async function GET(
       if (konstr?.full_name) pdf.text(konstr.full_name, margin, yPosition)
       if (elektr?.full_name)
         pdf.text(elektr.full_name, margin + sigW + 5, yPosition)
+      yPosition += 4
+
+      // Uprawnienia budowlane PIIB pod imieniem (uwaga Artura 2026-05-13).
+      pdf.setFontSize(7)
+      pdf.setTextColor(60)
+      if (konstr?.license_number && hasValidLicense(konstr.license_number)) {
+        pdf.text(`Nr upr.: ${konstr.license_number}`, margin, yPosition)
+      }
+      if (elektr?.license_number && hasValidLicense(elektr.license_number)) {
+        pdf.text(`Nr upr.: ${elektr.license_number}`, margin + sigW + 5, yPosition)
+      }
+      yPosition += 3.5
+      if (konstr?.chamber_membership && konstr.chamber_membership.trim()) {
+        pdf.text(konstr.chamber_membership.trim(), margin, yPosition, {
+          maxWidth: sigW - 10,
+        })
+      }
+      if (elektr?.chamber_membership && elektr.chamber_membership.trim()) {
+        pdf.text(elektr.chamber_membership.trim(), margin + sigW + 5, yPosition, {
+          maxWidth: sigW - 10,
+        })
+      }
+      pdf.setTextColor(0)
       yPosition += 8
     } else {
       pdf.setDrawColor(0)
@@ -2447,6 +2470,27 @@ export async function GET(
           yPosition
         )
       }
+      yPosition += 4
+
+      // Uprawnienia budowlane PIIB. Dla rocznej gdy jest jeden sygnariusz —
+      // podajmy jego uprawnienia. Przy 2+ sygnariuszach pomijamy (brak miejsca),
+      // pieczątka i tak zawiera numer.
+      pdf.setFontSize(7)
+      pdf.setTextColor(60)
+      if (signingInspectors.length === 1) {
+        const lead = signingInspectors[0] as any
+        if (lead?.license_number && hasValidLicense(lead.license_number)) {
+          pdf.text(`Nr upr.: ${lead.license_number}`, margin, yPosition)
+          yPosition += 3.5
+        }
+        if (lead?.chamber_membership && lead.chamber_membership.trim()) {
+          pdf.text(lead.chamber_membership.trim(), margin, yPosition, {
+            maxWidth: sigW - 10,
+          })
+          yPosition += 3.5
+        }
+      }
+      pdf.setTextColor(0)
       yPosition += 8
     }
 

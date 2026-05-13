@@ -2614,33 +2614,70 @@ export async function GET(
     // ─── PODPISY ────────────────────────────────────────────────────────────
     const sigColW = Math.floor(USABLE_WIDTH / 2)
 
-    function signatureCell(label: string, name: string): TableCell {
-      return new TableCell({
-        width: { size: sigColW, type: WidthType.DXA },
-        borders: noBorder,
-        children: [
-          new Paragraph({
-            // 2800 twipów ≈ 5cm pionowego miejsca przed linią podpisu —
-            // wystarczy na pieczątkę inspektora (~4×2.5cm) + odręczny podpis.
-            // Uwaga Artura 2026-05-12: poprzednio 800 twipów (~1.4cm) było
-            // za mało, pieczątka się nie mieściła.
-            spacing: { before: 2800 },
-            border: {
-              top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-            },
-            children: [new TextRun({ text: label, font: 'Arial', size: 18 })],
-          }),
+    function signatureCell(
+      label: string,
+      name: string,
+      credentials?: { license_number?: string | null; chamber_membership?: string | null }
+    ): TableCell {
+      const paragraphs: Paragraph[] = [
+        new Paragraph({
+          // 2800 twipów ≈ 5cm pionowego miejsca przed linią podpisu —
+          // wystarczy na pieczątkę inspektora (~4×2.5cm) + odręczny podpis.
+          // Uwaga Artura 2026-05-12: poprzednio 800 twipów (~1.4cm) było
+          // za mało, pieczątka się nie mieściła.
+          spacing: { before: 2800 },
+          border: {
+            top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+          },
+          children: [new TextRun({ text: label, font: 'Arial', size: 18 })],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: name,
+              font: 'Arial',
+              size: 16,
+              italics: true,
+            }),
+          ],
+        }),
+      ]
+
+      // Uprawnienia budowlane PIIB pod imieniem — uwaga Artura 2026-05-13.
+      // Renderujemy `Nr upr.` + izba tylko gdy są dane (sygnariusze mają;
+      // branżowi i tak nie składają podpisu pod protokołem PIIB).
+      if (credentials?.license_number && hasValidLicense(credentials.license_number)) {
+        paragraphs.push(
           new Paragraph({
             children: [
               new TextRun({
-                text: name,
+                text: `Nr upr.: ${credentials.license_number}`,
                 font: 'Arial',
-                size: 16,
-                italics: true,
+                size: 14,
               }),
             ],
-          }),
-        ],
+          })
+        )
+      }
+      if (credentials?.chamber_membership && credentials.chamber_membership.trim()) {
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: credentials.chamber_membership.trim(),
+                font: 'Arial',
+                size: 14,
+                color: HEX.graphite800,
+              }),
+            ],
+          })
+        )
+      }
+
+      return new TableCell({
+        width: { size: sigColW, type: WidthType.DXA },
+        borders: noBorder,
+        children: paragraphs,
       })
     }
 
@@ -2661,22 +2698,58 @@ export async function GET(
           children: [
             signatureCell(
               'Branża KONSTRUKCYJNO-BUDOWLANA',
-              konstr?.full_name || ''
+              konstr?.full_name || '',
+              konstr
+                ? {
+                    license_number: konstr.license_number,
+                    chamber_membership: konstr.chamber_membership,
+                  }
+                : undefined
             ),
-            signatureCell('Branża ELEKTRYCZNA', elektr?.full_name || ''),
+            signatureCell(
+              'Branża ELEKTRYCZNA',
+              elektr?.full_name || '',
+              elektr
+                ? {
+                    license_number: elektr.license_number,
+                    chamber_membership: elektr.chamber_membership,
+                  }
+                : undefined
+            ),
           ],
         })
       )
     } else {
+      // Roczna: jeden podpis dla wszystkich sygnariuszy. Pokazujemy uprawnienia
+      // każdego z osobna pod nazwiskiem; gdy 2+ inspektorów, kolejne idą w
+      // następnych liniach dzięki wielokrotnym akapitom.
+      const annualSigningInspectors = signingInspectors as Array<{
+        full_name: string
+        license_number?: string | null
+        chamber_membership?: string | null
+      }>
+      const namesJoined = annualSigningInspectors
+        .map((i) => i.full_name)
+        .filter(Boolean)
+        .join(', ')
+      // Jeśli tylko 1 sygnariusz, podajmy jego uprawnienia bezpośrednio.
+      // Dla wielu — pomijamy uprawnienia w komórce (brak miejsca), inspektor
+      // dopisze ręcznie pod pieczątką (każda pieczątka i tak zawiera numer).
+      const lead = annualSigningInspectors.length === 1
+        ? annualSigningInspectors[0]
+        : null
       sigRows.push(
         new TableRow({
           children: [
             signatureCell(
               'Wykonawca KONTROLI',
-              signingInspectors
-                .map((i: any) => i.full_name)
-                .filter(Boolean)
-                .join(', ')
+              namesJoined,
+              lead
+                ? {
+                    license_number: lead.license_number,
+                    chamber_membership: lead.chamber_membership,
+                  }
+                : undefined
             ),
             signatureCell(
               'Właściciel / Zarządca obiektu',
