@@ -75,3 +75,31 @@ WHERE element_number = 14 AND section_code = 'udt' AND is_active = TRUE;
 --   15 (Dojazdy, plac manewrowy) — z definicji z poziomu terenu
 --   17 (Stacja kontenerowa pomiarowa) — aplikacja, nie w szablonie Worda
 --   18 (Panele PV) — aplikacja, nie w szablonie Worda
+
+-- 4) Dopasowanie do szablonu Worda: wzmianki SCADA mają „(jeżeli udostępniono)".
+--    Uwaga Waldka 2026-05-14 — szablon R wszędzie sygnalizuje warunkowość SCADA.
+--    „Stan wyważenia – wibracje (z systemu SCADA)" w Pozycje element 6 zostaje
+--    bez zmian — to nazwanie źródła danych, nie czynność kontrolna.
+UPDATE inspection_element_definitions
+SET scope_annual = REPLACE(scope_annual,
+  '• Analiza wskazań temperatury i drgań ze SCADA',
+  '• Analiza wskazań temperatury i drgań ze SCADA (jeżeli udostępniono)')
+WHERE element_number IN (4, 7)
+  AND scope_annual LIKE '%Analiza wskazań temperatury i drgań ze SCADA%'
+  AND scope_annual NOT LIKE '%SCADA (jeżeli%';
+
+UPDATE inspection_element_definitions
+SET scope_annual = REPLACE(scope_annual,
+  '• Analiza alarmów i ostrzeżeń ze SCADA z ostatnich 12 miesięcy',
+  '• Analiza alarmów i ostrzeżeń ze SCADA z ostatnich 12 miesięcy (jeżeli udostępniono)')
+WHERE element_number = 6
+  AND scope_annual NOT LIKE '%12 miesięcy (jeżeli%';
+
+-- 5) Wstępny akapit sekcji III („WARIANT UPROSZCZONY …") sygnalizuje wariant
+--    już na poziomie protokołu — per-row prefiks w nagłówku „Zakres roczny" jest
+--    redundantny. Wracamy do tego samego nagłówka co w wariancie rozszerzonym.
+UPDATE inspection_element_definitions
+SET scope_annual_simplified = REPLACE(scope_annual_simplified,
+  'Zakres roczny — wariant uproszczony (bez wjazdu na konstrukcję):',
+  'Zakres roczny (oględziny):')
+WHERE scope_annual_simplified LIKE '%— wariant uproszczony%';
