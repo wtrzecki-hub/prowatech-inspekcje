@@ -3181,23 +3181,10 @@ export async function GET(
 
       sectionHeading('III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego'),
       bodyParagraph('W trakcie kontroli ustalono:'),
-      // Akapit wstępny zależny od wariantu rocznika (wzorce
-      // wzory_PIIB/Protokol_Kontroli_Rocznej_EW_PIIB_{R,U}.docx).
-      ...(isSimplifiedAnnual
-        ? [
-            bodyParagraph(
-              'WARIANT UPROSZCZONY (kontrola bez wjazdu na konstrukcję): Inspekcja prowadzona z poziomu terenu i pierwszego segmentu wieży. Główne narzędzia: oględziny z lornetką, weryfikacja dokumentacji, analiza danych SCADA udostępnionych przez właściciela / serwis. Wariant odpowiedni dla obiektów objętych pełną umową serwisową producenta. Czynności wymagające wjazdu (kontrola wyższych segmentów wieży, wnętrza gondoli, wirnika z bliska, podestów pośrednich, sprzętu BHP/ppoż. w gondoli, kontroli flansz wyższych) realizowane są przez serwis producenta zgodnie z umową serwisową (art. 8b ustawy z 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).',
-              { italic: true }
-            ),
-          ]
-        : !isFiveYear
-        ? [
-            bodyParagraph(
-              'UWAGA o zakresie czynności kontrolnych: Niniejszy zakres obejmuje czynności wykonywane w ramach inspekcji okresowej, tj. kontrolę wizualną, ocenę ekspercką osoby z uprawnieniami budowlanymi oraz weryfikację dokumentacji. Czynności wymagające specjalistycznego sprzętu lub kompetencji (badania NDT, kontrola momentów dokręcenia, diagnostyka wibracyjna, dostęp linowy / dronowy do łopat, pomiar luzu łożysk, pomiary grubości powłok) są realizowane przez certyfikowany serwis techniczny producenta turbiny w ramach umowy serwisowej (art. 8b ustawy z 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).',
-              { italic: true }
-            ),
-          ]
-        : []),
+      // Brak akapitu wstępnego o wariancie — `annual_variant` to flaga wewnętrzna
+      // dla inspektora (steruje treścią `scope_annual` w kolumnie „Opis i ustalenia
+      // z kontroli"), nie jest komunikowana klientowi w protokole.
+      // Decyzja Waldka 2026-05-14.
       ustaleniaTable
     )
 
