@@ -3130,128 +3130,10 @@ export async function GET(
       )
     }
 
-    // ─── DOKUMENTACJA FOTOGRAFICZNA ZALECEŃ ─────────────────────────────────
-    // Zdjęcia per pozycja zakresu robót (recommendation_photos z
-    // parent_type='repair_scope_item'). Wskaźniki kopiowane przez auto-carry
-    // z previous_recommendations przy zaznaczeniu "Nie wykonano".
-    const recommendationPhotosSection: (Table | Paragraph)[] = []
-    if (repairScope && repairScope.length > 0) {
-      const scopeIds = (
-        repairScope as Array<{ id?: string }>
-      )
-        .map((r) => r.id)
-        .filter((id): id is string => Boolean(id))
-
-      if (scopeIds.length > 0) {
-        const { data: recPhotosData } = await supabase
-          .from('recommendation_photos')
-          .select('parent_id, file_url, caption, sort_order')
-          .eq('inspection_id', inspectionId)
-          .eq('parent_type', 'repair_scope_item')
-          .in('parent_id', scopeIds)
-          .order('sort_order', { ascending: true })
-
-        const photosByScopeId = new Map<
-          string,
-          Array<{ file_url: string; caption: string | null }>
-        >()
-        for (const p of (recPhotosData || []) as Array<{
-          parent_id: string
-          file_url: string
-          caption: string | null
-        }>) {
-          if (!photosByScopeId.has(p.parent_id)) {
-            photosByScopeId.set(p.parent_id, [])
-          }
-          photosByScopeId.get(p.parent_id)!.push({
-            file_url: p.file_url,
-            caption: p.caption,
-          })
-        }
-
-        const scopesWithPhotos = (
-          repairScope as Array<{
-            id?: string
-            item_number: number
-            scope_description: string | null
-          }>
-        ).filter((r) => r.id && (photosByScopeId.get(r.id)?.length ?? 0) > 0)
-
-        if (scopesWithPhotos.length > 0) {
-          recommendationPhotosSection.push(
-            subHeading('Dokumentacja fotograficzna zaleceń'),
-            bodyParagraph(
-              '(stan zaleceń niewykonanych z poprzedniej kontroli, udokumentowany podczas niniejszej kontroli)',
-              { italic: true }
-            )
-          )
-
-          const cellWidth = Math.floor(USABLE_WIDTH / 2)
-          for (const scope of scopesWithPhotos) {
-            const photos = photosByScopeId.get(scope.id!)!
-            const headerText = `Poz. ${scope.item_number}. ${
-              (scope.scope_description || '').slice(0, 120)
-            }${(scope.scope_description?.length || 0) > 120 ? '…' : ''}`
-            recommendationPhotosSection.push(
-              bodyParagraph(headerText, { bold: true })
-            )
-
-            const photoBuffers = await Promise.all(
-              photos.map((p) => fetchImageAsBuffer(p.file_url))
-            )
-
-            const photoTableRows: TableRow[] = []
-            for (let i = 0; i < photos.length; i += 2) {
-              const cells: TableCell[] = []
-              for (let j = 0; j < 2; j++) {
-                const buf = i + j < photos.length ? photoBuffers[i + j] : null
-                if (buf) {
-                  const imageType: 'jpg' | 'png' =
-                    buf.format === 'png' ? 'png' : 'jpg'
-                  cells.push(
-                    new TableCell({
-                      width: { size: cellWidth, type: WidthType.DXA },
-                      children: [
-                        new Paragraph({
-                          alignment: AlignmentType.CENTER,
-                          children: [
-                            new ImageRun({
-                              type: imageType,
-                              data: buf.buffer,
-                              transformation: { width: 280, height: 187 },
-                              altText: {
-                                title: `Zalecenie poz. ${scope.item_number} zdjęcie ${i + j + 1}`,
-                                description: photos[i + j].caption ?? '',
-                                name: `rec-photo-${scope.id}-${i + j}`,
-                              },
-                            }),
-                          ],
-                        }),
-                      ],
-                    })
-                  )
-                } else {
-                  // Pusta lub brakująca komórka
-                  cells.push(
-                    new TableCell({
-                      width: { size: cellWidth, type: WidthType.DXA },
-                      children: [new Paragraph({ children: [] })],
-                    })
-                  )
-                }
-              }
-              photoTableRows.push(new TableRow({ children: cells }))
-            }
-            recommendationPhotosSection.push(
-              new Table({
-                width: { size: USABLE_WIDTH, type: WidthType.DXA },
-                rows: photoTableRows,
-              })
-            )
-          }
-        }
-      }
-    }
+    // Sekcja „Dokumentacja fotograficzna zaleceń" usunięta 2026-05-13 — wszystkie
+    // zdjęcia (zaleceniowe + bieżące usterki) renderują się w jednej sekcji
+    // „VI/VII. Dokumentacja graficzna / fotograficzna" z globalną numeracją
+    // („Zdjęcie nr N"). Decyzja Waldka.
 
     sectionChildren.push(
       sectionHeading(
@@ -3259,7 +3141,6 @@ export async function GET(
       ),
       bodyParagraph('Określenie zakresu robót remontowych i kolejności ich wykonywania:'),
       repairTable,
-      ...recommendationPhotosSection,
       subHeading('Definicje rodzajów robót remontowych'),
       workKindLegendTable,
       subHeading('Zalecany czas wykonania robót remontowych — stopień pilności'),
@@ -3306,31 +3187,64 @@ export async function GET(
     }
 
     // ─── ZDJĘCIA INSPEKCJI ─────────────────────────────────────────────────
-    // Pobieramy zdjęcia z `inspection_photos` posortowane po numerze i
-    // budujemy tabelę 2-kolumnową: każde zdjęcie + caption "Zdjęcie nr X".
-    const { data: photosData, error: photosErr } = await supabase
-      .from('inspection_photos')
-      .select('id, photo_number, file_url, description, sort_order')
-      .eq('inspection_id', inspectionId)
-      .order('photo_number', { ascending: true, nullsFirst: false })
+    // Pobieramy zdjęcia z OBU tabel — globalna numeracja od 2026-05-13:
+    // zaleceniowe (recommendation_photos, parent_type='repair_scope_item') idą
+    // pierwsze (1..N), potem usterki bieżącej kontroli (inspection_photos).
+    // Wszystkie renderują się tu jako „Zdjęcie nr X" — jedna sekcja.
+    const [{ data: ipData, error: ipErr }, { data: rpData, error: rpErr }] =
+      await Promise.all([
+        supabase
+          .from('inspection_photos')
+          .select('id, photo_number, file_url, description')
+          .eq('inspection_id', inspectionId),
+        supabase
+          .from('recommendation_photos')
+          .select('id, photo_number, file_url, caption')
+          .eq('inspection_id', inspectionId)
+          .eq('parent_type', 'repair_scope_item'),
+      ])
 
-    if (photosErr) {
-      console.error('[DOCX] Błąd ładowania inspection_photos:', photosErr)
-    }
-    console.log(
-      `[DOCX] inspection_photos dla ${inspectionId}: ${photosData?.length ?? 0} wierszy`
-    )
+    if (ipErr) console.error('[DOCX] Błąd ładowania inspection_photos:', ipErr)
+    if (rpErr) console.error('[DOCX] Błąd ładowania recommendation_photos:', rpErr)
 
-    const photoRows = (photosData || []).filter(
-      (p: any) => p.file_url
-    ) as Array<{
-      id: string
+    const allPhotos: Array<{
       photo_number: number | null
       file_url: string
       description: string | null
-    }>
+    }> = [
+      ...((ipData || []) as Array<{
+        photo_number: number | null
+        file_url: string | null
+        description: string | null
+      }>)
+        .filter((p) => p.file_url)
+        .map((p) => ({
+          photo_number: p.photo_number,
+          file_url: p.file_url as string,
+          description: p.description,
+        })),
+      ...((rpData || []) as Array<{
+        photo_number: number | null
+        file_url: string | null
+        caption: string | null
+      }>)
+        .filter((p) => p.file_url)
+        .map((p) => ({
+          photo_number: p.photo_number,
+          file_url: p.file_url as string,
+          description: p.caption,
+        })),
+    ]
 
-    console.log(`[DOCX] photoRows z file_url: ${photoRows.length}`)
+    // Sort po photo_number rosnąco (null na koniec). Zaleceniowe dostały
+    // numery 1..N w backfillu, więc pojawią się first.
+    const photoRows = allPhotos.sort((a, b) => {
+      const an = a.photo_number ?? Number.MAX_SAFE_INTEGER
+      const bn = b.photo_number ?? Number.MAX_SAFE_INTEGER
+      return an - bn
+    })
+
+    console.log(`[DOCX] zdjęć (IP + RP) dla ${inspectionId}: ${photoRows.length}`)
 
     const photoSectionBlocks: (Table | Paragraph)[] = []
     if (photoRows.length > 0) {

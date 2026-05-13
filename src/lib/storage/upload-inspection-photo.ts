@@ -17,12 +17,22 @@
 
 import { compressImage } from './image-compress'
 import { createClient } from '@/lib/supabase/client'
+import { nextGlobalPhotoNumber } from './next-photo-number'
 
 export type UploadStatus = 'compressing' | 'uploading' | 'saving'
 
 export interface UploadInspectionPhotoOpts {
   file: File
   inspectionId: string
+  /**
+   * Sugerowany numer zdjęcia. Wspólna przestrzeń numeracji z
+   * `recommendation_photos.photo_number` (decyzja Waldka 2026-05-13).
+   *
+   * Jeśli przekazana wartość jest niższa niż faktyczny max ze wspólnej
+   * przestrzeni (np. callsite obliczył max tylko z `inspection_photos`,
+   * pomijając RP), helper auto-naprawi numerację do max(RP, IP)+1.
+   * Pomocne dla zachowania kompatybilności ze starymi callsite.
+   */
   photoNumber: number
   elementId?: string | null
   description?: string | null
@@ -103,11 +113,18 @@ export async function uploadInspectionPhoto(
   // 4. Wpis do DB
   onProgress?.('saving')
   const supabase = createClient()
+
+  // Auto-naprawa numeracji: callsite mógł obliczyć max tylko z inspection_photos,
+  // pomijając recommendation_photos. Helper sięga do OBU tabel i bierze max+1
+  // gdy sugerowany numer kolidowałby z istniejącym.
+  const safeNumber = await nextGlobalPhotoNumber(supabase, inspectionId)
+  const finalNumber = Math.max(photoNumber, safeNumber)
+
   const { data, error } = await supabase
     .from('inspection_photos')
     .insert({
       inspection_id: inspectionId,
-      photo_number: photoNumber,
+      photo_number: finalNumber,
       file_url: publicUrl,
       description: description?.trim() || null,
       element_id: elementId || null,

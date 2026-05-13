@@ -2001,118 +2001,10 @@ export async function GET(
       [12, 22, 75, 18, 18, 35]
     )
 
-    // ─── DOKUMENTACJA FOTOGRAFICZNA ZALECEŃ ─────────────────────────────────
-    // Zdjęcia per pozycja zakresu robót (parent_type='repair_scope_item').
-    // Wskaźniki kopiowane przez auto-carry z `previous_recommendations` przy
-    // zaznaczeniu "Nie wykonano" — patrz previous-recommendations-table.tsx.
-    if (repairScope && repairScope.length > 0) {
-      const scopeIds = (
-        repairScope as Array<{ id?: string }>
-      )
-        .map((r) => r.id)
-        .filter((id): id is string => Boolean(id))
-
-      if (scopeIds.length > 0) {
-        const { data: recPhotosData } = await supabase
-          .from('recommendation_photos')
-          .select('parent_id, file_url, caption, sort_order')
-          .eq('inspection_id', inspectionId)
-          .eq('parent_type', 'repair_scope_item')
-          .in('parent_id', scopeIds)
-          .order('sort_order', { ascending: true })
-
-        const photosByScopeId = new Map<
-          string,
-          Array<{ file_url: string; caption: string | null }>
-        >()
-        for (const p of (recPhotosData || []) as Array<{
-          parent_id: string
-          file_url: string
-          caption: string | null
-        }>) {
-          if (!photosByScopeId.has(p.parent_id)) {
-            photosByScopeId.set(p.parent_id, [])
-          }
-          photosByScopeId.get(p.parent_id)!.push({
-            file_url: p.file_url,
-            caption: p.caption,
-          })
-        }
-
-        const scopesWithPhotos = (
-          repairScope as Array<{
-            id?: string
-            item_number: number
-            scope_description: string | null
-          }>
-        ).filter((r) => r.id && (photosByScopeId.get(r.id)?.length ?? 0) > 0)
-
-        if (scopesWithPhotos.length > 0) {
-          addSubHeading('Dokumentacja fotograficzna zaleceń')
-          addBody(
-            '(stan zaleceń niewykonanych z poprzedniej kontroli, udokumentowany podczas niniejszej kontroli)',
-            { italic: true }
-          )
-
-          const recPhotoGap = 4
-          const recPhotoWidth = (pageWidth - 2 * margin - recPhotoGap) / 2
-          const recPhotoHeight = (recPhotoWidth * 2) / 3
-
-          for (const scope of scopesWithPhotos) {
-            const photos = photosByScopeId.get(scope.id!)!
-            // Nagłówek pozycji
-            ensureSpace(8)
-            pdf.setFontSize(FONT_PT.body)
-            pdf.setFont('Roboto', 'bold')
-            const headerText = `Poz. ${scope.item_number}. ${
-              (scope.scope_description || '').slice(0, 100)
-            }${(scope.scope_description?.length || 0) > 100 ? '…' : ''}`
-            const headerLines = pdf.splitTextToSize(
-              headerText,
-              pageWidth - 2 * margin
-            )
-            pdf.text(headerLines, margin, yPosition)
-            yPosition += headerLines.length * 4.5 + 2
-            pdf.setFont('Roboto', 'normal')
-
-            const photoImages = await Promise.all(
-              photos.map((p) => fetchImageAsBase64(p.file_url))
-            )
-
-            for (let i = 0; i < photos.length; i += 2) {
-              ensureSpace(recPhotoHeight + 10)
-              const yStart = yPosition
-              for (let j = 0; j < 2 && i + j < photos.length; j++) {
-                const img = photoImages[i + j]
-                const x = margin + j * (recPhotoWidth + recPhotoGap)
-                if (img) {
-                  const fmt = img.format === 'WEBP' ? 'JPEG' : img.format
-                  try {
-                    pdf.addImage(
-                      img.base64,
-                      fmt,
-                      x,
-                      yStart,
-                      recPhotoWidth,
-                      recPhotoHeight
-                    )
-                  } catch (e) {
-                    console.error('[PDF] Nie udało się wstawić zdjęcia zalecenia:', e)
-                    pdf.setDrawColor(...RGB.graphite200)
-                    pdf.rect(x, yStart, recPhotoWidth, recPhotoHeight)
-                  }
-                } else {
-                  pdf.setDrawColor(...RGB.graphite200)
-                  pdf.rect(x, yStart, recPhotoWidth, recPhotoHeight)
-                }
-              }
-              yPosition = yStart + recPhotoHeight + 5
-            }
-            yPosition += 2
-          }
-        }
-      }
-    }
+    // Sekcja „Dokumentacja fotograficzna zaleceń" usunięta 2026-05-13 — wszystkie
+    // zdjęcia (zaleceniowe + bieżące usterki) renderują się w sekcji „VI/VII.
+    // Dokumentacja graficzna / fotograficzna" z globalną numeracją („Zdjęcie nr N").
+    // Decyzja Waldka.
 
     // ─── 3 TABELE-LEGENDY ───────────────────────────────────────────────────
     addSubHeading('Definicje rodzajów robót remontowych')
@@ -2306,31 +2198,62 @@ export async function GET(
       { italic: true }
     )
 
-    // Pobieramy zdjęcia inspekcji posortowane po numerze (z fallbackiem na sort_order).
+    // Pobieramy zdjęcia z OBU tabel — globalna numeracja od 2026-05-13:
+    // zaleceniowe (recommendation_photos, parent_type='repair_scope_item') idą
+    // pierwsze (1..N), potem usterki bieżącej kontroli (inspection_photos).
     // Renderujemy jako siatkę 2 x N z podpisami "Zdjęcie nr X".
-    const { data: photosData, error: photosErr } = await supabase
-      .from('inspection_photos')
-      .select('id, photo_number, file_url, description, sort_order')
-      .eq('inspection_id', inspectionId)
-      .order('photo_number', { ascending: true, nullsFirst: false })
+    const [{ data: ipData, error: ipErr }, { data: rpData, error: rpErr }] =
+      await Promise.all([
+        supabase
+          .from('inspection_photos')
+          .select('id, photo_number, file_url, description')
+          .eq('inspection_id', inspectionId),
+        supabase
+          .from('recommendation_photos')
+          .select('id, photo_number, file_url, caption')
+          .eq('inspection_id', inspectionId)
+          .eq('parent_type', 'repair_scope_item'),
+      ])
 
-    if (photosErr) {
-      console.error('[PDF] Błąd ładowania inspection_photos:', photosErr)
-    }
-    console.log(
-      `[PDF] inspection_photos dla ${inspectionId}: ${photosData?.length ?? 0} wierszy`
-    )
+    if (ipErr) console.error('[PDF] Błąd ładowania inspection_photos:', ipErr)
+    if (rpErr) console.error('[PDF] Błąd ładowania recommendation_photos:', rpErr)
 
-    const photoRows = (photosData || []).filter(
-      (p: any) => p.file_url
-    ) as Array<{
-      id: string
+    const allPhotos: Array<{
       photo_number: number | null
       file_url: string
       description: string | null
-    }>
+    }> = [
+      ...((ipData || []) as Array<{
+        photo_number: number | null
+        file_url: string | null
+        description: string | null
+      }>)
+        .filter((p) => p.file_url)
+        .map((p) => ({
+          photo_number: p.photo_number,
+          file_url: p.file_url as string,
+          description: p.description,
+        })),
+      ...((rpData || []) as Array<{
+        photo_number: number | null
+        file_url: string | null
+        caption: string | null
+      }>)
+        .filter((p) => p.file_url)
+        .map((p) => ({
+          photo_number: p.photo_number,
+          file_url: p.file_url as string,
+          description: p.caption,
+        })),
+    ]
 
-    console.log(`[PDF] photoRows z file_url: ${photoRows.length}`)
+    const photoRows = allPhotos.sort((a, b) => {
+      const an = a.photo_number ?? Number.MAX_SAFE_INTEGER
+      const bn = b.photo_number ?? Number.MAX_SAFE_INTEGER
+      return an - bn
+    })
+
+    console.log(`[PDF] zdjęć (IP + RP) dla ${inspectionId}: ${photoRows.length}`)
 
     if (photoRows.length > 0) {
       // Podtytuł sekcji zdjęć — analogicznie do legacy protokołów.
