@@ -214,7 +214,37 @@ export async function GET(
       const aNum = a.element_definition?.element_number ?? 999
       const bNum = b.element_definition?.element_number ?? 999
       return aNum - bNum
-    })
+    }) as Array<{ id: string; [k: string]: unknown }>
+
+    // ─── FETCH ZDJĘĆ PER ELEMENT ──────────────────────────────────────────
+    // Mapa element_id → "1, 3, 5" — fallback dla kolumny "Nr fot." w tabeli III
+    // gdy inspektor nie wpisał ręcznie `el.photo_numbers`. Zdjęcia carry'ed
+    // z prev_rec (Faza A — PR #42) mają element_id i wpadają tu automatycznie.
+    const { data: elemPhotosData } = await supabase
+      .from('inspection_photos')
+      .select('element_id, photo_number')
+      .eq('inspection_id', inspectionId)
+      .not('element_id', 'is', null)
+      .order('photo_number', { ascending: true, nullsFirst: false })
+
+    const photoNumbersByElement = new Map<string, string>()
+    for (const p of (elemPhotosData || []) as Array<{
+      element_id: string | null
+      photo_number: number | null
+    }>) {
+      if (!p.element_id || p.photo_number == null) continue
+      const cur = photoNumbersByElement.get(p.element_id) || ''
+      photoNumbersByElement.set(
+        p.element_id,
+        cur ? `${cur}, ${p.photo_number}` : String(p.photo_number)
+      )
+    }
+
+    const photoNumbersFor = (el: { id: string; photo_numbers?: string | null }) => {
+      const manual = (el.photo_numbers || '').trim()
+      if (manual) return manual
+      return photoNumbersByElement.get(el.id) || ''
+    }
 
     const { data: inspectorRels } = await supabase
       .from('inspection_inspectors')
@@ -1553,7 +1583,7 @@ export async function GET(
           def.scope_five_year_additional || '',
           `${ratingLabel(el.condition_rating)}\nPrzydatność: ${usability}`,
           [el.notes, el.recommendations].filter(Boolean).join(' / '),
-          el.photo_numbers || '',
+          photoNumbersFor(el),
           formatDate(el.recommendation_completion_date),
         ])
         rowKeys.push((el.condition_rating as RatingKey) ?? null)
@@ -1637,7 +1667,7 @@ export async function GET(
             .join('\n\n'),
           ratingLabel(el.condition_rating),
           el.recommendations || '',
-          el.photo_numbers || '',
+          photoNumbersFor(el),
           formatDate(el.recommendation_completion_date),
         ])
         rowKeys.push((el.condition_rating as RatingKey) ?? null)
