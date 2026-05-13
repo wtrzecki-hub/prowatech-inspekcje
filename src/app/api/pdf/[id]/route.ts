@@ -148,7 +148,7 @@ export async function GET(
       .from('inspections')
       .select(
         `
-        id, protocol_number, inspection_date, inspection_type, status,
+        id, protocol_number, inspection_date, inspection_type, annual_variant, status,
         overall_condition_rating, overall_assessment, hazard_information,
         next_annual_date, next_five_year_date, next_electrical_date,
         previous_annual_date, previous_five_year_date,
@@ -195,6 +195,8 @@ export async function GET(
     const windFarm = turbine?.wind_farms
     const client = windFarm?.clients
     const isFiveYear = insp.inspection_type === 'five_year'
+    const isSimplifiedAnnual =
+      insp.inspection_type === 'annual' && insp.annual_variant === 'simplified'
 
     // ─── FETCH RELATED ─────────────────────────────────────────────────────
     const { data: elementsData } = await supabase
@@ -204,7 +206,7 @@ export async function GET(
         id, condition_rating, notes, recommendations, photo_numbers,
         recommendation_completion_date, usage_suitability, is_not_applicable,
         element_definition:element_definition_id (
-          id, element_number, name_pl, scope_annual,
+          id, element_number, name_pl, scope_annual, scope_annual_simplified,
           scope_five_year_additional, applicable_standards, sort_order
         )
         `
@@ -1562,6 +1564,21 @@ export async function GET(
     // ─── III. USTALENIA - JEDNA TABELA PIIB ─────────────────────────────────
     addSection('III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego')
     addBody('W trakcie kontroli ustalono:')
+    // Akapit wstępny zależny od wariantu (wzorce wzory_PIIB/_R.docx i _U.docx).
+    // Dla rocznika rozszerzonego — informacja o zakresie czynności i podziale
+    // z serwisem producenta. Dla uproszczonego — wyjaśnienie że kontrola
+    // prowadzona jest tylko z poziomu terenu i parteru wieży.
+    if (isSimplifiedAnnual) {
+      addBody(
+        'WARIANT UPROSZCZONY (kontrola bez wjazdu na konstrukcję): Inspekcja prowadzona z poziomu terenu i pierwszego segmentu wieży. Główne narzędzia: oględziny z lornetką, weryfikacja dokumentacji, analiza danych SCADA udostępnionych przez właściciela / serwis. Wariant odpowiedni dla obiektów objętych pełną umową serwisową producenta. Czynności wymagające wjazdu (kontrola wyższych segmentów wieży, wnętrza gondoli, wirnika z bliska, podestów pośrednich, sprzętu BHP/ppoż. w gondoli, kontroli flansz wyższych) realizowane są przez serwis producenta zgodnie z umową serwisową (art. 8b ustawy z 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).',
+        { italic: true }
+      )
+    } else if (!isFiveYear) {
+      addBody(
+        'UWAGA o zakresie czynności kontrolnych: Niniejszy zakres obejmuje czynności wykonywane w ramach inspekcji okresowej, tj. kontrolę wizualną, ocenę ekspercką osoby z uprawnieniami budowlanymi oraz weryfikację dokumentacji. Czynności wymagające specjalistycznego sprzętu lub kompetencji (badania NDT, kontrola momentów dokręcenia, diagnostyka wibracyjna, dostęp linowy / dronowy do łopat, pomiar luzu łożysk, pomiary grubości powłok) są realizowane przez certyfikowany serwis techniczny producenta turbiny w ramach umowy serwisowej (art. 8b ustawy z 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).',
+        { italic: true }
+      )
+    }
 
     const usablePdfWidth = pageWidth - 2 * margin
     if (isFiveYear) {
@@ -1664,10 +1681,16 @@ export async function GET(
       for (const el of elements as any[]) {
         const def = el.element_definition
         if (!def || el.is_not_applicable) continue
+        // Wariant uproszczony — fallback do scope_annual gdy element nie ma
+        // dedykowanej treści (1, 10, 15, 17, 18 — patrz migracja
+        // 2026-05-13_annual_variant_uproszczony.sql).
+        const scopeText = isSimplifiedAnnual
+          ? (def.scope_annual_simplified || def.scope_annual || '')
+          : (def.scope_annual || '')
         body.push([
           `${def.element_number}. ${def.name_pl}`,
           [
-            def.scope_annual || '',
+            scopeText,
             el.notes ? '- ' + el.notes : '',
           ]
             .filter(Boolean)

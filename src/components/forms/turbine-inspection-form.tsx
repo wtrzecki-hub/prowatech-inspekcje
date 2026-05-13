@@ -275,6 +275,11 @@ export function TurbineInspectionForm({
   const [selectedFarmName, setSelectedFarmName]   = useState(preselectedTurbine?.wind_farms?.name || '')
   const [selectedTurbineId, setSelectedTurbineId] = useState(preselectedTurbine?.id || '')
   const [inspectionType, setInspectionType]       = useState<'annual' | 'five_year'>('annual')
+  // Wariant rocznika: rozszerzony (z wjazdem na konstrukcję) lub uproszczony
+  // (bez wjazdu — kontrola tylko z poziomu terenu / parteru; reszta przez
+  // serwis producenta). Wzorce w `wzory_PIIB/Protokol_Kontroli_Rocznej_EW_PIIB_{R,U}.docx`.
+  // Ignorowany dla inspection_type='five_year'.
+  const [annualVariant, setAnnualVariant]         = useState<'extended' | 'simplified'>('extended')
   const [inspectionDate, setInspectionDate]       = useState(new Date().toISOString().split('T')[0])
   const [siteVisitDate, setSiteVisitDate]         = useState(new Date().toISOString().split('T')[0])
   const [nextInspectionDate, setNextInspectionDate] = useState('')
@@ -609,6 +614,9 @@ export function TurbineInspectionForm({
         .insert({
           turbine_id: selectedTurbineId,
           inspection_type: inspectionType,
+          // annual_variant ignorowany przez generator dla five_year; zostawiamy
+          // domyślną wartość 'extended' żeby kolumna NOT NULL miała poprawny content.
+          annual_variant: inspectionType === 'annual' ? annualVariant : 'extended',
           status,
           inspection_date: inspectionDate,
           site_visit_date: siteVisitDate || null,
@@ -970,6 +978,26 @@ export function TurbineInspectionForm({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {inspectionType === 'annual' && (
+                  <div className="space-y-2">
+                    <Label className="text-base">Wariant rocznika</Label>
+                    <Select
+                      value={annualVariant}
+                      onValueChange={(v) => setAnnualVariant(v as 'extended' | 'simplified')}
+                    >
+                      <SelectTrigger className="h-12 text-base"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="extended">Rozszerzony (z wjazdem na konstrukcję)</SelectItem>
+                        <SelectItem value="simplified">Uproszczony (bez wjazdu — kontrola z poziomu terenu)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Wariant uproszczony — dla obiektów objętych pełną umową serwisową producenta;
+                      kontrola tylko z poziomu terenu i parteru wieży.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label className="text-base flex items-center gap-2">

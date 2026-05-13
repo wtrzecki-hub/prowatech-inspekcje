@@ -348,6 +348,7 @@ export async function GET(
         protocol_number,
         inspection_date,
         inspection_type,
+        annual_variant,
         status,
         overall_condition_rating,
         overall_assessment,
@@ -442,6 +443,8 @@ export async function GET(
     const windFarm = turbine?.wind_farms
     const client = windFarm?.clients
     const isFiveYear = insp.inspection_type === 'five_year'
+    const isSimplifiedAnnual =
+      insp.inspection_type === 'annual' && insp.annual_variant === 'simplified'
 
     // ─── FETCH ELEMENTS ────────────────────────────────────────────────────
     const { data: elementsData } = await supabase
@@ -461,6 +464,7 @@ export async function GET(
           element_number,
           name_pl,
           scope_annual,
+          scope_annual_simplified,
           scope_five_year_additional,
           applicable_standards,
           sort_order
@@ -2014,7 +2018,12 @@ export async function GET(
               }),
               multilineCell(
                 [
-                  ...(def.scope_annual || '').split('\n').filter(Boolean),
+                  ...(isSimplifiedAnnual
+                    ? (def.scope_annual_simplified || def.scope_annual || '')
+                    : (def.scope_annual || '')
+                  )
+                    .split('\n')
+                    .filter(Boolean),
                   ...(el.notes ? ['', '— Opis: ' + el.notes] : []),
                 ],
                 colsAN[1],
@@ -3172,6 +3181,23 @@ export async function GET(
 
       sectionHeading('III. Ustalenia oraz wnioski po sprawdzeniu stanu technicznego'),
       bodyParagraph('W trakcie kontroli ustalono:'),
+      // Akapit wstępny zależny od wariantu rocznika (wzorce
+      // wzory_PIIB/Protokol_Kontroli_Rocznej_EW_PIIB_{R,U}.docx).
+      ...(isSimplifiedAnnual
+        ? [
+            bodyParagraph(
+              'WARIANT UPROSZCZONY (kontrola bez wjazdu na konstrukcję): Inspekcja prowadzona z poziomu terenu i pierwszego segmentu wieży. Główne narzędzia: oględziny z lornetką, weryfikacja dokumentacji, analiza danych SCADA udostępnionych przez właściciela / serwis. Wariant odpowiedni dla obiektów objętych pełną umową serwisową producenta. Czynności wymagające wjazdu (kontrola wyższych segmentów wieży, wnętrza gondoli, wirnika z bliska, podestów pośrednich, sprzętu BHP/ppoż. w gondoli, kontroli flansz wyższych) realizowane są przez serwis producenta zgodnie z umową serwisową (art. 8b ustawy z 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).',
+              { italic: true }
+            ),
+          ]
+        : !isFiveYear
+        ? [
+            bodyParagraph(
+              'UWAGA o zakresie czynności kontrolnych: Niniejszy zakres obejmuje czynności wykonywane w ramach inspekcji okresowej, tj. kontrolę wizualną, ocenę ekspercką osoby z uprawnieniami budowlanymi oraz weryfikację dokumentacji. Czynności wymagające specjalistycznego sprzętu lub kompetencji (badania NDT, kontrola momentów dokręcenia, diagnostyka wibracyjna, dostęp linowy / dronowy do łopat, pomiar luzu łożysk, pomiary grubości powłok) są realizowane przez certyfikowany serwis techniczny producenta turbiny w ramach umowy serwisowej (art. 8b ustawy z 20 maja 2016 r. o inwestycjach w zakresie elektrowni wiatrowych).',
+              { italic: true }
+            ),
+          ]
+        : []),
       ustaleniaTable
     )
 
