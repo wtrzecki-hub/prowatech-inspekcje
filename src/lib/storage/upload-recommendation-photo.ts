@@ -9,6 +9,7 @@
 
 import { compressImage } from './image-compress'
 import { createClient } from '@/lib/supabase/client'
+import { nextGlobalPhotoNumber } from './next-photo-number'
 
 export type UploadStatus = 'compressing' | 'uploading' | 'saving'
 
@@ -37,7 +38,9 @@ export interface UploadedRecommendationPhoto {
   r2_key: string
   caption: string | null
   sort_order: number
+  photo_number: number | null
 }
+
 
 export async function uploadRecommendationPhoto(
   opts: UploadRecommendationPhotoOpts,
@@ -96,6 +99,7 @@ export async function uploadRecommendationPhoto(
 
   onProgress?.('saving')
   const supabase = createClient()
+  const photoNumber = await nextGlobalPhotoNumber(supabase, inspectionId)
   const { data, error } = await supabase
     .from('recommendation_photos')
     .insert({
@@ -106,9 +110,10 @@ export async function uploadRecommendationPhoto(
       r2_key: key,
       caption: caption?.trim() || null,
       sort_order: sortOrder,
+      photo_number: photoNumber,
     })
     .select(
-      'id, parent_type, parent_id, inspection_id, file_url, r2_key, caption, sort_order',
+      'id, parent_type, parent_id, inspection_id, file_url, r2_key, caption, sort_order, photo_number',
     )
     .single()
 
