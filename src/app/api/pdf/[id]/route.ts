@@ -1667,7 +1667,7 @@ export async function GET(
         body.push([
           `${def.element_number}. ${def.name_pl}`,
           [
-            (def.scope_annual || '').slice(0, 300),
+            def.scope_annual || '',
             el.notes ? '- ' + el.notes : '',
           ]
             .filter(Boolean)
