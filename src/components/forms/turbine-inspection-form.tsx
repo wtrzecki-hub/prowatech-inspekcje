@@ -335,11 +335,10 @@ export function TurbineInspectionForm({
   //   has_pv_panels=true (decyzja Waldka 2026-05-13 — w bazie tylko 2 turbiny
   //   na FW Działoszyn mają PV)
   // State zachowuje wszystkie elementy zeby user nie tracil danych przy zmianie typu.
-  const selectedTurbine =
-    preselectedTurbine?.id === selectedTurbineId
-      ? preselectedTurbine
-      : turbines.find((t) => t.id === selectedTurbineId) ?? null
-  const hasPvPanels = selectedTurbine?.has_pv_panels === true
+  // `selectedTurbine` ponownie wyliczone niżej (przy renderze) — tu tylko jego
+  // znacznik PV potrzebny do filtra.
+  const hasPvPanels =
+    turbines.find((t) => t.id === selectedTurbineId)?.has_pv_panels === true
   const visibleElements = elements
     .filter((el) =>
       inspectionType === 'five_year' ? el.appliesToFiveYear : el.appliesToAnnual
