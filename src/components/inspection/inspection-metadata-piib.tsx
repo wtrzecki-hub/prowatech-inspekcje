@@ -133,6 +133,9 @@ interface InspectionMetadataPiibProps {
   inspectionId: string
   /** Czy widoczna sekcja kob_entries_summary z opisem dla 5-letniej (5 lat) vs rocznej (12 mies.) */
   inspectionType?: 'annual' | 'five_year'
+  /** Status inspekcji — gdy 'signed', wszystkie save'y są pomijane (defense
+   *  in depth obok UI pointer-events:none na poziomie strony). */
+  inspectionStatus?: string | null
 }
 
 const SUPABASE_URL = 'https://lhxhsprqoecepojrxepf.supabase.co'
@@ -569,7 +572,10 @@ const DOCUMENT_STATUS_OPTIONS: Array<{
 export function InspectionMetadataPiib({
   inspectionId,
   inspectionType = 'annual',
+  inspectionStatus,
 }: InspectionMetadataPiibProps) {
+  // Freeze podpisanych protokołów — defense in depth obok UI pointer-events.
+  const isLocked = inspectionStatus === 'signed'
   const [meta, setMeta] = useState<InspectionMetadata>(EMPTY_METADATA)
   const [turbinePhotos, setTurbinePhotos] =
     useState<TurbinePhotos>(EMPTY_TURBINE_PHOTOS)
@@ -806,9 +812,12 @@ export function InspectionMetadataPiib({
             autoFill.documents_reviewed = mergedDocs
           }
 
-          if (Object.keys(autoFill).length > 0) {
+          if (Object.keys(autoFill).length > 0 && !isLocked) {
             Object.assign(loaded, autoFill)
             // Persist od razu, żeby nie trzeba było „ruszać" pól w UI.
+            // Skip dla podpisanych protokołów — auto-fill nie ruszał istniejących
+            // wartości i tak (`isEmpty` check), ale po podpisaniu zasada „nie
+            // ruszamy" obejmuje również operacje read-side-effect.
             const { error: upErr } = await sb
               .from('inspections')
               .update(autoFill)
@@ -827,6 +836,7 @@ export function InspectionMetadataPiib({
   }
 
   const queueSave = (updates: Partial<InspectionMetadata>) => {
+    if (isLocked) return
     setMeta((prev) => ({ ...prev, ...updates }))
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -863,6 +873,7 @@ export function InspectionMetadataPiib({
     field: K,
     value: TurbinePiibFields[K]
   ) => {
+    if (isLocked) return
     setTurbinePiib((prev) => ({ ...prev, [field]: value }))
 
     if (!turbinePhotos.turbineId) return
@@ -987,6 +998,7 @@ export function InspectionMetadataPiib({
    * Optymistyczna aktualizacja state + revert przy błędzie.
    */
   const toggleInspector = async (inspector: AvailableInspector) => {
+    if (isLocked) return
     const sb = supabase()
     const isSelected = selectedInspectorIds.has(inspector.id)
 
@@ -1027,6 +1039,7 @@ export function InspectionMetadataPiib({
 
   /** Toggle przedstawiciela klienta w junction `inspection_participants`. */
   const toggleRepresentative = async (repId: string) => {
+    if (isLocked) return
     const sb = supabase()
     const isSelected = selectedRepIds.has(repId)
 
@@ -1073,6 +1086,7 @@ export function InspectionMetadataPiib({
    *   - 'manager'     → ustawia jako zarządcę obiektu (`manager_name`)
    */
   const handleAddRep = async () => {
+    if (isLocked) return
     if (!clientId) {
       alert('Brak klienta — sprawdź przypisanie turbiny do farmy/klienta.')
       return
@@ -1136,6 +1150,7 @@ export function InspectionMetadataPiib({
 
   /** Soft-delete przedstawiciela — wraca do bazy ale nie pojawia się w UI. */
   const handleDeleteRep = async (rep: ClientRepresentative) => {
+    if (isLocked) return
     if (
       !confirm(
         `Usunąć przedstawiciela „${rep.full_name}" z listy klienta? Pozostanie zachowany w starszych inspekcjach, ale nie będzie już proponowany.`

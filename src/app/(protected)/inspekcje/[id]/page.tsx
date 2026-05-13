@@ -48,6 +48,11 @@ import {
   CONDITION_RATINGS,
 } from '@/lib/constants'
 import {
+  isInspectionLocked,
+  LOCKED_BANNER_TITLE,
+  LOCKED_BANNER_BODY,
+} from '@/lib/inspections/locked'
+import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
@@ -520,6 +525,15 @@ export default function InspectionDetailPage() {
   }
 
   const handleInspectionChange = (field: string, value: unknown) => {
+    // Freeze: gdy inspekcja jest 'signed', jedyna zmiana którą dopuszczamy
+    // to przejście statusu na inny (żeby user mógł odblokować). Pozostałe
+    // pola są zablokowane do edycji.
+    if (
+      isInspectionLocked(inspection?.status) &&
+      !(field === 'status' && value !== 'signed')
+    ) {
+      return
+    }
     setInspection((prev) => {
       if (!prev) return prev
       return { ...prev, [field]: value }
@@ -738,9 +752,37 @@ export default function InspectionDetailPage() {
         inspectionId={inspection.id}
       />
 
-      {/* Tabs */}
-      <Tabs defaultValue="elementy" className="w-full">
-        <TabsList className="flex w-full lg:w-auto overflow-x-auto">
+      {/* Freeze banner — protokoły podpisane (signed) są read-only.
+          StatusBar zostaje aktywny, żeby user mógł odblokować zmieniając status. */}
+      {isInspectionLocked(inspection.status) && (
+        <Alert className="border-warning-200 bg-warning-50">
+          <AlertCircle className="h-4 w-4 text-warning-700" />
+          <AlertDescription>
+            <p className="font-semibold text-warning-900 mb-1">
+              {LOCKED_BANNER_TITLE}
+            </p>
+            <p className="text-warning-800 text-sm">{LOCKED_BANNER_BODY}</p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Tabs — wrapper z pointer-events:none gdy inspekcja podpisana.
+          To zapobiega klikalności wszystkich inputów/buttonów wewnątrz;
+          guard backendowy w save funkcjach dodatkowo zabezpiecza przed
+          obejściem przez devtools. PDF/DOCX generowanie zostaje aktywne
+          bo nie modyfikuje danych (jest poza Tabs, w nagłówku). */}
+      <Tabs
+        defaultValue="elementy"
+        className={
+          'w-full' +
+          (isInspectionLocked(inspection.status)
+            ? ' pointer-events-none opacity-60 select-none'
+            : '')
+        }
+        aria-disabled={isInspectionLocked(inspection.status)}
+      >
+        {/* pointer-events-auto: przełączanie tabów ma działać nawet w trybie locked. */}
+        <TabsList className="flex w-full lg:w-auto overflow-x-auto pointer-events-auto opacity-100">
           <TabsTrigger value="metryczka">Metryczka</TabsTrigger>
           <TabsTrigger value="elementy">Elementy</TabsTrigger>
           <TabsTrigger value="serwis">Serwis</TabsTrigger>
@@ -767,6 +809,7 @@ export default function InspectionDetailPage() {
           <InspectionMetadataPiib
             inspectionId={inspection.id}
             inspectionType={inspection.inspection_type}
+            inspectionStatus={inspection.status}
           />
         </TabsContent>
 
@@ -922,6 +965,7 @@ export default function InspectionDetailPage() {
               inspectionId={inspection.id}
               turbineId={inspection.turbine?.id}
               inspectionDate={inspection.inspection_date}
+              inspectionStatus={inspection.status}
             />
             <EmergencyStateTable inspectionId={inspection.id} />
           </div>

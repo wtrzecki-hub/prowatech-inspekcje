@@ -106,6 +106,9 @@ interface PreviousRecommendationsTableProps {
   /** Data bieżącej inspekcji — używana do obliczenia deadline z urgency_level
    *  przy auto-carry do repair_scope_items. */
   inspectionDate?: string | null
+  /** Status inspekcji — gdy 'signed', wszystkie save'y i carry'e są pomijane
+   *  (defense in depth obok UI pointer-events:none). */
+  inspectionStatus?: string | null
 }
 
 const SUPABASE_URL = 'https://lhxhsprqoecepojrxepf.supabase.co'
@@ -134,7 +137,11 @@ export function PreviousRecommendationsTable({
   inspectionId,
   turbineId,
   inspectionDate,
+  inspectionStatus,
 }: PreviousRecommendationsTableProps) {
+  // Guard freeze — defense in depth (UI ma pointer-events:none, ale ten guard
+  // chroni przed bypass'em przez devtools / programatyczne wywołania).
+  const isLocked = inspectionStatus === 'signed'
   const [items, setItems] = useState<PreviousRecommendation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -205,6 +212,7 @@ export function PreviousRecommendationsTable({
       prevRecId?: string
     } = {}
   ): Promise<void> => {
+    if (isLocked) return
     const text = rawText?.trim()
     if (!text) return
     const normText = normalizeForCarryDedup(text)
@@ -349,6 +357,164 @@ export function PreviousRecommendationsTable({
       }
     } catch (err) {
       console.error('Błąd auto-carry do repair_scope_items:', err)
+    }
+  }
+
+  /**
+   * Auto-carry: po zaznaczeniu „Nie wykonano" propaguj treść zalecenia i
+   * zdjęcia do `inspection_elements` (sekcja III. USTALENIA w protokole).
+   *
+   * Match po `element_name` z prev_rec === `inspection_element_definitions.name_pl`
+   * (DOKŁADNY — bez fuzzy). Brak match → bez propagacji (inspektor wpisze ręcznie
+   * lub poprawi nazwę w polu „Element / lokalizacja").
+   *
+   * Dedup tekstu: prefiks „Z poprzedniej kontroli: …" — jeśli `recommendations`
+   * już zawiera ten string, nie duplikujemy.
+   *
+   * Dedup zdjęć: po `source_recommendation_id` — jeśli zdjęcia z tego prev_rec
+   * już są w `inspection_photos`, pomijamy. Mapowanie schematu
+   * `recommendation_photos` → `inspection_photos`:
+   *   - `file_url` → `file_url`
+   *   - `caption`  → `description`
+   *   - `sort_order` → `sort_order`
+   *   - nowa numeracja `photo_number` = max+1, max+2… (continuation).
+   *
+   * Reverse (zmiana 'nie' → coś innego) usuwa TYLKO zdjęcia (po source_id);
+   * tekstu nie cofamy bo inspektor mógł go już edytować.
+   */
+  const ensureCarryToElement = async (
+    prevRecId: string,
+    recommendationText: string | null,
+    elementName: string | null
+  ): Promise<void> => {
+    if (isLocked) return
+    const trimmedName = elementName?.trim()
+    if (!trimmedName) return
+    const trimmedText = recommendationText?.trim()
+    if (!trimmedText) return
+
+    try {
+      const sb = supabase()
+
+      // 1. Match dokładny: inspection_element_definitions.name_pl LUB name_short
+      //    Datalist z PR #37 podaje pełne `name_pl` (np. „Fundament i posadowienie"),
+      //    ale inspektorzy często wpisują krótko („Fundament") — to ta sama rzecz.
+      //    Match po obu kolumnach pokrywa oba realistyczne źródła wartości,
+      //    bez wprowadzania fuzzy similarity.
+      const { data: defs, error: defErr } = await sb
+        .from('inspection_element_definitions')
+        .select('id, name_pl, name_short')
+        .or(`name_pl.eq.${trimmedName},name_short.eq.${trimmedName}`)
+        .eq('is_active', true)
+      if (defErr) {
+        console.error('Błąd lookup element_definition:', defErr)
+        return
+      }
+      // Preferuj match po name_pl gdy oba istnieją (rzadko, ale możliwe).
+      const def =
+        defs?.find((d) => d.name_pl === trimmedName) || defs?.[0] || null
+      if (!def) return // brak match — pomiń, inspektor wpisał freetext
+
+      // 2. Element w bieżącej inspekcji (zwykle istnieje — seedowane przy create)
+      const { data: elem, error: elemErr } = await sb
+        .from('inspection_elements')
+        .select('id, recommendations')
+        .eq('inspection_id', inspectionId)
+        .eq('element_definition_id', def.id)
+        .maybeSingle()
+      if (elemErr) {
+        console.error('Błąd lookup inspection_element:', elemErr)
+        return
+      }
+      if (!elem) return // element nie istnieje (np. wyłączony z rocznej)
+
+      // 3. Append do recommendations z dedupem po prefiksie
+      const carryLine = `Z poprzedniej kontroli: ${trimmedText}`
+      const current = (elem.recommendations || '').trim()
+      if (!current.includes(carryLine)) {
+        const next = current ? `${current}\n\n${carryLine}` : carryLine
+        const { error: updErr } = await sb
+          .from('inspection_elements')
+          .update({ recommendations: next })
+          .eq('id', elem.id)
+        if (updErr) console.error('Błąd append do recommendations:', updErr)
+      }
+
+      // 4. Carry zdjęć (dedup po source_recommendation_id)
+      const { data: existing, error: existErr } = await sb
+        .from('inspection_photos')
+        .select('id')
+        .eq('inspection_id', inspectionId)
+        .eq('source_recommendation_id', prevRecId)
+        .limit(1)
+      if (existErr) {
+        console.error('Błąd check existing carry photos:', existErr)
+        return
+      }
+      if (existing && existing.length > 0) return
+
+      const { data: srcPhotos, error: srcErr } = await sb
+        .from('recommendation_photos')
+        .select('file_url, caption, sort_order')
+        .eq('parent_type', 'previous_recommendation')
+        .eq('parent_id', prevRecId)
+      if (srcErr) {
+        console.error('Błąd select recommendation_photos:', srcErr)
+        return
+      }
+      if (!srcPhotos || srcPhotos.length === 0) return
+
+      // Numeracja photo_number — continuation z max bieżącej inspekcji.
+      const { data: maxRow } = await sb
+        .from('inspection_photos')
+        .select('photo_number')
+        .eq('inspection_id', inspectionId)
+        .order('photo_number', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle()
+      let nextNumber =
+        ((maxRow?.photo_number as number | null) ?? 0) + 1
+
+      const toInsert = (
+        srcPhotos as Array<{
+          file_url: string
+          caption: string | null
+          sort_order: number
+        }>
+      ).map((p) => ({
+        inspection_id: inspectionId,
+        element_id: elem.id,
+        file_url: p.file_url,
+        description: p.caption,
+        sort_order: p.sort_order,
+        photo_number: nextNumber++,
+        source_recommendation_id: prevRecId,
+      }))
+      const { error: insErr } = await sb
+        .from('inspection_photos')
+        .insert(toInsert)
+      if (insErr) console.error('Błąd insert inspection_photos:', insErr)
+    } catch (err) {
+      console.error('Błąd propagacji prev_rec → element:', err)
+    }
+  }
+
+  /**
+   * Revert zdjęć przepisanych przez `ensureCarryToElement`. Wywoływane gdy
+   * inspektor zmienia status z 'nie' na inny (lub null). Tekstu zalecenia
+   * w `inspection_elements.recommendations` NIE cofamy — inspektor mógł
+   * dopisać własne uwagi obok.
+   */
+  const revertElementCarry = async (prevRecId: string): Promise<void> => {
+    if (isLocked) return
+    try {
+      const { error } = await supabase()
+        .from('inspection_photos')
+        .delete()
+        .eq('source_recommendation_id', prevRecId)
+      if (error) console.error('Błąd revert zdjęć element-carry:', error)
+    } catch (err) {
+      console.error('Błąd revert prev_rec → element:', err)
     }
   }
 
@@ -529,6 +695,7 @@ export function PreviousRecommendationsTable({
     forType: SourceType,
     options: { silent?: boolean } = {}
   ): Promise<AutoImportInfo | null> => {
+    if (isLocked) return null
     if (!turbineId) return null
     setImportingType(forType)
     try {
@@ -818,6 +985,7 @@ export function PreviousRecommendationsTable({
             element_name: it.element_name,
             prevRecId: it.id,
           })
+          await ensureCarryToElement(it.id, it.recommendation_text, it.element_name)
         }
       }
 
@@ -857,6 +1025,7 @@ export function PreviousRecommendationsTable({
       | 'element_name',
     value: string | null
   ) => {
+    if (isLocked) return
     setItems((prev) =>
       prev.map((i) =>
         i.id === id
@@ -902,7 +1071,14 @@ export function PreviousRecommendationsTable({
               element_name: row.element_name,
               prevRecId: row.id,
             })
+            void ensureCarryToElement(row.id, row.recommendation_text, row.element_name)
           }
+        } else if (field === 'completion_status' && value !== 'nie') {
+          // Reverse: odznaczenie „Nie wykonano" cofa zdjęcia skopiowane do
+          // inspection_photos (po source_recommendation_id). Tekstu w
+          // inspection_elements.recommendations NIE cofamy — inspektor mógł
+          // dopisać własne uwagi do tego samego pola.
+          void revertElementCarry(id)
         }
 
         // Propagacja do scope_item zmian element_name / work_kind /
@@ -923,6 +1099,8 @@ export function PreviousRecommendationsTable({
             row.source_inspection_type &&
             row.recommendation_text
           ) {
+            const effectiveElementName =
+              field === 'element_name' ? value : row.element_name
             void ensureCarryToScope(
               row.recommendation_text,
               row.source_inspection_type,
@@ -930,10 +1108,20 @@ export function PreviousRecommendationsTable({
                 work_kind: field === 'work_kind' ? (value as WorkKind) : row.work_kind,
                 urgency_level:
                   field === 'urgency_level' ? (value as UrgencyLevel) : row.urgency_level,
-                element_name: field === 'element_name' ? value : row.element_name,
+                element_name: effectiveElementName,
                 prevRecId: row.id,
               }
             )
+            // Element-carry: gdy inspektor uzupełnia poprawną nazwę elementu
+            // w prev_rec ze statusem 'nie', dopisz zalecenie + zdjęcia do
+            // inspection_elements (analogicznie do scope-carry).
+            if (field === 'element_name') {
+              void ensureCarryToElement(
+                row.id,
+                row.recommendation_text,
+                effectiveElementName
+              )
+            }
           }
         }
       } catch (err) {
@@ -945,6 +1133,7 @@ export function PreviousRecommendationsTable({
   }
 
   const handleDelete = async (id: string) => {
+    if (isLocked) return
     const deleted = items.find((i) => i.id === id)
     setItems((prev) => prev.filter((i) => i.id !== id))
     try {
