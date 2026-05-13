@@ -70,6 +70,7 @@ interface Inspection {
   protocol_number: string | null
   inspection_date: string
   inspection_type: 'annual' | 'five_year'
+  annual_variant: 'extended' | 'simplified'
   status: InspectionStatus
   overall_condition_rating: ConditionRating | null
   overall_assessment: string | null
@@ -208,6 +209,7 @@ export default function InspectionDetailPage() {
           protocol_number,
           inspection_date,
           inspection_type,
+          annual_variant,
           status,
           overall_condition_rating,
           overall_assessment,
@@ -696,6 +698,40 @@ export default function InspectionDetailPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400">Klient</p>
                 <p className="font-medium text-graphite-800 text-[13px]">{inspection.client?.name}</p>
               </div>
+              {inspection.inspection_type === 'annual' && (
+                <div>
+                  <Label
+                    htmlFor="header-annual-variant"
+                    className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400"
+                  >
+                    Wariant rocznika
+                  </Label>
+                  <Select
+                    value={inspection.annual_variant || 'extended'}
+                    onValueChange={(v) =>
+                      handleInspectionChange(
+                        'annual_variant',
+                        v as 'extended' | 'simplified',
+                      )
+                    }
+                    disabled={isInspectionLocked(inspection.status)}
+                  >
+                    <SelectTrigger
+                      id="header-annual-variant"
+                      className="font-medium h-8 text-[13px] mt-1"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="extended">Rozszerzony (z wjazdem)</SelectItem>
+                      <SelectItem value="simplified">Uproszczony (bez wjazdu)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-graphite-400 mt-1">
+                    Wpływa tylko na treść w sekcji III generowanego protokołu (PDF / DOCX).
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
