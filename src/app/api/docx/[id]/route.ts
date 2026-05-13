@@ -41,6 +41,7 @@ import {
   contentDispositionAttachment,
 } from '@/lib/protocol-filename'
 import { hasValidLicense } from '@/lib/inspectors/license'
+import { formatExtraCertsSuffix } from '@/lib/inspectors/format-certs'
 import { buildOwnerLine } from '@/lib/protocol-formatters'
 
 // =============================================================================
@@ -472,7 +473,39 @@ export async function GET(
       const aNum = a.element_definition?.element_number ?? 999
       const bNum = b.element_definition?.element_number ?? 999
       return aNum - bNum
-    })
+    }) as Array<{ id: string; [k: string]: unknown }>
+
+    // ─── FETCH ZDJĘĆ PER ELEMENT ──────────────────────────────────────────
+    // Mapa element_id → "1, 3, 5" (numery zdjęć z inspection_photos.element_id)
+    // używana jako fallback dla kolumny "Nr fot." w tabeli III, gdy inspektor
+    // nie wpisał ręcznie `el.photo_numbers`. Zdjęcia carry'ed z prev_rec
+    // (Faza A — PR #42) mają element_id i tu wpadają automatycznie.
+    const { data: elemPhotosData } = await supabase
+      .from('inspection_photos')
+      .select('element_id, photo_number')
+      .eq('inspection_id', inspectionId)
+      .not('element_id', 'is', null)
+      .order('photo_number', { ascending: true, nullsFirst: false })
+
+    const photoNumbersByElement = new Map<string, string>()
+    for (const p of (elemPhotosData || []) as Array<{
+      element_id: string | null
+      photo_number: number | null
+    }>) {
+      if (!p.element_id || p.photo_number == null) continue
+      const cur = photoNumbersByElement.get(p.element_id) || ''
+      photoNumbersByElement.set(
+        p.element_id,
+        cur ? `${cur}, ${p.photo_number}` : String(p.photo_number)
+      )
+    }
+
+    // Helper: fallback do auto-numeracji z inspection_photos gdy pole puste.
+    const photoNumbersFor = (el: { id: string; photo_numbers?: string | null }) => {
+      const manual = (el.photo_numbers || '').trim()
+      if (manual) return manual
+      return photoNumbersByElement.get(el.id) || ''
+    }
 
     // ─── FETCH INSPECTORS ──────────────────────────────────────────────────
     const { data: inspectorRels } = await supabase
@@ -489,7 +522,8 @@ export async function GET(
           chamber_membership,
           chamber_certificate_number,
           sep_certificate_number,
-          gwo_certificate_number
+          gwo_certificate_number,
+          udt_certificate_number
         )
       `
       )
@@ -507,12 +541,23 @@ export async function GET(
     // w protokole jako inspektorzy branżowi bez podpisu. Uwaga Waldka
     // 2026-05-12: typowy zespół to "PIIB + branżowy", co najmniej jeden
     // sygnariusz wymagany przez prawo budowlane.
-    const signingInspectors = inspectors.filter((i: any) =>
-      hasValidLicense(i.license_number),
-    )
-    const assistingInspectors = inspectors.filter(
-      (i: any) => !hasValidLicense(i.license_number),
-    )
+    // Kolejność branż w metryczce „Wykonawca kontroli" (Waldek 2026-05-13):
+    // konstrukcyjna PIIB zawsze pierwsza — kierownik komisji, sygnariusz.
+    const SPECIALTY_ORDER: Record<string, number> = {
+      konstrukcyjna: 0,
+      elektryczna: 1,
+      sanitarna: 2,
+      inna: 3,
+    }
+    const inspectorSortKey = (i: any) =>
+      SPECIALTY_ORDER[i.rel_specialty || i.specialty || ''] ?? 99
+
+    const signingInspectors = inspectors
+      .filter((i: any) => hasValidLicense(i.license_number))
+      .sort((a: any, b: any) => inspectorSortKey(a) - inspectorSortKey(b))
+    const assistingInspectors = inspectors
+      .filter((i: any) => !hasValidLicense(i.license_number))
+      .sort((a: any, b: any) => inspectorSortKey(a) - inspectorSortKey(b))
 
     // ─── FETCH PARTICIPANTS (Przy udziale — przedstawiciele klienta) ──────
     // Fallback do legacy `additional_participants` gdy brak rekordów.
@@ -1278,27 +1323,22 @@ export async function GET(
             ? signingInspectors
                 .map(
                   (i: any) =>
-                    `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}`
+                    `${i.full_name || ''}${i.license_number ? ' / ' + i.license_number : ''}${i.specialty ? ' / ' + i.specialty : ''}${formatExtraCertsSuffix(i)}`
                 )
                 .join('; ')
             : insp.contractor_info) || ''
         ),
         // Inspektor branżowy — uczestnik kontroli z uprawnieniami branżowymi
-        // (SEP, GWO) ale bez uprawnień budowlanych PIIB. Nie podpisuje
+        // (GWO, SEP, UDT) ale bez uprawnień budowlanych PIIB. Nie podpisuje
         // protokołu. Renderowany tylko gdy taki istnieje.
         ...(assistingInspectors.length > 0
           ? [
               metaRow(
                 'Inspektor branżowy:',
                 assistingInspectors
-                  .map((i: any) => {
-                    const certs: string[] = []
-                    if (i.sep_certificate_number) certs.push('SEP')
-                    if (i.gwo_certificate_number) certs.push('GWO')
-                    const certSuffix =
-                      certs.length > 0 ? ` (${certs.join(', ')})` : ''
-                    return `${i.full_name || ''}${certSuffix}`
-                  })
+                  .map(
+                    (i: any) => `${i.full_name || ''}${formatExtraCertsSuffix(i)}`
+                  )
                   .join('; '),
               ),
             ]
@@ -1890,7 +1930,7 @@ export async function GET(
                 [el.notes, el.recommendations].filter(Boolean).join(' • ') || '',
                 colsFY[4]
               ),
-              dataCell(el.photo_numbers || '', colsFY[5]),
+              dataCell(photoNumbersFor(el), colsFY[5]),
               dataCell(formatDate(el.recommendation_completion_date), colsFY[6]),
             ],
           })
@@ -2006,7 +2046,7 @@ export async function GET(
                 ],
               }),
               dataCell(el.recommendations || '', colsAN[3]),
-              dataCell(el.photo_numbers || '', colsAN[4]),
+              dataCell(photoNumbersFor(el), colsAN[4]),
               dataCell(formatDate(el.recommendation_completion_date), colsAN[5]),
             ],
           })
@@ -2614,33 +2654,70 @@ export async function GET(
     // ─── PODPISY ────────────────────────────────────────────────────────────
     const sigColW = Math.floor(USABLE_WIDTH / 2)
 
-    function signatureCell(label: string, name: string): TableCell {
-      return new TableCell({
-        width: { size: sigColW, type: WidthType.DXA },
-        borders: noBorder,
-        children: [
-          new Paragraph({
-            // 2800 twipów ≈ 5cm pionowego miejsca przed linią podpisu —
-            // wystarczy na pieczątkę inspektora (~4×2.5cm) + odręczny podpis.
-            // Uwaga Artura 2026-05-12: poprzednio 800 twipów (~1.4cm) było
-            // za mało, pieczątka się nie mieściła.
-            spacing: { before: 2800 },
-            border: {
-              top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-            },
-            children: [new TextRun({ text: label, font: 'Arial', size: 18 })],
-          }),
+    function signatureCell(
+      label: string,
+      name: string,
+      credentials?: { license_number?: string | null; chamber_membership?: string | null }
+    ): TableCell {
+      const paragraphs: Paragraph[] = [
+        new Paragraph({
+          // 2800 twipów ≈ 5cm pionowego miejsca przed linią podpisu —
+          // wystarczy na pieczątkę inspektora (~4×2.5cm) + odręczny podpis.
+          // Uwaga Artura 2026-05-12: poprzednio 800 twipów (~1.4cm) było
+          // za mało, pieczątka się nie mieściła.
+          spacing: { before: 2800 },
+          border: {
+            top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+          },
+          children: [new TextRun({ text: label, font: 'Arial', size: 18 })],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: name,
+              font: 'Arial',
+              size: 16,
+              italics: true,
+            }),
+          ],
+        }),
+      ]
+
+      // Uprawnienia budowlane PIIB pod imieniem — uwaga Artura 2026-05-13.
+      // Renderujemy `Nr upr.` + izba tylko gdy są dane (sygnariusze mają;
+      // branżowi i tak nie składają podpisu pod protokołem PIIB).
+      if (credentials?.license_number && hasValidLicense(credentials.license_number)) {
+        paragraphs.push(
           new Paragraph({
             children: [
               new TextRun({
-                text: name,
+                text: `Nr upr.: ${credentials.license_number}`,
                 font: 'Arial',
-                size: 16,
-                italics: true,
+                size: 14,
               }),
             ],
-          }),
-        ],
+          })
+        )
+      }
+      if (credentials?.chamber_membership && credentials.chamber_membership.trim()) {
+        paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: credentials.chamber_membership.trim(),
+                font: 'Arial',
+                size: 14,
+                color: HEX.graphite800,
+              }),
+            ],
+          })
+        )
+      }
+
+      return new TableCell({
+        width: { size: sigColW, type: WidthType.DXA },
+        borders: noBorder,
+        children: paragraphs,
       })
     }
 
@@ -2661,22 +2738,58 @@ export async function GET(
           children: [
             signatureCell(
               'Branża KONSTRUKCYJNO-BUDOWLANA',
-              konstr?.full_name || ''
+              konstr?.full_name || '',
+              konstr
+                ? {
+                    license_number: konstr.license_number,
+                    chamber_membership: konstr.chamber_membership,
+                  }
+                : undefined
             ),
-            signatureCell('Branża ELEKTRYCZNA', elektr?.full_name || ''),
+            signatureCell(
+              'Branża ELEKTRYCZNA',
+              elektr?.full_name || '',
+              elektr
+                ? {
+                    license_number: elektr.license_number,
+                    chamber_membership: elektr.chamber_membership,
+                  }
+                : undefined
+            ),
           ],
         })
       )
     } else {
+      // Roczna: jeden podpis dla wszystkich sygnariuszy. Pokazujemy uprawnienia
+      // każdego z osobna pod nazwiskiem; gdy 2+ inspektorów, kolejne idą w
+      // następnych liniach dzięki wielokrotnym akapitom.
+      const annualSigningInspectors = signingInspectors as Array<{
+        full_name: string
+        license_number?: string | null
+        chamber_membership?: string | null
+      }>
+      const namesJoined = annualSigningInspectors
+        .map((i) => i.full_name)
+        .filter(Boolean)
+        .join(', ')
+      // Jeśli tylko 1 sygnariusz, podajmy jego uprawnienia bezpośrednio.
+      // Dla wielu — pomijamy uprawnienia w komórce (brak miejsca), inspektor
+      // dopisze ręcznie pod pieczątką (każda pieczątka i tak zawiera numer).
+      const lead = annualSigningInspectors.length === 1
+        ? annualSigningInspectors[0]
+        : null
       sigRows.push(
         new TableRow({
           children: [
             signatureCell(
               'Wykonawca KONTROLI',
-              signingInspectors
-                .map((i: any) => i.full_name)
-                .filter(Boolean)
-                .join(', ')
+              namesJoined,
+              lead
+                ? {
+                    license_number: lead.license_number,
+                    chamber_membership: lead.chamber_membership,
+                  }
+                : undefined
             ),
             signatureCell(
               'Właściciel / Zarządca obiektu',
@@ -3098,128 +3211,10 @@ export async function GET(
       )
     }
 
-    // ─── DOKUMENTACJA FOTOGRAFICZNA ZALECEŃ ─────────────────────────────────
-    // Zdjęcia per pozycja zakresu robót (recommendation_photos z
-    // parent_type='repair_scope_item'). Wskaźniki kopiowane przez auto-carry
-    // z previous_recommendations przy zaznaczeniu "Nie wykonano".
-    const recommendationPhotosSection: (Table | Paragraph)[] = []
-    if (repairScope && repairScope.length > 0) {
-      const scopeIds = (
-        repairScope as Array<{ id?: string }>
-      )
-        .map((r) => r.id)
-        .filter((id): id is string => Boolean(id))
-
-      if (scopeIds.length > 0) {
-        const { data: recPhotosData } = await supabase
-          .from('recommendation_photos')
-          .select('parent_id, file_url, caption, sort_order')
-          .eq('inspection_id', inspectionId)
-          .eq('parent_type', 'repair_scope_item')
-          .in('parent_id', scopeIds)
-          .order('sort_order', { ascending: true })
-
-        const photosByScopeId = new Map<
-          string,
-          Array<{ file_url: string; caption: string | null }>
-        >()
-        for (const p of (recPhotosData || []) as Array<{
-          parent_id: string
-          file_url: string
-          caption: string | null
-        }>) {
-          if (!photosByScopeId.has(p.parent_id)) {
-            photosByScopeId.set(p.parent_id, [])
-          }
-          photosByScopeId.get(p.parent_id)!.push({
-            file_url: p.file_url,
-            caption: p.caption,
-          })
-        }
-
-        const scopesWithPhotos = (
-          repairScope as Array<{
-            id?: string
-            item_number: number
-            scope_description: string | null
-          }>
-        ).filter((r) => r.id && (photosByScopeId.get(r.id)?.length ?? 0) > 0)
-
-        if (scopesWithPhotos.length > 0) {
-          recommendationPhotosSection.push(
-            subHeading('Dokumentacja fotograficzna zaleceń'),
-            bodyParagraph(
-              '(stan zaleceń niewykonanych z poprzedniej kontroli, udokumentowany podczas niniejszej kontroli)',
-              { italic: true }
-            )
-          )
-
-          const cellWidth = Math.floor(USABLE_WIDTH / 2)
-          for (const scope of scopesWithPhotos) {
-            const photos = photosByScopeId.get(scope.id!)!
-            const headerText = `Poz. ${scope.item_number}. ${
-              (scope.scope_description || '').slice(0, 120)
-            }${(scope.scope_description?.length || 0) > 120 ? '…' : ''}`
-            recommendationPhotosSection.push(
-              bodyParagraph(headerText, { bold: true })
-            )
-
-            const photoBuffers = await Promise.all(
-              photos.map((p) => fetchImageAsBuffer(p.file_url))
-            )
-
-            const photoTableRows: TableRow[] = []
-            for (let i = 0; i < photos.length; i += 2) {
-              const cells: TableCell[] = []
-              for (let j = 0; j < 2; j++) {
-                const buf = i + j < photos.length ? photoBuffers[i + j] : null
-                if (buf) {
-                  const imageType: 'jpg' | 'png' =
-                    buf.format === 'png' ? 'png' : 'jpg'
-                  cells.push(
-                    new TableCell({
-                      width: { size: cellWidth, type: WidthType.DXA },
-                      children: [
-                        new Paragraph({
-                          alignment: AlignmentType.CENTER,
-                          children: [
-                            new ImageRun({
-                              type: imageType,
-                              data: buf.buffer,
-                              transformation: { width: 280, height: 187 },
-                              altText: {
-                                title: `Zalecenie poz. ${scope.item_number} zdjęcie ${i + j + 1}`,
-                                description: photos[i + j].caption ?? '',
-                                name: `rec-photo-${scope.id}-${i + j}`,
-                              },
-                            }),
-                          ],
-                        }),
-                      ],
-                    })
-                  )
-                } else {
-                  // Pusta lub brakująca komórka
-                  cells.push(
-                    new TableCell({
-                      width: { size: cellWidth, type: WidthType.DXA },
-                      children: [new Paragraph({ children: [] })],
-                    })
-                  )
-                }
-              }
-              photoTableRows.push(new TableRow({ children: cells }))
-            }
-            recommendationPhotosSection.push(
-              new Table({
-                width: { size: USABLE_WIDTH, type: WidthType.DXA },
-                rows: photoTableRows,
-              })
-            )
-          }
-        }
-      }
-    }
+    // Sekcja „Dokumentacja fotograficzna zaleceń" usunięta 2026-05-13 — wszystkie
+    // zdjęcia (zaleceniowe + bieżące usterki) renderują się w jednej sekcji
+    // „VI/VII. Dokumentacja graficzna / fotograficzna" z globalną numeracją
+    // („Zdjęcie nr N"). Decyzja Waldka.
 
     sectionChildren.push(
       sectionHeading(
@@ -3227,7 +3222,6 @@ export async function GET(
       ),
       bodyParagraph('Określenie zakresu robót remontowych i kolejności ich wykonywania:'),
       repairTable,
-      ...recommendationPhotosSection,
       subHeading('Definicje rodzajów robót remontowych'),
       workKindLegendTable,
       subHeading('Zalecany czas wykonania robót remontowych — stopień pilności'),
@@ -3274,31 +3268,64 @@ export async function GET(
     }
 
     // ─── ZDJĘCIA INSPEKCJI ─────────────────────────────────────────────────
-    // Pobieramy zdjęcia z `inspection_photos` posortowane po numerze i
-    // budujemy tabelę 2-kolumnową: każde zdjęcie + caption "Zdjęcie nr X".
-    const { data: photosData, error: photosErr } = await supabase
-      .from('inspection_photos')
-      .select('id, photo_number, file_url, description, sort_order')
-      .eq('inspection_id', inspectionId)
-      .order('photo_number', { ascending: true, nullsFirst: false })
+    // Pobieramy zdjęcia z OBU tabel — globalna numeracja od 2026-05-13:
+    // zaleceniowe (recommendation_photos, parent_type='repair_scope_item') idą
+    // pierwsze (1..N), potem usterki bieżącej kontroli (inspection_photos).
+    // Wszystkie renderują się tu jako „Zdjęcie nr X" — jedna sekcja.
+    const [{ data: ipData, error: ipErr }, { data: rpData, error: rpErr }] =
+      await Promise.all([
+        supabase
+          .from('inspection_photos')
+          .select('id, photo_number, file_url, description')
+          .eq('inspection_id', inspectionId),
+        supabase
+          .from('recommendation_photos')
+          .select('id, photo_number, file_url, caption')
+          .eq('inspection_id', inspectionId)
+          .eq('parent_type', 'repair_scope_item'),
+      ])
 
-    if (photosErr) {
-      console.error('[DOCX] Błąd ładowania inspection_photos:', photosErr)
-    }
-    console.log(
-      `[DOCX] inspection_photos dla ${inspectionId}: ${photosData?.length ?? 0} wierszy`
-    )
+    if (ipErr) console.error('[DOCX] Błąd ładowania inspection_photos:', ipErr)
+    if (rpErr) console.error('[DOCX] Błąd ładowania recommendation_photos:', rpErr)
 
-    const photoRows = (photosData || []).filter(
-      (p: any) => p.file_url
-    ) as Array<{
-      id: string
+    const allPhotos: Array<{
       photo_number: number | null
       file_url: string
       description: string | null
-    }>
+    }> = [
+      ...((ipData || []) as Array<{
+        photo_number: number | null
+        file_url: string | null
+        description: string | null
+      }>)
+        .filter((p) => p.file_url)
+        .map((p) => ({
+          photo_number: p.photo_number,
+          file_url: p.file_url as string,
+          description: p.description,
+        })),
+      ...((rpData || []) as Array<{
+        photo_number: number | null
+        file_url: string | null
+        caption: string | null
+      }>)
+        .filter((p) => p.file_url)
+        .map((p) => ({
+          photo_number: p.photo_number,
+          file_url: p.file_url as string,
+          description: p.caption,
+        })),
+    ]
 
-    console.log(`[DOCX] photoRows z file_url: ${photoRows.length}`)
+    // Sort po photo_number rosnąco (null na koniec). Zaleceniowe dostały
+    // numery 1..N w backfillu, więc pojawią się first.
+    const photoRows = allPhotos.sort((a, b) => {
+      const an = a.photo_number ?? Number.MAX_SAFE_INTEGER
+      const bn = b.photo_number ?? Number.MAX_SAFE_INTEGER
+      return an - bn
+    })
+
+    console.log(`[DOCX] zdjęć (IP + RP) dla ${inspectionId}: ${photoRows.length}`)
 
     const photoSectionBlocks: (Table | Paragraph)[] = []
     if (photoRows.length > 0) {

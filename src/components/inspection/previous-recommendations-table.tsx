@@ -543,6 +543,31 @@ export function PreviousRecommendationsTable({
           }
         }
       }
+
+      // Backfill on-load: dla istniejących wpisów z 'nie wykonano' i wpisanym
+      // element_name, retroaktywnie wywołaj `ensureCarryToElement`. Funkcja jest
+      // event-driven (odpala się przy zmianie statusu w UI) — wpisy zaznaczone
+      // PRZED merge'em PR #42 (Faza A) nie miały okazji się propagować.
+      // Dedup w samej funkcji (po prefiksie tekstu + source_recommendation_id
+      // dla zdjęć) gwarantuje idempotentność — można odpalić wiele razy bez
+      // duplikacji. Guard `isLocked` chroni podpisane protokoły.
+      //
+      // Wzorzec z PR #33 (auto-fill deadline z urgency on-load).
+      if (!isLocked) {
+        for (const it of loaded) {
+          if (
+            it.completion_status === 'nie' &&
+            it.recommendation_text &&
+            it.element_name?.trim()
+          ) {
+            void ensureCarryToElement(
+              it.id,
+              it.recommendation_text,
+              it.element_name
+            )
+          }
+        }
+      }
     } catch (err) {
       console.error('Błąd ładowania zaleceń poprzedniej kontroli:', err)
     } finally {
