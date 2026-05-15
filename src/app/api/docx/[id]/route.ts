@@ -3041,12 +3041,13 @@ export async function GET(
     // (PIIB, izba, GWO, SEP, UDT). Obrazy (JPG/PNG) wklejamy jako ImageRun;
     // skany w formacie PDF nie da się embedować w DOCX — wstawiamy klikalny
     // link do pobrania.
+    // Załączamy 3 typy skanów: PIIB (sygnatariusze), zaświadczenie z izby
+    // (potwierdza przynależność) oraz certyfikat GWO (branżowi / wjazd
+    // na konstrukcję). SEP i UDT pomijamy — decyzja Waldka 2026-05-15.
     const SCAN_FIELDS_DOCX: Array<{ key: string; label: string }> = [
       { key: 'license_scan_url', label: 'Uprawnienia budowlane (PIIB)' },
       { key: 'chamber_scan_url', label: 'Zaświadczenie z izby inżynierów' },
       { key: 'gwo_scan_url', label: 'Certyfikat GWO' },
-      { key: 'sep_scan_url', label: 'Świadectwo kwalifikacyjne SEP' },
-      { key: 'udt_scan_url', label: 'Zaświadczenie UDT' },
     ]
 
     type CredScan = {
@@ -3136,36 +3137,12 @@ export async function GET(
       const TARGET_IMG_WIDTH = 560
       const MAX_IMG_HEIGHT = 760 // ok. jednej strony A4 po nagłówku
 
+      // Każdy skan na nowej stronie — bez podpisu „Inspektor / Dokument".
+      // Spójnie z PDF i z archiwum (PROTOKÓŁ 111/T/2025): treść skanu sama
+      // identyfikuje inspektora (imię, nr uprawnień, pieczątka). Dla PDF-ów
+      // (których w DOCX nie da się osadzić) zostawiamy klikalny link.
       for (let idx = 0; idx < usableCredentialScans.length; idx++) {
         const scan = usableCredentialScans[idx]
-
-        // Każdy skan na nowej stronie — `pageBreakBefore` na pierwszym akapicie.
-        credentialsAppendix.push(
-          new Paragraph({
-            pageBreakBefore: true,
-            spacing: { after: 80 },
-            children: [
-              new TextRun({
-                text: scan.inspectorName,
-                bold: true,
-                font: 'Arial',
-                size: 22,
-                color: HEX.graphite900,
-              }),
-            ],
-          }),
-          new Paragraph({
-            spacing: { after: 200 },
-            children: [
-              new TextRun({
-                text: scan.docLabel,
-                font: 'Arial',
-                size: FONT_DXA.body,
-                color: HEX.graphite700,
-              }),
-            ],
-          })
-        )
 
         if (scan.kind === 'image' && scan.buffer) {
           let finalWidth = TARGET_IMG_WIDTH
@@ -3183,6 +3160,7 @@ export async function GET(
           try {
             credentialsAppendix.push(
               new Paragraph({
+                pageBreakBefore: true,
                 alignment: AlignmentType.CENTER,
                 children: [
                   new ImageRun({
@@ -3207,8 +3185,34 @@ export async function GET(
             )
           }
         } else if (scan.kind === 'pdf') {
-          // DOCX nie umie embedować PDF — pełna treść skanu pod linkiem
+          // DOCX nie umie embedować PDF — pełna treść skanu pod linkiem.
+          // Tu zostaje podpis identyfikujący, bo link sam w sobie nic nie
+          // mówi czyj skan to jest.
           credentialsAppendix.push(
+            new Paragraph({
+              pageBreakBefore: true,
+              spacing: { after: 80 },
+              children: [
+                new TextRun({
+                  text: scan.inspectorName,
+                  bold: true,
+                  font: 'Arial',
+                  size: 22,
+                  color: HEX.graphite900,
+                }),
+              ],
+            }),
+            new Paragraph({
+              spacing: { after: 120 },
+              children: [
+                new TextRun({
+                  text: scan.docLabel,
+                  font: 'Arial',
+                  size: FONT_DXA.body,
+                  color: HEX.graphite700,
+                }),
+              ],
+            }),
             new Paragraph({
               spacing: { before: 80, after: 80 },
               children: [
