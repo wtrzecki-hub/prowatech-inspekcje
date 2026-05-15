@@ -996,7 +996,12 @@ function ProtocolRow({
             variant="outline"
             size="sm"
             className="h-8 px-2.5 text-xs gap-1 border-graphite-200"
-            onClick={() => window.open(protocol.protocol_pdf_url, '_blank')}
+            // Proxy endpoint zamiast bezpośredniego R2 URL — daje ładną nazwę
+            // pliku po pobraniu (zgodną z `buildProtocolFilename`), zamiast
+            // surowego R2 key typu `2025_annual_{ts}_{rand}.pdf`.
+            onClick={() =>
+              window.open(`/api/historical-protocol/${protocol.id}`, '_blank')
+            }
           >
             <Download className="h-3 w-3" />
             PDF
