@@ -306,7 +306,14 @@ export default function PortalProtokolyPage() {
                         variant="outline"
                         size="sm"
                         className="h-8 px-2.5 text-xs gap-1 border-graphite-200"
-                        onClick={() => window.open(h.protocol_pdf_url ?? "", "_blank")}
+                        // Proxy endpoint daje ładną nazwę pliku zgodną
+                        // z `buildProtocolFilename` (zamiast surowego R2 key).
+                        onClick={() =>
+                          window.open(
+                            `/api/historical-protocol/${h.id}`,
+                            "_blank",
+                          )
+                        }
                       >
                         <Download className="h-3 w-3" />
                         PDF
