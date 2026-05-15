@@ -22,6 +22,11 @@ import {
 import { hasValidLicense } from '@/lib/inspectors/license'
 import { formatExtraCertsSuffix } from '@/lib/inspectors/format-certs'
 import { buildOwnerLine } from '@/lib/protocol-formatters'
+import { resolveDefaultObservation } from '@/lib/inspections/default-observations'
+import {
+  buildDefectLookup,
+  lookupDefectName,
+} from '@/lib/inspections/defect-lookup'
 
 // =============================================================================
 // PROTOKÓŁ KONTROLI OKRESOWEJ - PDF (układ PIIB)
@@ -206,7 +211,7 @@ export async function GET(
         id, condition_rating, notes, recommendations, photo_numbers,
         recommendation_completion_date, usage_suitability, is_not_applicable,
         element_definition:element_definition_id (
-          id, element_number, name_pl, scope_annual, scope_annual_simplified,
+          id, element_number, name_pl, name_short, scope_annual, scope_annual_simplified,
           scope_five_year_additional, applicable_standards, sort_order
         )
         `
@@ -336,10 +341,62 @@ export async function GET(
     const { data: prevRecs } = await supabase
       .from('previous_recommendations')
       .select(
-        'item_number, recommendation_text, completion_status, remarks, source_inspection_type'
+        'item_number, recommendation_text, completion_status, remarks, source_inspection_type, element_name'
       )
       .eq('inspection_id', inspectionId)
       .order('item_number')
+
+    // Biblioteka defektów do mapowania zalecenie → nazwa defektu w sekcji
+    // „Zaobserwowane defekty z poprzedniej kontroli" (kolumna Opis tabeli III).
+    // Kolumna Zalecenia osobno trzyma surowy tekst zalecenia jako carry-over.
+    const { data: defectLib } = await supabase
+      .from('defect_library')
+      .select('name_pl, recommendation_template, archive_match_aliases, element_number')
+      .eq('is_active', true)
+    const defectLookup = buildDefectLookup(defectLib || undefined)
+
+    // Mapowanie nazwy elementu PIIB (`element_name` z previous_recommendations)
+    // do element_number z `inspection_element_definitions` — żeby fuzzy lookup
+    // ograniczyć do kandydatów z tego samego elementu (mniej fałszywych matchów
+    // między elementami, np. „roślinność" zmatchowana do „nieszczelności fundamentu").
+    const { data: allDefs } = await supabase
+      .from('inspection_element_definitions')
+      .select('element_number, name_pl, name_short')
+      .eq('is_active', true)
+    const elementNumberByName: Record<string, number> = {}
+    for (const d of (allDefs || []) as Array<{
+      element_number: number
+      name_pl: string
+      name_short: string | null
+    }>) {
+      elementNumberByName[d.name_pl] = d.element_number
+      if (d.name_short) elementNumberByName[d.name_short] = d.element_number
+    }
+
+    // Dedup duplikatów w previous_recommendations (znany bug danych — niektóre
+    // zalecenia są zapisane 2× pod tym samym item_number) po (element_name + norm_text).
+    const unfinishedDefectsByElementName: Record<string, string[]> = {}
+    const seenPerElement: Record<string, Set<string>> = {}
+    for (const pr of (prevRecs || []) as Array<{
+      recommendation_text: string | null
+      completion_status: string | null
+      element_name: string | null
+    }>) {
+      if (pr.completion_status !== 'nie') continue
+      const name = pr.element_name?.trim()
+      const text = pr.recommendation_text?.trim()
+      if (!name || !text) continue
+      const dedupKey = `${name}::${text.toLowerCase()}`
+      if (!seenPerElement[name]) seenPerElement[name] = new Set()
+      if (seenPerElement[name].has(dedupKey)) continue
+      seenPerElement[name].add(dedupKey)
+
+      const elementNumber = elementNumberByName[name] ?? null
+      const defectName = lookupDefectName(defectLookup, text, elementNumber)
+      if (!defectName) continue
+      const arr = (unfinishedDefectsByElementName[name] ??= [])
+      if (!arr.includes(defectName)) arr.push(defectName)
+    }
 
     const { data: emergencyItems } = await supabase
       .from('emergency_state_items')
@@ -1676,14 +1733,51 @@ export async function GET(
         const scopeText = isSimplifiedAnnual
           ? (def.scope_annual_simplified || def.scope_annual || '')
           : (def.scope_annual || '')
+
+        // „Opis stanu technicznego" — z `inspection_elements.observation` lub
+        // `def.default_observation` (po migracji 2026-05-15) lub fallback mapy.
+        const observationText = resolveDefaultObservation(
+          (el as any).observation,
+          (def as any).default_observation,
+          def.element_number,
+        )
+
+        // „Zaobserwowane defekty z poprzedniej kontroli" — nazwy defektów z
+        // defect_library zmapowane z previous_recommendations po element_name.
+        // Tekst surowy zalecenia jest w kolumnie Zalecenia (carry-over), tu
+        // pokazujemy CO ZOSTAŁO ZAOBSERWOWANE (defekt), nie CO ZROBIĆ (akcja).
+        const unfinishedForElement = [
+          ...(unfinishedDefectsByElementName[def.name_pl] || []),
+          ...(def.name_short
+            ? unfinishedDefectsByElementName[def.name_short] || []
+            : []),
+        ]
+
+        const notesTrimmed = el.notes?.trim()
+        // Marker `❧` opakowuje nagłówki sekcji — parser w didDrawCell
+        // używa go żeby pogrubić tekst nawet gdy autoTable wrappuje nagłówek
+        // na wiele linii (matching exact-string nie działa po wrappingu).
+        const M = '❧'
+        const opisColumn = [
+          scopeText,
+          observationText
+            ? `${M}Opis stanu technicznego:${M}\n${observationText}`
+            : '',
+          notesTrimmed
+            ? `${M}Zaobserwowane usterki:${M}\n- ${notesTrimmed}`
+            : '',
+          unfinishedForElement.length > 0
+            ? `${M}Zaobserwowane defekty z poprzedniej kontroli:${M}\n${unfinishedForElement
+                .map((t) => `- ${t}`)
+                .join('\n')}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+
         body.push([
           `${def.element_number}. ${def.name_pl}`,
-          [
-            scopeText,
-            el.notes ? '- ' + el.notes : '',
-          ]
-            .filter(Boolean)
-            .join('\n\n'),
+          opisColumn,
           ratingLabel(el.condition_rating),
           el.recommendations || '',
           photoNumbersFor(el),
@@ -1742,6 +1836,66 @@ export async function GET(
               }
             }
           }
+        },
+        // Pogrubienie nagłówków sekcji w kolumnie „Opis i ustalenia z kontroli".
+        // autoTable nie wspiera mieszanego bold/normal w jednej komórce —
+        // anulujemy default rendering tekstu (text=[]) i rysujemy custom w
+        // didDrawCell linijka po linijce z odpowiednim fontStyle.
+        willDrawCell: (data: any) => {
+          if (
+            data.section === 'body' &&
+            data.column.index === 1 &&
+            Array.isArray(data.cell.text) &&
+            data.cell.text.length > 0
+          ) {
+            ;(data.cell as any)._customLines = [...data.cell.text]
+            data.cell.text = []
+          }
+        },
+        didDrawCell: (data: any) => {
+          if (data.section !== 'body' || data.column.index !== 1) return
+          const lines = (data.cell as any)._customLines as
+            | string[]
+            | undefined
+          if (!lines || lines.length === 0) return
+
+          const M = '❧'
+          const padding = data.cell.styles.cellPadding ?? 2
+          const fontSize = data.cell.styles.fontSize as number
+          const scaleFactor = (pdf as any).internal.scaleFactor as number
+          const lineHeight = (fontSize * 1.15) / scaleFactor
+          const x = data.cell.x + padding
+          let y = data.cell.y + padding + fontSize / scaleFactor
+
+          pdf.setFontSize(fontSize)
+          const tc = (data.cell.styles.textColor || [0, 0, 0]) as
+            | number
+            | [number, number, number]
+          if (Array.isArray(tc)) {
+            pdf.setTextColor(tc[0], tc[1], tc[2])
+          } else {
+            pdf.setTextColor(tc)
+          }
+
+          // State machine — marker `M` to toggle bold/normal. Każde wystąpienie
+          // przełącza stan. Pojedyncza linia może zawierać 0, 1 lub 2 markery:
+          //   2 → cały nagłówek mieści się w 1 linii (bold)
+          //   1 → wrap nagłówka: linia jest w środku bold sekcji
+          //   0 → linia tekstu w aktualnym stanie (normal lub bold)
+          let inBold = false
+          for (const rawLine of lines) {
+            const markers = (rawLine.match(new RegExp(M, 'g')) || []).length
+            const cleanLine = rawLine.replace(new RegExp(M, 'g'), '')
+            // Bold jeśli aktualny stan TRUE, lub linia zawiera marker
+            // (przypadek: wrap w środku nagłówka albo full-line header).
+            const renderBold = inBold || markers > 0
+            pdf.setFont('Roboto', renderBold ? 'bold' : 'normal')
+            pdf.text(cleanLine, x, y)
+            y += lineHeight
+            // Toggle stanu po linii — nieparzysta liczba markerów zmienia stan.
+            if (markers % 2 === 1) inBold = !inBold
+          }
+          pdf.setFont('Roboto', 'normal')
         },
       })
       yPosition = (pdf as any).lastAutoTable.finalY + 5
