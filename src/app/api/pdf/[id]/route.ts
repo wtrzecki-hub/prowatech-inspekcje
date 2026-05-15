@@ -262,7 +262,9 @@ export async function GET(
         inspector:inspector_id (
           id, full_name, license_number, specialty,
           chamber_membership, chamber_certificate_number,
-          sep_certificate_number, gwo_certificate_number, udt_certificate_number
+          sep_certificate_number, gwo_certificate_number, udt_certificate_number,
+          license_scan_url, chamber_scan_url,
+          gwo_scan_url, sep_scan_url, udt_scan_url
         )
         `
       )
@@ -2712,7 +2714,174 @@ export async function GET(
       addAutoTable(['Lp.', 'Załącznik do protokołu'], attachBody, [10, 170])
     }
 
+    // ─── ZAŁĄCZNIKI: UPRAWNIENIA INSPEKTORÓW ──────────────────────────────
+    // Dla każdego inspektora w zespole doklejamy wszystkie posiadane skany
+    // (PIIB, izba, GWO, SEP, UDT). Obrazy (JPG/PNG) wklejamy bezpośrednio w
+    // jsPDF; skany w formacie PDF zbieramy i wszywamy po wygenerowaniu przez
+    // pdf-lib. Spójnie z archiwum (np. PROTOKÓŁ 111/T/2025): każda strona —
+    // łącznie z tytułowymi skanów — ma stopkę i numerację „Strona X z Y".
+    type ScanItem = {
+      inspectorName: string
+      docLabel: string
+      url: string
+    }
+    type FetchedScan = ScanItem & {
+      format: 'image' | 'pdf' | 'unknown'
+      buffer?: Buffer
+      imageBase64?: string
+      imageFormat?: 'JPEG' | 'PNG'
+    }
+
+    const SCAN_FIELDS: Array<{ key: string; label: string }> = [
+      { key: 'license_scan_url', label: 'Uprawnienia budowlane (PIIB)' },
+      { key: 'chamber_scan_url', label: 'Zaświadczenie z izby inżynierów' },
+      { key: 'gwo_scan_url', label: 'Certyfikat GWO' },
+      { key: 'sep_scan_url', label: 'Świadectwo kwalifikacyjne SEP' },
+      { key: 'udt_scan_url', label: 'Zaświadczenie UDT' },
+    ]
+
+    const scanList: ScanItem[] = []
+    for (const ins of [...signingInspectors, ...assistingInspectors]) {
+      for (const { key, label } of SCAN_FIELDS) {
+        const url = (ins as any)[key] as string | null | undefined
+        if (url && url.trim()) {
+          scanList.push({
+            inspectorName: ins.full_name || '—',
+            docLabel: label,
+            url: url.trim(),
+          })
+        }
+      }
+    }
+
+    const pdfScansToAppend: Array<{
+      jsPdfPageAfter: number
+      buffer: Buffer
+      caption: string
+    }> = []
+
+    if (scanList.length > 0) {
+      const fetched: FetchedScan[] = await Promise.all(
+        scanList.map(async (s) => {
+          try {
+            const res = await fetch(s.url, { cache: 'no-store' })
+            if (!res.ok) {
+              console.error(`[appendix] fetch ${s.url} -> ${res.status}`)
+              return { ...s, format: 'unknown' as const }
+            }
+            const ct = (res.headers.get('content-type') || '').toLowerCase()
+            const buf = Buffer.from(await res.arrayBuffer())
+            if (ct.includes('pdf') || /\.pdf(\?|$)/i.test(s.url)) {
+              return { ...s, format: 'pdf' as const, buffer: buf }
+            }
+            let imageFormat: 'JPEG' | 'PNG' = 'JPEG'
+            if (ct.includes('png') || /\.png(\?|$)/i.test(s.url)) imageFormat = 'PNG'
+            return {
+              ...s,
+              format: 'image' as const,
+              buffer: buf,
+              imageBase64: buf.toString('base64'),
+              imageFormat,
+            }
+          } catch (err) {
+            console.error('[appendix] fetch failed', s.url, err)
+            return { ...s, format: 'unknown' as const }
+          }
+        })
+      )
+
+      const usable = fetched.filter(
+        (f) => f.format === 'image' || f.format === 'pdf'
+      )
+
+      if (usable.length > 0) {
+        addSection('Załączniki — uprawnienia inspektorów')
+        addBody(
+          'Skany dokumentów potwierdzających uprawnienia osób uczestniczących w kontroli.'
+        )
+
+        for (const scan of usable) {
+          if (scan.format === 'image' && scan.imageBase64) {
+            pdf.addPage()
+            yPosition = margin
+            pdf.setFontSize(11)
+            pdf.setFont('Roboto', 'bold')
+            pdf.setTextColor(...RGB.graphite900)
+            pdf.text(scan.inspectorName, margin, yPosition)
+            yPosition += 5
+            pdf.setFont('Roboto', 'normal')
+            pdf.setFontSize(10)
+            pdf.setTextColor(...RGB.graphite700)
+            pdf.text(scan.docLabel, margin, yPosition)
+            pdf.setTextColor(0)
+            yPosition += 6
+
+            const maxW = pageWidth - 2 * margin
+            const maxH = pageHeight - yPosition - margin
+            try {
+              let imgW = maxW
+              let imgH = maxH
+              try {
+                const props = (pdf as any).getImageProperties(
+                  scan.imageBase64
+                )
+                if (props?.width && props?.height) {
+                  const ratio = props.width / props.height
+                  imgW = maxW
+                  imgH = imgW / ratio
+                  if (imgH > maxH) {
+                    imgH = maxH
+                    imgW = imgH * ratio
+                  }
+                }
+              } catch {
+                // brak getImageProperties → użyj prostokąta maxW × maxH
+              }
+              const offsetX = margin + (maxW - imgW) / 2
+              pdf.addImage(
+                scan.imageBase64,
+                scan.imageFormat || 'JPEG',
+                offsetX,
+                yPosition,
+                imgW,
+                imgH,
+                undefined,
+                'FAST'
+              )
+            } catch (e) {
+              console.error('[appendix] image embed failed', scan.url, e)
+            }
+          } else if (scan.format === 'pdf' && scan.buffer) {
+            pdf.addPage()
+            yPosition = margin
+            pdf.setFontSize(11)
+            pdf.setFont('Roboto', 'bold')
+            pdf.setTextColor(...RGB.graphite900)
+            pdf.text(scan.inspectorName, margin, yPosition)
+            yPosition += 5
+            pdf.setFont('Roboto', 'normal')
+            pdf.setFontSize(10)
+            pdf.setTextColor(...RGB.graphite700)
+            pdf.text(scan.docLabel, margin, yPosition)
+            pdf.setTextColor(0)
+
+            const currentPage = (pdf as any).internal.getNumberOfPages()
+            pdfScansToAppend.push({
+              jsPdfPageAfter: currentPage,
+              buffer: scan.buffer,
+              caption: `${scan.inspectorName} — ${scan.docLabel}`,
+            })
+          }
+        }
+      }
+    }
+
     // ─── PAGE FOOTERS ──────────────────────────────────────────────────────
+    // Numerujemy wszystkie strony jsPDF (główny protokół + strony tytułowe
+    // skanów). PDF-y skanów wszywane przez pdf-lib zaraz pod stronami
+    // tytułowymi pozostaną bez stopki (limitacja jsPDF→pdf-lib), ale to
+    // zachowuje spójność wizualną z archiwum: każda strona ma „Strona X | …",
+    // skany wstawione mechanicznie tylko wyróżniają się brakiem stopki.
     const pageCount = (pdf as any).internal.getNumberOfPages()
     for (let i = 1; i <= pageCount; i++) {
       pdf.setPage(i)
@@ -2736,7 +2905,39 @@ export async function GET(
       pdf.setTextColor(0)
     }
 
-    const pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
+    let pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
+
+    // ─── MERGE PDF SCANS (pdf-lib) ─────────────────────────────────────────
+    // Dla skanów w formacie PDF: wszywamy ich strony do dokumentu zaraz po
+    // odpowiadającej stronie tytułowej (caption page) wygenerowanej w jsPDF.
+    // Iterujemy od końca, żeby wstawianie wcześniejszych stron nie przesuwało
+    // indeksów późniejszych.
+    if (pdfScansToAppend.length > 0) {
+      try {
+        const { PDFDocument } = await import('pdf-lib')
+        const mainDoc = await PDFDocument.load(pdfBuffer)
+        const sorted = [...pdfScansToAppend].sort(
+          (a, b) => b.jsPdfPageAfter - a.jsPdfPageAfter
+        )
+        for (const item of sorted) {
+          try {
+            const scanDoc = await PDFDocument.load(item.buffer)
+            const indices = scanDoc.getPageIndices()
+            const pages = await mainDoc.copyPages(scanDoc, indices)
+            for (let k = 0; k < pages.length; k++) {
+              mainDoc.insertPage(item.jsPdfPageAfter + k, pages[k])
+            }
+          } catch (err) {
+            console.error('[appendix] pdf-lib insert failed', item.caption, err)
+          }
+        }
+        const mergedBytes = await mainDoc.save()
+        pdfBuffer = Buffer.from(mergedBytes)
+      } catch (err) {
+        console.error('[appendix] pdf-lib merge failed', err)
+        // Zostaje wersja jsPDF bez wszytych PDF-ów skanów — caption pages widoczne.
+      }
+    }
 
     const filename = buildProtocolFilename(
       {
