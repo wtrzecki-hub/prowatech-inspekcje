@@ -43,6 +43,11 @@ import {
 import { hasValidLicense } from '@/lib/inspectors/license'
 import { formatExtraCertsSuffix } from '@/lib/inspectors/format-certs'
 import { buildOwnerLine } from '@/lib/protocol-formatters'
+import { resolveDefaultObservation } from '@/lib/inspections/default-observations'
+import {
+  buildDefectLookup,
+  lookupDefectName,
+} from '@/lib/inspections/defect-lookup'
 
 // =============================================================================
 // PROTOKÓŁ KONTROLI OKRESOWEJ — DOCX (układ PIIB)
@@ -463,6 +468,7 @@ export async function GET(
           id,
           element_number,
           name_pl,
+          name_short,
           scope_annual,
           scope_annual_simplified,
           scope_five_year_additional,
@@ -615,10 +621,59 @@ export async function GET(
     const { data: prevRecs } = await supabase
       .from('previous_recommendations')
       .select(
-        'item_number, recommendation_text, completion_status, remarks, source_inspection_type'
+        'item_number, recommendation_text, completion_status, remarks, source_inspection_type, element_name'
       )
       .eq('inspection_id', inspectionId)
       .order('item_number')
+
+    // Biblioteka defektów — mapowanie zalecenie → nazwa defektu w sekcji
+    // „Zaobserwowane defekty z poprzedniej kontroli" w kolumnie Opis tabeli III.
+    const { data: defectLib } = await supabase
+      .from('defect_library')
+      .select('name_pl, recommendation_template, archive_match_aliases, element_number')
+      .eq('is_active', true)
+    const defectLookup = buildDefectLookup(defectLib || undefined)
+
+    // Pre-fetch wszystkich element_definitions żeby zmapować nazwę elementu
+    // z previous_recommendations.element_name na element_number (potrzebne do
+    // fuzzy lookup ograniczonego per element — mniej fałszywych matchów).
+    const { data: allDefs } = await supabase
+      .from('inspection_element_definitions')
+      .select('element_number, name_pl, name_short')
+      .eq('is_active', true)
+    const elementNumberByName: Record<string, number> = {}
+    for (const d of (allDefs || []) as Array<{
+      element_number: number
+      name_pl: string
+      name_short: string | null
+    }>) {
+      elementNumberByName[d.name_pl] = d.element_number
+      if (d.name_short) elementNumberByName[d.name_short] = d.element_number
+    }
+
+    // Dedup duplikatów + fuzzy lookup nazw defektów.
+    const unfinishedDefectsByElementName: Record<string, string[]> = {}
+    const seenPerElement: Record<string, Set<string>> = {}
+    for (const pr of (prevRecs || []) as Array<{
+      recommendation_text: string | null
+      completion_status: string | null
+      element_name: string | null
+    }>) {
+      if (pr.completion_status !== 'nie') continue
+      const name = pr.element_name?.trim()
+      const text = pr.recommendation_text?.trim()
+      if (!name || !text) continue
+      const dedupKey = `${name}::${text.toLowerCase()}`
+      if (!seenPerElement[name]) seenPerElement[name] = new Set()
+      if (seenPerElement[name].has(dedupKey)) continue
+      seenPerElement[name].add(dedupKey)
+
+      const elementNumber = elementNumberByName[name] ?? null
+      const defectName = lookupDefectName(defectLookup, text, elementNumber)
+      if (!defectName) continue
+      const arr = (unfinishedDefectsByElementName[name] ??= [])
+      if (!arr.includes(defectName)) arr.push(defectName)
+    }
 
     const { data: emergencyItems } = await supabase
       .from('emergency_state_items')
@@ -2016,19 +2071,73 @@ export async function GET(
                     : []),
                 ],
               }),
-              multilineCell(
-                [
-                  ...(isSimplifiedAnnual
-                    ? (def.scope_annual_simplified || def.scope_annual || '')
-                    : (def.scope_annual || '')
-                  )
-                    .split('\n')
-                    .filter(Boolean),
-                  ...(el.notes ? ['', '— Opis: ' + el.notes] : []),
-                ],
-                colsAN[1],
-                { fill, color: textColor }
-              ),
+              (() => {
+                const scopeText = isSimplifiedAnnual
+                  ? (def.scope_annual_simplified || def.scope_annual || '')
+                  : (def.scope_annual || '')
+                const observationText = resolveDefaultObservation(
+                  (el as any).observation,
+                  (def as any).default_observation,
+                  def.element_number,
+                )
+                const unfinishedForElement = [
+                  ...(unfinishedDefectsByElementName[def.name_pl] || []),
+                  ...((def as any).name_short
+                    ? unfinishedDefectsByElementName[(def as any).name_short] || []
+                    : []),
+                ]
+                const notesTrimmed = (el as any).notes?.trim()
+
+                // Każdy paragraf to obiekt { text, bold } — nagłówki sekcji
+                // wprowadzonych w PR 2026-05-15 są pogrubione dla wyróżnienia.
+                type Para = { text: string; bold?: boolean }
+                const paragraphs: Para[] = [
+                  ...scopeText.split('\n').filter(Boolean).map((t: string) => ({ text: t })),
+                ]
+                if (observationText) {
+                  paragraphs.push({ text: '' })
+                  paragraphs.push({ text: 'Opis stanu technicznego:', bold: true })
+                  paragraphs.push({ text: observationText })
+                }
+                if (notesTrimmed) {
+                  paragraphs.push({ text: '' })
+                  paragraphs.push({ text: 'Zaobserwowane usterki:', bold: true })
+                  paragraphs.push({ text: `- ${notesTrimmed}` })
+                }
+                if (unfinishedForElement.length > 0) {
+                  paragraphs.push({ text: '' })
+                  paragraphs.push({
+                    text: 'Zaobserwowane defekty z poprzedniej kontroli:',
+                    bold: true,
+                  })
+                  for (const t of unfinishedForElement) {
+                    paragraphs.push({ text: `- ${t}` })
+                  }
+                }
+
+                return new TableCell({
+                  width: { size: colsAN[1], type: WidthType.DXA },
+                  borders: thinBorder,
+                  shading: fill
+                    ? { type: ShadingType.CLEAR, color: 'auto', fill }
+                    : undefined,
+                  children: paragraphs.map(
+                    (p) =>
+                      new Paragraph({
+                        spacing: { before: 0, after: 30 },
+                        children: [
+                          new TextRun({
+                            text: p.text,
+                            bold: p.bold,
+                            font: 'Arial',
+                            size: FONT_DXA.tableBody,
+                            color: textColor,
+                          }),
+                        ],
+                      })
+                  ),
+                })
+              })(),
               new TableCell({
                 width: { size: colsAN[2], type: WidthType.DXA },
                 borders: thinBorder,
