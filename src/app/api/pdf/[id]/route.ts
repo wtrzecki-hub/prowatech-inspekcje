@@ -2732,12 +2732,13 @@ export async function GET(
       imageFormat?: 'JPEG' | 'PNG'
     }
 
+    // Załączamy 3 typy skanów: PIIB (sygnatariusze), zaświadczenie z izby
+    // (potwierdza przynależność) oraz certyfikat GWO (branżowi / wjazd
+    // na konstrukcję). SEP i UDT pomijamy — decyzja Waldka 2026-05-15.
     const SCAN_FIELDS: Array<{ key: string; label: string }> = [
       { key: 'license_scan_url', label: 'Uprawnienia budowlane (PIIB)' },
       { key: 'chamber_scan_url', label: 'Zaświadczenie z izby inżynierów' },
       { key: 'gwo_scan_url', label: 'Certyfikat GWO' },
-      { key: 'sep_scan_url', label: 'Świadectwo kwalifikacyjne SEP' },
-      { key: 'udt_scan_url', label: 'Zaświadczenie UDT' },
     ]
 
     const scanList: ScanItem[] = []
@@ -2755,7 +2756,7 @@ export async function GET(
     }
 
     const pdfScansToAppend: Array<{
-      jsPdfPageAfter: number
+      placeholderPageIdx: number
       buffer: Buffer
       caption: string
     }> = []
@@ -2800,22 +2801,20 @@ export async function GET(
           'Skany dokumentów potwierdzających uprawnienia osób uczestniczących w kontroli.'
         )
 
+        // Każdy skan na własnej stronie — bez strony tytułowej.
+        // Decyzja Waldka 2026-05-15: strony tytułowe wydłużały dokument
+        // o jedną stronę przed PDF-em skanu („uprawnienia przeskoczyły
+        // o stronę"). W archiwum (PROTOKÓŁ 111/T/2025) skany też lecą
+        // bezpośrednio bez podpisów — treść dokumentu zawiera dane
+        // identyfikujące inspektora (imię, nr uprawnień, pieczątka).
+        //
+        // Dla skanów PDF: tworzymy pustą stronę-placeholder w jsPDF,
+        // zapisujemy jej indeks, a w fazie pdf-lib zastępujemy ją
+        // właściwymi stronami skanu PDF (removePage + insertPage).
         for (const scan of usable) {
           if (scan.format === 'image' && scan.imageBase64) {
             pdf.addPage()
             yPosition = margin
-            pdf.setFontSize(11)
-            pdf.setFont('Roboto', 'bold')
-            pdf.setTextColor(...RGB.graphite900)
-            pdf.text(scan.inspectorName, margin, yPosition)
-            yPosition += 5
-            pdf.setFont('Roboto', 'normal')
-            pdf.setFontSize(10)
-            pdf.setTextColor(...RGB.graphite700)
-            pdf.text(scan.docLabel, margin, yPosition)
-            pdf.setTextColor(0)
-            yPosition += 6
-
             const maxW = pageWidth - 2 * margin
             const maxH = pageHeight - yPosition - margin
             try {
@@ -2852,22 +2851,12 @@ export async function GET(
               console.error('[appendix] image embed failed', scan.url, e)
             }
           } else if (scan.format === 'pdf' && scan.buffer) {
+            // Pusta strona-placeholder; pdf-lib usunie ją i wstawi
+            // właściwe strony skanu PDF na tym samym indeksie.
             pdf.addPage()
-            yPosition = margin
-            pdf.setFontSize(11)
-            pdf.setFont('Roboto', 'bold')
-            pdf.setTextColor(...RGB.graphite900)
-            pdf.text(scan.inspectorName, margin, yPosition)
-            yPosition += 5
-            pdf.setFont('Roboto', 'normal')
-            pdf.setFontSize(10)
-            pdf.setTextColor(...RGB.graphite700)
-            pdf.text(scan.docLabel, margin, yPosition)
-            pdf.setTextColor(0)
-
-            const currentPage = (pdf as any).internal.getNumberOfPages()
+            const placeholderPageIdx = (pdf as any).internal.getNumberOfPages()
             pdfScansToAppend.push({
-              jsPdfPageAfter: currentPage,
+              placeholderPageIdx,
               buffer: scan.buffer,
               caption: `${scan.inspectorName} — ${scan.docLabel}`,
             })
@@ -2908,24 +2897,27 @@ export async function GET(
     let pdfBuffer = Buffer.from(pdf.output('arraybuffer'))
 
     // ─── MERGE PDF SCANS (pdf-lib) ─────────────────────────────────────────
-    // Dla skanów w formacie PDF: wszywamy ich strony do dokumentu zaraz po
-    // odpowiadającej stronie tytułowej (caption page) wygenerowanej w jsPDF.
-    // Iterujemy od końca, żeby wstawianie wcześniejszych stron nie przesuwało
-    // indeksów późniejszych.
+    // Dla skanów w formacie PDF: zastępujemy pustą stronę-placeholder
+    // właściwymi stronami skanu PDF (removePage + insertPage na tym samym
+    // indeksie). Iterujemy od końca, żeby modyfikacje wcześniejszych stron
+    // nie przesuwały indeksów późniejszych placeholderów.
     if (pdfScansToAppend.length > 0) {
       try {
         const { PDFDocument } = await import('pdf-lib')
         const mainDoc = await PDFDocument.load(pdfBuffer)
         const sorted = [...pdfScansToAppend].sort(
-          (a, b) => b.jsPdfPageAfter - a.jsPdfPageAfter
+          (a, b) => b.placeholderPageIdx - a.placeholderPageIdx
         )
         for (const item of sorted) {
           try {
             const scanDoc = await PDFDocument.load(item.buffer)
             const indices = scanDoc.getPageIndices()
             const pages = await mainDoc.copyPages(scanDoc, indices)
+            // 0-indexed pozycja placeholdera
+            const insertAt = item.placeholderPageIdx - 1
+            mainDoc.removePage(insertAt)
             for (let k = 0; k < pages.length; k++) {
-              mainDoc.insertPage(item.jsPdfPageAfter + k, pages[k])
+              mainDoc.insertPage(insertAt + k, pages[k])
             }
           } catch (err) {
             console.error('[appendix] pdf-lib insert failed', item.caption, err)
@@ -2935,7 +2927,7 @@ export async function GET(
         pdfBuffer = Buffer.from(mergedBytes)
       } catch (err) {
         console.error('[appendix] pdf-lib merge failed', err)
-        // Zostaje wersja jsPDF bez wszytych PDF-ów skanów — caption pages widoczne.
+        // Bez merge zostają puste placeholdery — widoczne jako puste strony.
       }
     }
 
