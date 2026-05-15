@@ -21,6 +21,7 @@ import {
   HeadingLevel,
   PageOrientation,
   LevelFormat,
+  ExternalHyperlink,
 } from 'docx'
 import { format } from 'date-fns'
 import { pl } from 'date-fns/locale'
@@ -252,6 +253,51 @@ function ratingLabel(r: string | null | undefined): string {
  * Zwraca null jeśli nie udało się pobrać. Generator DOCX nie powinien się
  * wywalić gdy zdjęcie jest niedostępne.
  */
+/**
+ * Wyciągnij wymiary obrazu z nagłówka PNG/JPEG bez dodatkowej biblioteki.
+ * Dla skanów uprawnień potrzebujemy poprawnie zachować proporcje przy
+ * embedowaniu w DOCX (ImageRun wymaga jawnej szerokości i wysokości w px).
+ */
+function getImageDimensions(
+  buf: Buffer
+): { width: number; height: number } | null {
+  // PNG: signature (8B) + IHDR chunk (length 4B, 'IHDR' 4B, width 4B, height 4B)
+  if (
+    buf.length >= 24 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47
+  ) {
+    return {
+      width: buf.readUInt32BE(16),
+      height: buf.readUInt32BE(20),
+    }
+  }
+  // JPEG: SOI (FFD8) + markers; wymiary w segmencie SOFn (FFC0..FFCF z wyjątkiem C4/C8/CC)
+  if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) break
+      const marker = buf[i + 1]
+      if (
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        marker !== 0xc4 &&
+        marker !== 0xc8 &&
+        marker !== 0xcc
+      ) {
+        const height = buf.readUInt16BE(i + 5)
+        const width = buf.readUInt16BE(i + 7)
+        return { width, height }
+      }
+      const segLength = buf.readUInt16BE(i + 2)
+      i += 2 + segLength
+    }
+  }
+  return null
+}
+
 async function fetchImageAsBuffer(
   url: string | null | undefined
 ): Promise<{ buffer: Buffer; format: 'png' | 'jpg' | 'webp' } | null> {
@@ -533,7 +579,12 @@ export async function GET(
           chamber_certificate_number,
           sep_certificate_number,
           gwo_certificate_number,
-          udt_certificate_number
+          udt_certificate_number,
+          license_scan_url,
+          chamber_scan_url,
+          gwo_scan_url,
+          sep_scan_url,
+          udt_scan_url
         )
       `
       )
@@ -2985,6 +3036,213 @@ export async function GET(
       rows: attachRows,
     })
 
+    // ─── ZAŁĄCZNIKI: UPRAWNIENIA INSPEKTORÓW ────────────────────────────────
+    // Dla każdego inspektora w zespole doklejamy wszystkie posiadane skany
+    // (PIIB, izba, GWO, SEP, UDT). Obrazy (JPG/PNG) wklejamy jako ImageRun;
+    // skany w formacie PDF nie da się embedować w DOCX — wstawiamy klikalny
+    // link do pobrania.
+    const SCAN_FIELDS_DOCX: Array<{ key: string; label: string }> = [
+      { key: 'license_scan_url', label: 'Uprawnienia budowlane (PIIB)' },
+      { key: 'chamber_scan_url', label: 'Zaświadczenie z izby inżynierów' },
+      { key: 'gwo_scan_url', label: 'Certyfikat GWO' },
+      { key: 'sep_scan_url', label: 'Świadectwo kwalifikacyjne SEP' },
+      { key: 'udt_scan_url', label: 'Zaświadczenie UDT' },
+    ]
+
+    type CredScan = {
+      inspectorName: string
+      docLabel: string
+      url: string
+    }
+    type FetchedCredScan = CredScan & {
+      kind: 'image' | 'pdf' | 'unavailable'
+      buffer?: Buffer
+      imageType?: 'jpg' | 'png'
+      width?: number
+      height?: number
+    }
+
+    const credentialScans: CredScan[] = []
+    for (const ins of [...signingInspectors, ...assistingInspectors] as Array<{
+      full_name: string | null
+      license_scan_url?: string | null
+      chamber_scan_url?: string | null
+      gwo_scan_url?: string | null
+      sep_scan_url?: string | null
+      udt_scan_url?: string | null
+    }>) {
+      for (const { key, label } of SCAN_FIELDS_DOCX) {
+        const url = (ins as Record<string, unknown>)[key] as
+          | string
+          | null
+          | undefined
+        if (url && url.trim()) {
+          credentialScans.push({
+            inspectorName: ins.full_name || '—',
+            docLabel: label,
+            url: url.trim(),
+          })
+        }
+      }
+    }
+
+    const fetchedCredentialScans: FetchedCredScan[] = await Promise.all(
+      credentialScans.map(async (s): Promise<FetchedCredScan> => {
+        try {
+          const res = await fetch(s.url, { cache: 'no-store' })
+          if (!res.ok) {
+            console.error(`[docx-appendix] fetch ${s.url} -> ${res.status}`)
+            return { ...s, kind: 'unavailable' }
+          }
+          const ct = (res.headers.get('content-type') || '').toLowerCase()
+          const buf = Buffer.from(await res.arrayBuffer())
+          if (ct.includes('pdf') || /\.pdf(\?|$)/i.test(s.url)) {
+            return { ...s, kind: 'pdf', buffer: buf }
+          }
+          const imageType: 'jpg' | 'png' =
+            ct.includes('png') || /\.png(\?|$)/i.test(s.url) ? 'png' : 'jpg'
+          const dims = getImageDimensions(buf)
+          return {
+            ...s,
+            kind: 'image',
+            buffer: buf,
+            imageType,
+            width: dims?.width,
+            height: dims?.height,
+          }
+        } catch (err) {
+          console.error('[docx-appendix] fetch failed', s.url, err)
+          return { ...s, kind: 'unavailable' }
+        }
+      })
+    )
+
+    const usableCredentialScans = fetchedCredentialScans.filter(
+      (s) => s.kind === 'image' || s.kind === 'pdf'
+    )
+
+    const credentialsAppendix: (Paragraph | Table)[] = []
+    if (usableCredentialScans.length > 0) {
+      credentialsAppendix.push(
+        sectionHeading('Załączniki — uprawnienia inspektorów'),
+        bodyParagraph(
+          'Skany dokumentów potwierdzających uprawnienia osób uczestniczących w kontroli.',
+          { italic: true }
+        )
+      )
+
+      // Docelowa szerokość obrazu w px (Word renderuje ImageRun w 96 dpi)
+      // 560 px ≈ 14.8 cm — mieści się w obszarze treści A4 z marginesami.
+      const TARGET_IMG_WIDTH = 560
+      const MAX_IMG_HEIGHT = 760 // ok. jednej strony A4 po nagłówku
+
+      for (let idx = 0; idx < usableCredentialScans.length; idx++) {
+        const scan = usableCredentialScans[idx]
+
+        // Każdy skan na nowej stronie — `pageBreakBefore` na pierwszym akapicie.
+        credentialsAppendix.push(
+          new Paragraph({
+            pageBreakBefore: true,
+            spacing: { after: 80 },
+            children: [
+              new TextRun({
+                text: scan.inspectorName,
+                bold: true,
+                font: 'Arial',
+                size: 22,
+                color: HEX.graphite900,
+              }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 200 },
+            children: [
+              new TextRun({
+                text: scan.docLabel,
+                font: 'Arial',
+                size: FONT_DXA.body,
+                color: HEX.graphite700,
+              }),
+            ],
+          })
+        )
+
+        if (scan.kind === 'image' && scan.buffer) {
+          let finalWidth = TARGET_IMG_WIDTH
+          let finalHeight = Math.round(TARGET_IMG_WIDTH * (297 / 210)) // domyślnie A4 portrait
+          if (scan.width && scan.height && scan.width > 0 && scan.height > 0) {
+            const ratio = scan.width / scan.height
+            finalWidth = TARGET_IMG_WIDTH
+            finalHeight = Math.round(finalWidth / ratio)
+            if (finalHeight > MAX_IMG_HEIGHT) {
+              finalHeight = MAX_IMG_HEIGHT
+              finalWidth = Math.round(finalHeight * ratio)
+            }
+          }
+
+          try {
+            credentialsAppendix.push(
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new ImageRun({
+                    type: scan.imageType || 'jpg',
+                    data: scan.buffer,
+                    transformation: { width: finalWidth, height: finalHeight },
+                    altText: {
+                      title: `${scan.inspectorName} – ${scan.docLabel}`,
+                      description: 'Skan dokumentu uprawnień',
+                      name: `cred-${idx}`,
+                    },
+                  }),
+                ],
+              })
+            )
+          } catch (e) {
+            console.error('[docx-appendix] ImageRun failed', scan.url, e)
+            credentialsAppendix.push(
+              bodyParagraph('[Nie udało się osadzić obrazu w dokumencie]', {
+                italic: true,
+              })
+            )
+          }
+        } else if (scan.kind === 'pdf') {
+          // DOCX nie umie embedować PDF — pełna treść skanu pod linkiem
+          credentialsAppendix.push(
+            new Paragraph({
+              spacing: { before: 80, after: 80 },
+              children: [
+                new TextRun({
+                  text:
+                    'Dokument w formacie PDF — pełna treść skanu dostępna pod linkiem:',
+                  italics: true,
+                  font: 'Arial',
+                  size: FONT_DXA.body,
+                  color: HEX.graphite700,
+                }),
+              ],
+            }),
+            new Paragraph({
+              children: [
+                new ExternalHyperlink({
+                  link: scan.url,
+                  children: [
+                    new TextRun({
+                      text: scan.url,
+                      font: 'Arial',
+                      size: FONT_DXA.body,
+                      color: '0066CC',
+                      underline: {},
+                    }),
+                  ],
+                }),
+              ],
+            })
+          )
+        }
+      }
+    }
+
     // ─── HEADER / FOOTER (pages 2+) ─────────────────────────────────────────
     const docHeader = new Header({
       children: [
@@ -3649,7 +3907,8 @@ export async function GET(
 
       ...(hasAttachments
         ? [subHeading('Załączniki do protokołu'), attachmentsTable]
-        : [])
+        : []),
+      ...credentialsAppendix
     )
 
     const doc = new Document({
